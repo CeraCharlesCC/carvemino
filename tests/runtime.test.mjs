@@ -33,3 +33,17 @@ test("runtime stops scheduling frames after game over", () => {
     globalThis.cancelAnimationFrame = previousCancel;
   }
 });
+
+test("runtime replay commands are indexed by the fixed-step clock", () => {
+  const rules = getSingleplayerMode("classic").rules;
+  const game = createGame({ seed: 2, rules });
+  const runtime = new GameRuntime({ game, rules });
+
+  runtime.command({ type: "FOCUS_NEXT" });
+  runtime.runOneTick();
+
+  const replay = runtime.exportReplay(2);
+  assert.equal(game.stepTick, 1);
+  assert.deepEqual(replay.commands, [{ stepTick: 0, type: "FOCUS_NEXT" }]);
+  assert.equal(Object.hasOwn(replay.commands[0], "tick"), false);
+});

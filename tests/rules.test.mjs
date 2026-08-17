@@ -14,8 +14,8 @@ test("rules definitions are validated, detached, and deeply frozen", () => {
   definition.id = "test-rules-v1";
   const rules = defineRules(definition);
 
-  definition.simulation.lockDelayTicks = 1;
-  assert.notEqual(rules.simulation.lockDelayTicks, 1);
+  definition.simulation.lockDelayWorldTicks = 1;
+  assert.notEqual(rules.simulation.lockDelayWorldTicks, 1);
   assert.equal(Object.isFrozen(rules), true);
   assert.equal(Object.isFrozen(rules.simulation), true);
   assert.equal(Object.isFrozen(rules.pieces.templates.I.cells), true);
@@ -39,20 +39,20 @@ test("rules definitions reject mode metadata and unknown fields", () => {
 
 test("rules definitions validate the complete shape", () => {
   const incomplete = mutableCopy(CLASSIC_RULESET);
-  delete incomplete.garbage;
+  delete incomplete.pieces;
 
   assert.throws(
     () => defineRules(incomplete),
-    /rules\.garbage is required/
+    /rules\.pieces is required/
   );
 });
 
 test("rules definitions reject invalid semantic values", () => {
   const invalidTickRate = mutableCopy(CLASSIC_RULESET);
-  invalidTickRate.simulation.ticksPerSecond = 0;
+  invalidTickRate.simulation.stepsPerSecond = 0;
   assert.throws(
     () => defineRules(invalidTickRate),
-    /rules\.simulation\.ticksPerSecond must be an integer >= 1/
+    /rules\.simulation\.stepsPerSecond must be an integer >= 1/
   );
 
   const invalidRotation = mutableCopy(CLASSIC_RULESET);
@@ -74,6 +74,9 @@ test("single-player catalog owns mode identity and points at complete rulesets",
     assert.equal(Object.hasOwn(mode.rules, "modeId"), false);
     assert.equal(Object.hasOwn(mode.rules, "name"), false);
     assert.equal(Object.hasOwn(mode.rules, "description"), false);
+    assert.equal(Object.hasOwn(mode.rules, "attack"), false);
+    assert.equal(Object.hasOwn(mode.rules, "garbage"), false);
+    assert.equal(Object.hasOwn(mode.rules, "survival"), false);
   }
   assert.throws(() => getSingleplayerMode("unknown"), /Unknown single-player mode/);
 });

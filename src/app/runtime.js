@@ -6,7 +6,7 @@ export class GameRuntime {
     this.rules = rules;
     this.onFrame = onFrame;
     this.onEvents = onEvents;
-    this.stepSeconds = 1 / rules.simulation.ticksPerSecond;
+    this.stepSeconds = 1 / rules.simulation.stepsPerSecond;
     this.accumulator = 0;
     this.lastTime = null;
     this.pendingCommands = [];
@@ -25,7 +25,7 @@ export class GameRuntime {
     this.pendingCommands = [];
     for (const command of commands) {
       this.commandLog.push({
-        tick: this.game.simulationTick,
+        stepTick: this.game.stepTick,
         ...command
       });
     }
@@ -73,7 +73,7 @@ export class GameRuntime {
 
   exportReplay(seed) {
     return {
-      version: 1,
+      version: 2,
       rulesetId: this.rules.id,
       seed,
       commands: this.commandLog.map((command) => ({ ...command }))

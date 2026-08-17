@@ -13,6 +13,8 @@ import {
   stepGame
 } from "../src/domain/game.js";
 import { createMatch, getPlayerGame, stepMatch } from "../src/domain/match.js";
+import { defineSurvivalPolicy } from "../src/domain/match/survival.js";
+import { defineVersusPolicy } from "../src/domain/match/versus.js";
 import { getTemplateBounds, getTemplateCells } from "../src/domain/rules.js";
 import { makeTestRules } from "./helpers/rules.mjs";
 
@@ -27,6 +29,33 @@ function spawnI(game, rules) {
 
 function boardIndex(board, x, y) {
   return y * board.width + x;
+}
+
+function prepareTwoLineClear(game) {
+  const bottom = game.board.height - 1;
+  game.worldTick = 1;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  for (const y of [bottom - 1, bottom]) {
+    for (let x = 1; x < game.board.width; x += 1) {
+      game.board.cells[boardIndex(game.board, x, y)] = 1;
+    }
+  }
+  game.activePieces = [{
+    id: "manual-clear",
+    templateId: "I",
+    rotation: 0,
+    cellValue: 1,
+    x: 0,
+    y: bottom - 1,
+    cells: [{ x: 0, y: 0 }, { x: 0, y: 1 }],
+    carved: 0,
+    carveLimit: 2,
+    restingWorldTicks: 0,
+    pendingLock: false,
+    spawnIndex: 1,
+    committed: false
+  }];
+  game.focusedPieceId = "manual-clear";
 }
 
 test("same seed and command stream stays deterministic", () => {
@@ -85,9 +114,9 @@ test("sculpt fills only one empty orthogonal neighbor per command", () => {
 test("successful sculpt pauses the whole playfield timeline for the grace window", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 20, rules });
-  game.tick = 20;
-  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
-  game.nextScheduledSpawnTick = 1480;
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  game.nextScheduledSpawnWorldTick = 1480;
   game.activePieces = [
     {
       id: "focus",
@@ -98,7 +127,7 @@ test("successful sculpt pauses the whole playfield timeline for the grace window
       cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 1,
       committed: false
     },
@@ -111,7 +140,7 @@ test("successful sculpt pauses the whole playfield timeline for the grace window
       cells: [{ x: 0, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 2,
       committed: false
     }
@@ -121,31 +150,31 @@ test("successful sculpt pauses the whole playfield timeline for the grace window
   const events = stepGame(game, [{ type: "SCULPT", pieceId: "focus", x: 1, y: 0 }], rules);
 
   assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 5);
-  assert.equal(game.tick, 20, "the world clock pauses");
-  assert.equal(game.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
+  assert.equal(game.worldTick, 20, "the world clock pauses");
+  assert.equal(game.worldHoldSteps, rules.simulation.operationGraceSteps - 1);
   assert(events.some((event) => event.type === "BLOCK_CARVED"));
   assert(!events.some((event) => event.type === "PIECE_MOVED"));
 
-  for (let i = 1; i < rules.simulation.operationGraceTicks; i += 1) {
+  for (let i = 1; i < rules.simulation.operationGraceSteps; i += 1) {
     stepGame(game, [], rules);
   }
-  assert.equal(game.tick, 20);
-  assert.equal(game.worldHoldTicks, 0);
+  assert.equal(game.worldTick, 20);
+  assert.equal(game.worldHoldSteps, 0);
   assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 5);
 
   const resumed = stepGame(game, [], rules);
-  assert.equal(game.tick, 21);
+  assert.equal(game.worldTick, 21);
   assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 6);
   assert(resumed.some((event) => event.type === "PIECE_MOVED" && event.pieceId === "other"));
 });
 
 test("global grace defers scheduled spawns and garbage", () => {
-  const rules = makeTestRules({ simulation: { operationGraceTicks: 2 } });
+  const rules = makeTestRules({ simulation: { operationGraceSteps: 2 } });
   const game = createGame({ seed: 24, rules });
-  game.tick = 20;
-  game.dropQueue[0].spawnTick = 20;
-  game.dropQueue[1].spawnTick = 1000;
-  game.nextScheduledSpawnTick = 1480;
+  game.worldTick = 20;
+  game.dropQueue[0].spawnAtWorldTick = 20;
+  game.dropQueue[1].spawnAtWorldTick = 1000;
+  game.nextScheduledSpawnWorldTick = 1480;
   game.activePieces = [{
     id: "focus",
     templateId: "I",
@@ -155,7 +184,7 @@ test("global grace defers scheduled spawns and garbage", () => {
     cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
     carved: 0,
     carveLimit: 2,
-    restingTicks: 0,
+    restingWorldTicks: 0,
     spawnIndex: 1,
     committed: false
   }];
@@ -164,7 +193,7 @@ test("global grace defers scheduled spawns and garbage", () => {
     id: "due-during-hold",
     sourcePlayerId: "opponent",
     rows: 1,
-    applyTick: 20,
+    applyAtWorldTick: 20,
     seed: 7
   }), true);
 
@@ -176,8 +205,8 @@ test("global grace defers scheduled spawns and garbage", () => {
   assert(![...sculpted, ...held].some((event) => (
     event.type === "PIECE_SPAWNED" || event.type === "GARBAGE_APPLIED"
   )));
-  assert.equal(game.tick, 20);
-  assert.equal(game.dropQueue[0].spawnTick, 20);
+  assert.equal(game.worldTick, 20);
+  assert.equal(game.dropQueue[0].spawnAtWorldTick, 20);
   assert.equal(game.incomingGarbage.length, 1);
 
   const resumed = stepGame(game, [], rules);
@@ -189,9 +218,9 @@ test("global grace defers scheduled spawns and garbage", () => {
 test("invalid sculpt does not suppress gravity", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 21, rules });
-  game.tick = 20;
-  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
-  game.nextScheduledSpawnTick = 1480;
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  game.nextScheduledSpawnWorldTick = 1480;
   game.activePieces = [
     {
       id: "focus",
@@ -202,7 +231,7 @@ test("invalid sculpt does not suppress gravity", () => {
       cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 1,
       committed: false
     },
@@ -215,7 +244,7 @@ test("invalid sculpt does not suppress gravity", () => {
       cells: [{ x: 0, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 2,
       committed: false
     }
@@ -233,9 +262,9 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 22, rules });
   const bottom = game.board.height - 1;
-  game.tick = 20;
-  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
-  game.nextScheduledSpawnTick = 1480;
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  game.nextScheduledSpawnWorldTick = 1480;
   game.activePieces = [
     {
       id: "locking",
@@ -246,7 +275,7 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
       cells: [{ x: 0, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: rules.simulation.lockDelayTicks - 1,
+      restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1,
       spawnIndex: 1,
       committed: true
     },
@@ -259,7 +288,7 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
       cells: [{ x: 0, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 2,
       committed: false
     }
@@ -273,10 +302,10 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
   assert(!events.some((event) => event.type === "PIECE_LOCKED"));
   assert.equal(game.activePieces.find((piece) => piece.id === "locking").pendingLock, true);
   assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
-  assert.equal(game.tick, 20);
+  assert.equal(game.worldTick, 20);
   assert(!events.some((event) => event.type === "PIECE_MOVED"));
 
-  for (let i = 1; i < rules.simulation.operationGraceTicks; i += 1) {
+  for (let i = 1; i < rules.simulation.operationGraceSteps; i += 1) {
     const held = stepGame(game, [], rules);
     assert(!held.some((event) => event.type === "PIECE_LOCKED"));
   }
@@ -285,19 +314,19 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
   assert(locked.some((event) => event.type === "PIECE_LOCKED"
     && event.pieceId === "locking"));
   assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
-  assert.equal(game.tick, 20, "lock resolution does not consume world time");
+  assert.equal(game.worldTick, 20, "lock resolution does not consume world time");
 });
 
 test("an ordinary gravity landing reaches pending lock without pulse alignment", () => {
   const rules = makeTestRules({
-    simulation: { lockDelayTicks: 4, operationGraceTicks: 3 },
+    simulation: { lockDelayWorldTicks: 4, operationGraceSteps: 3 },
     progression: {
-      gravityStartTicks: 2,
-      gravityStepTicks: 0,
-      gravityMinimumTicks: 2,
-      spawnStartTicks: 1000,
-      spawnStepTicks: 0,
-      spawnMinimumTicks: 1000
+      gravityStartWorldTicks: 2,
+      gravityStepWorldTicks: 0,
+      gravityMinimumWorldTicks: 2,
+      spawnStartWorldTicks: 1000,
+      spawnStepWorldTicks: 0,
+      spawnMinimumWorldTicks: 1000
     }
   });
   const game = createGame({ seed: 26, rules });
@@ -312,16 +341,16 @@ test("an ordinary gravity landing reaches pending lock without pulse alignment",
   const pending = game.activePieces.find((piece) => piece.id === pendingEvent.pieceId);
   assert(pending);
   assert.equal(pending.pendingLock, true);
-  assert.equal(game.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
+  assert.equal(game.worldHoldSteps, rules.simulation.operationGraceSteps - 1);
 });
 
 test("sculpt can edit a pending piece and refreshes the global grace", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 23, rules });
   const bottom = game.board.height - 1;
-  game.tick = 20;
-  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
-  game.nextScheduledSpawnTick = 1480;
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  game.nextScheduledSpawnWorldTick = 1480;
   game.activePieces = [
     {
       id: "editing",
@@ -332,7 +361,7 @@ test("sculpt can edit a pending piece and refreshes the global grace", () => {
       cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: rules.simulation.lockDelayTicks - 1,
+      restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1,
       spawnIndex: 1,
       committed: false
     },
@@ -345,7 +374,7 @@ test("sculpt can edit a pending piece and refreshes the global grace", () => {
       cells: [{ x: 0, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 2,
       committed: false
     }
@@ -363,8 +392,8 @@ test("sculpt can edit a pending piece and refreshes the global grace", () => {
   assert(events.some((event) => event.type === "BLOCK_CARVED"));
   assert(editing);
   assert.equal(editing.pendingLock, false);
-  assert.equal(editing.restingTicks, 0);
-  assert.equal(game.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
+  assert.equal(editing.restingWorldTicks, 0);
+  assert.equal(game.worldHoldSteps, rules.simulation.operationGraceSteps - 1);
   assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
 });
 
@@ -390,11 +419,28 @@ test("hard drop moves the focused piece to its lowest available position", () =>
   assertGameState(game);
 });
 
+test("hard drop cannot move the playfield while an operation grace hold is active", () => {
+  const rules = makeTestRules({ simulation: { operationGraceSteps: 3 } });
+  const game = createGame({ seed: 27, rules });
+  const piece = spawnI(game, rules);
+
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 1, y: 0 }], rules);
+  const heldWorldTick = game.worldTick;
+  const heldY = piece.y;
+  assert(game.worldHoldSteps > 0);
+
+  const events = stepGame(game, [{ type: "HARD_DROP_FOCUSED" }], rules);
+
+  assert.equal(piece.y, heldY);
+  assert.equal(game.worldTick, heldWorldTick);
+  assert(!events.some((event) => event.type === "PIECE_HARD_DROPPED"));
+});
+
 test("commit focuses another useful active piece without spawning an extra one", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 23, rules });
-  game.dropQueue.forEach((plan) => { plan.spawnTick = 1000; });
-  game.nextScheduledSpawnTick = 1480;
+  game.dropQueue.forEach((plan) => { plan.spawnAtWorldTick = 1000; });
+  game.nextScheduledSpawnWorldTick = 1480;
   game.activePieces = [
     {
       id: "older",
@@ -405,7 +451,7 @@ test("commit focuses another useful active piece without spawning an extra one",
       cells: [{ x: 0, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 1,
       committed: false
     },
@@ -418,7 +464,7 @@ test("commit focuses another useful active piece without spawning an extra one",
       cells: [{ x: 0, y: 0 }],
       carved: 0,
       carveLimit: 2,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       spawnIndex: 2,
       committed: false
     }
@@ -445,7 +491,7 @@ test("drop planning balances between two sampled positions over a 48-drop histor
   }));
   const historyBeforePlanning = game.dropCoverageHistory.map((historyPlan) => ({ ...historyPlan }));
   game.random.drops.state = 1;
-  game.nextScheduledSpawnTick = game.tick + 100;
+  game.nextScheduledSpawnWorldTick = game.worldTick + 100;
 
   stepGame(game, [], rules);
 
@@ -512,14 +558,14 @@ test("garbage is queued, cancellable, and duplicate ids are rejected", () => {
     id: "g1",
     sourcePlayerId: "opponent",
     rows: 4,
-    applyTick: 100,
+    applyAtWorldTick: 100,
     seed: 99
   }), true);
   assert.equal(queueGarbage(game, {
     id: "g1",
     sourcePlayerId: "opponent",
     rows: 4,
-    applyTick: 100,
+    applyAtWorldTick: 100,
     seed: 99
   }), false);
 
@@ -541,8 +587,8 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 25, rules });
   const bottom = game.board.height - 1;
-  game.tick = 20;
-  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
   game.activePieces = [{
     id: "pending",
     templateId: "I",
@@ -553,7 +599,7 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
     cells: [{ x: 0, y: 0 }],
     carved: 0,
     carveLimit: 2,
-    restingTicks: rules.simulation.lockDelayTicks - 1,
+    restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1,
     pendingLock: false,
     spawnIndex: 1,
     committed: false
@@ -564,10 +610,10 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
   const restored = restoreGame(snapshotGame(game));
 
   assert.equal(restored.activePieces[0].pendingLock, true);
-  assert.equal(restored.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
+  assert.equal(restored.worldHoldSteps, rules.simulation.operationGraceSteps - 1);
   assert.equal(hashGameState(restored), hashGameState(game));
 
-  for (let i = 0; i <= rules.simulation.operationGraceTicks; i += 1) {
+  for (let i = 0; i <= rules.simulation.operationGraceSteps; i += 1) {
     assert.deepEqual(stepGame(restored, [], rules), stepGame(game, [], rules));
     assert.equal(hashGameState(restored), hashGameState(game));
   }
@@ -576,7 +622,7 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
 test("restore rejects snapshots from a non-current schema instead of migrating them", () => {
   const rules = makeTestRules();
   const snapshot = snapshotGame(createGame({ seed: 26, rules }));
-  delete snapshot.simulationTick;
+  delete snapshot.stepTick;
   snapshot.version = 1;
   delete snapshot.schemaVersion;
 
@@ -585,39 +631,23 @@ test("restore rejects snapshots from a non-current schema instead of migrating t
 
 test("two-line clear in versus produces queued garbage for the opponent", () => {
   const rules = makeTestRules({
-    simulation: { lockDelayTicks: 1, operationGraceTicks: 0 },
-    garbage: { warningTicks: 20 }
+    simulation: { lockDelayWorldTicks: 1, operationGraceSteps: 0 }
+  });
+  const policy = defineVersusPolicy({
+    id: "vs-test-policy",
+    lineClearAttackRows: [0, 0, 1, 2, 4],
+    garbageWarningWorldTicks: 20,
+    cancellation: true
   });
   const match = createMatch({
     id: "vs-test",
-    mode: "versus",
     playerIds: ["a", "b"],
     seed: 5,
-    rules
+    rules,
+    policy
   });
   const a = getPlayerGame(match, "a");
-  const bottom = a.board.height - 1;
-
-  a.tick = 1;
-  a.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
-  for (const y of [bottom - 1, bottom]) {
-    for (let x = 1; x < a.board.width; x += 1) {
-      a.board.cells[boardIndex(a.board, x, y)] = 1;
-    }
-  }
-  a.activePieces = [{
-    id: "manual",
-    templateId: "I",
-    cellValue: 1,
-    x: 0,
-    y: bottom - 1,
-    cells: [{ x: 0, y: 0 }, { x: 0, y: 1 }],
-    carved: 0,
-    carveLimit: 2,
-    restingTicks: 0,
-    spawnIndex: 1
-  }];
-  a.focusedPieceId = "manual";
+  prepareTwoLineClear(a);
 
   const events = stepMatch(match, {});
   const b = getPlayerGame(match, "b");
@@ -625,24 +655,58 @@ test("two-line clear in versus produces queued garbage for the opponent", () => 
   assert(events.some((event) => event.type === "GARBAGE_SENT" && event.targetPlayerId === "b"));
   assert.equal(b.incomingGarbage.length, 1);
   assert.equal(b.incomingGarbage[0].rows, 1);
+  assert.equal(b.incomingGarbage[0].applyAtWorldTick, b.worldTick + 20);
+});
+
+test("simultaneous versus attacks do not cancel each other by player iteration order", () => {
+  const rules = makeTestRules({
+    simulation: { lockDelayWorldTicks: 1, operationGraceSteps: 0 }
+  });
+  const policy = defineVersusPolicy({
+    id: "simultaneous-vs-test-policy",
+    lineClearAttackRows: [0, 0, 1, 2, 4],
+    garbageWarningWorldTicks: 20,
+    cancellation: true
+  });
+  const match = createMatch({
+    id: "simultaneous-vs-test",
+    playerIds: ["a", "b"],
+    seed: 8,
+    rules,
+    policy
+  });
+  const a = getPlayerGame(match, "a");
+  const b = getPlayerGame(match, "b");
+  prepareTwoLineClear(a);
+  prepareTwoLineClear(b);
+
+  const events = stepMatch(match, {});
+
+  assert.equal(events.filter((event) => event.type === "ATTACK_GENERATED").length, 2);
+  assert.equal(events.filter((event) => event.type === "GARBAGE_SENT").length, 2);
+  assert.equal(events.filter((event) => event.type === "GARBAGE_CANCELLED").length, 0);
+  assert.equal(a.incomingGarbage.length, 1);
+  assert.equal(b.incomingGarbage.length, 1);
+  assert.equal(a.incomingGarbage[0].applyAtWorldTick, a.worldTick + 20);
+  assert.equal(b.incomingGarbage[0].applyAtWorldTick, b.worldTick + 20);
 });
 
 test("survival mode queues deterministic hazard waves", () => {
-  const rules = makeTestRules({
-    garbage: { warningTicks: 30 },
-    survival: {
-      firstWaveTick: 0,
-      waveIntervalTicks: 60,
-      rowsPerWaveStep: 120,
-      maximumRowsPerWave: 4
-    }
+  const rules = makeTestRules();
+  const policy = defineSurvivalPolicy({
+    id: "survival-test-policy",
+    garbageWarningWorldTicks: 30,
+    firstWaveMatchTick: 0,
+    waveIntervalMatchTicks: 60,
+    rowsPerWaveStepMatchTicks: 120,
+    maximumRowsPerWave: 4
   });
   const match = createMatch({
     id: "survival-test",
-    mode: "survival",
     playerIds: ["solo"],
     seed: 6,
-    rules
+    rules,
+    policy
   });
 
   const events = stepMatch(match, {});
@@ -650,4 +714,40 @@ test("survival mode queues deterministic hazard waves", () => {
   assert(events.some((event) => event.type === "SURVIVAL_WAVE_QUEUED"));
   assert.equal(game.incomingGarbage.length, 1);
   assert.equal(game.incomingGarbage[0].rows, 1);
+  assert.equal(game.incomingGarbage[0].applyAtWorldTick, 30);
+  assert.equal(match.matchTick, 1);
+});
+
+test("match clock advances independently while survival garbage waits on the world clock", () => {
+  const rules = makeTestRules();
+  const policy = defineSurvivalPolicy({
+    id: "clock-semantics-survival-policy",
+    garbageWarningWorldTicks: 5,
+    firstWaveMatchTick: 0,
+    waveIntervalMatchTicks: 1,
+    rowsPerWaveStepMatchTicks: 100,
+    maximumRowsPerWave: 1
+  });
+  const match = createMatch({
+    id: "clock-semantics-survival",
+    playerIds: ["solo"],
+    seed: 7,
+    rules,
+    policy
+  });
+  const game = getPlayerGame(match, "solo");
+  game.worldHoldSteps = 2;
+
+  stepMatch(match, {});
+  stepMatch(match, {});
+
+  assert.equal(match.matchTick, 2, "match policy time never pauses with one playfield");
+  assert.equal(game.stepTick, 2, "fixed simulation steps still run during a world hold");
+  assert.equal(game.worldTick, 0, "the playfield world clock is paused by the hold");
+  assert.equal(game.incomingGarbage.length, 2);
+  assert.deepEqual(
+    game.incomingGarbage.map((packet) => packet.applyAtWorldTick),
+    [5, 5],
+    "survival waves use match time, but their application deadlines use the target world clock"
+  );
 });

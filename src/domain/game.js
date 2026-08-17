@@ -1,14 +1,13 @@
 import {
-  attackForLineClear,
   getGarbageCellValue,
   getTemplateBounds,
   getTemplateCellValue,
   getTemplateCells,
   getTemplateIds,
   getTemplateRotations,
-  gravityIntervalForLevel,
+  gravityIntervalWorldTicksForLevel,
   scoreForLineClear,
-  spawnIntervalForLevel
+  spawnIntervalWorldTicksForLevel
 } from "./rules.js";
 
 const NEIGHBORS = Object.freeze([
@@ -20,7 +19,7 @@ const NEIGHBORS = Object.freeze([
 
 const DROP_COVERAGE_HISTORY_LIMIT = 48;
 const DROP_POSITION_CHOICES = 2;
-const GAME_SCHEMA_VERSION = 1;
+const GAME_SCHEMA_VERSION = 2;
 
 function hashSeed(seed, salt) {
   let x = (seed ^ salt) >>> 0;
@@ -240,7 +239,7 @@ function applyCarve(state, command, rules, events) {
   piece.cells.splice(index, 1);
   piece.cells.sort(compareCells);
   piece.carved += 1;
-  piece.restingTicks = 0;
+  piece.restingWorldTicks = 0;
   piece.pendingLock = false;
   state.scrap += rules.sculpting.scrapPerCarve;
   state.score += rules.scoring.carve;
@@ -269,7 +268,7 @@ function applyFill(state, command, rules, events) {
 
   piece.cells.push({ x: command.x, y: command.y });
   piece.cells.sort(compareCells);
-  piece.restingTicks = 0;
+  piece.restingWorldTicks = 0;
   piece.pendingLock = false;
   state.scrap -= rules.sculpting.fillCost;
   state.score += rules.scoring.fill;
@@ -296,11 +295,11 @@ function applySculpt(state, command, rules, events) {
 
 function bringNextSpawnForward(state) {
   if (state.dropQueue.length === 0) return;
-  const delta = state.tick - state.dropQueue[0].spawnTick;
+  const delta = state.worldTick - state.dropQueue[0].spawnAtWorldTick;
   if (delta >= 0) return;
 
-  for (const plan of state.dropQueue) plan.spawnTick += delta;
-  if (state.nextScheduledSpawnTick != null) state.nextScheduledSpawnTick += delta;
+  for (const plan of state.dropQueue) plan.spawnAtWorldTick += delta;
+  if (state.nextScheduledSpawnWorldTick != null) state.nextScheduledSpawnWorldTick += delta;
 }
 
 function applyHardDrop(state, rules, events) {
@@ -313,7 +312,7 @@ function applyHardDrop(state, rules, events) {
   }
 
   piece.y += distance;
-  piece.restingTicks = 0;
+  piece.restingWorldTicks = 0;
   piece.pendingLock = false;
   piece.committed = true;
   events.push({
@@ -332,9 +331,7 @@ function applyHardDrop(state, rules, events) {
 }
 
 function applyCommands(state, commands, rules, events) {
-  if (state.status !== "playing") return false;
-
-  let sculptedThisTick = false;
+  if (state.status !== "playing") return;
 
   for (const command of commands) {
     if (!command || typeof command.type !== "string") continue;
@@ -346,17 +343,16 @@ function applyCommands(state, commands, rules, events) {
         cycleFocus(state, -1, events);
         break;
       case "SCULPT":
-        sculptedThisTick = applySculpt(state, command, rules, events) || sculptedThisTick;
+        if (applySculpt(state, command, rules, events)) refreshWorldHold(state, rules);
         break;
       case "HARD_DROP_FOCUSED":
-        applyHardDrop(state, rules, events);
+        if (state.worldHoldSteps === 0) applyHardDrop(state, rules, events);
         break;
       default:
         break;
     }
   }
 
-  return sculptedThisTick;
 }
 
 function getDropCoverage(state, rules) {
@@ -403,7 +399,7 @@ function rememberDropCoverage(state, templateId, rotation, x) {
   }
 }
 
-function makeDropPlan(state, spawnTick, rules) {
+function makeDropPlan(state, spawnAtWorldTick, rules) {
   const templateIds = getTemplateIds(rules);
   const templateId = templateIds[randomInt(state.random.pieces, templateIds.length)];
   const rotations = getTemplateRotations(rules, templateId);
@@ -417,32 +413,32 @@ function makeDropPlan(state, spawnTick, rules) {
     templateId,
     rotation,
     x,
-    spawnTick
+    spawnAtWorldTick
   };
 }
 
 function maintainDropQueue(state, rules, events) {
   const desired = Math.max(1, rules.progression.previewCount);
   while (state.dropQueue.length < desired) {
-    let spawnTick;
-    if (state.dropQueue.length === 0 && state.nextScheduledSpawnTick == null) {
-      spawnTick = state.tick;
+    let spawnAtWorldTick;
+    if (state.dropQueue.length === 0 && state.nextScheduledSpawnWorldTick == null) {
+      spawnAtWorldTick = state.worldTick;
     } else if (state.dropQueue.length > 0) {
       const previous = state.dropQueue[state.dropQueue.length - 1];
-      spawnTick = previous.spawnTick + spawnIntervalForLevel(rules, state.level);
+      spawnAtWorldTick = previous.spawnAtWorldTick + spawnIntervalWorldTicksForLevel(rules, state.level);
     } else {
-      spawnTick = state.nextScheduledSpawnTick;
+      spawnAtWorldTick = state.nextScheduledSpawnWorldTick;
     }
 
-    const plan = makeDropPlan(state, spawnTick, rules);
+    const plan = makeDropPlan(state, spawnAtWorldTick, rules);
     state.dropQueue.push(plan);
-    state.nextScheduledSpawnTick = plan.spawnTick + spawnIntervalForLevel(rules, state.level);
+    state.nextScheduledSpawnWorldTick = plan.spawnAtWorldTick + spawnIntervalWorldTicksForLevel(rules, state.level);
     events.push({ type: "PIECE_PLANNED", plan: { ...plan } });
   }
 }
 
 function spawnDuePieces(state, rules, events) {
-  while (state.dropQueue.length > 0 && state.dropQueue[0].spawnTick <= state.tick) {
+  while (state.dropQueue.length > 0 && state.dropQueue[0].spawnAtWorldTick <= state.worldTick) {
     const plan = state.dropQueue.shift();
     const rotation = plan.rotation;
     const cells = getTemplateCells(rules, plan.templateId, rotation);
@@ -456,7 +452,7 @@ function spawnDuePieces(state, rules, events) {
       cells,
       carved: 0,
       carveLimit: rules.sculpting.carveLimit,
-      restingTicks: 0,
+      restingWorldTicks: 0,
       pendingLock: false,
       spawnIndex: state.nextSpawnIndex++,
       committed: false
@@ -485,8 +481,8 @@ function spawnDuePieces(state, rules, events) {
 }
 
 function applyGravity(state, rules, events) {
-  const interval = gravityIntervalForLevel(rules, state.level);
-  if (state.tick % interval !== 0) return;
+  const interval = gravityIntervalWorldTicksForLevel(rules, state.level);
+  if (state.worldTick % interval !== 0) return;
 
   const ordered = [...state.activePieces].sort(
     (a, b) => pieceBottom(b) - pieceBottom(a) || a.spawnIndex - b.spawnIndex
@@ -496,17 +492,17 @@ function applyGravity(state, rules, events) {
     if (!findPiece(state, piece.id)) continue;
     if (!canTranslate(state, piece, 0, 1)) continue;
     piece.y += 1;
-    piece.restingTicks = 0;
+    piece.restingWorldTicks = 0;
     events.push({ type: "PIECE_MOVED", pieceId: piece.id, x: piece.x, y: piece.y });
   }
 }
 
-function operationGraceTicks(rules) {
-  return Math.max(0, Math.floor(rules.simulation.operationGraceTicks || 0));
+function operationGraceSteps(rules) {
+  return Math.max(0, Math.floor(rules.simulation.operationGraceSteps || 0));
 }
 
 function refreshWorldHold(state, rules) {
-  state.worldHoldTicks = Math.max(state.worldHoldTicks, operationGraceTicks(rules));
+  state.worldHoldSteps = Math.max(state.worldHoldSteps, operationGraceSteps(rules));
 }
 
 function clearCompletedLines(state) {
@@ -569,11 +565,6 @@ function resolveLineClearRewards(state, rules, cleared, events) {
   events.push({ type: "LINES_CLEARED", count: cleared, totalLines: state.totalLines });
   events.push({ type: "SCORE_CHANGED", value: state.score });
 
-  const attackRows = attackForLineClear(rules, cleared);
-  if (attackRows > 0) {
-    events.push({ type: "ATTACK_GENERATED", rows: attackRows });
-  }
-
   const nextLevel = 1 + Math.floor(state.totalLines / rules.progression.linesPerLevel);
   if (nextLevel !== state.level) {
     state.level = nextLevel;
@@ -607,17 +598,17 @@ function beginDueNaturalLocks(state, rules, events) {
     !piece.pendingLock
     && !canTranslate(state, piece, 0, 1)
     && supportKindBelow(state, piece) !== "active"
-    && piece.restingTicks + 1 >= rules.simulation.lockDelayTicks
+    && piece.restingWorldTicks + 1 >= rules.simulation.lockDelayWorldTicks
   ));
   if (due.length === 0) return false;
 
-  if (operationGraceTicks(rules) === 0) {
+  if (operationGraceSteps(rules) === 0) {
     resolveLocks(state, due, rules, events);
     return true;
   }
 
   for (const piece of due) {
-    piece.restingTicks = rules.simulation.lockDelayTicks;
+    piece.restingWorldTicks = rules.simulation.lockDelayWorldTicks;
     piece.pendingLock = true;
     events.push({ type: "PIECE_LOCK_PENDING", pieceId: piece.id });
   }
@@ -635,7 +626,7 @@ function finalizePendingLocks(state, rules, events) {
   for (const piece of ordered) {
     piece.pendingLock = false;
     if (canTranslate(state, piece, 0, 1) || supportKindBelow(state, piece) === "active") {
-      piece.restingTicks = 0;
+      piece.restingWorldTicks = 0;
     } else {
       toLock.push(piece);
     }
@@ -650,19 +641,19 @@ function updateResting(state) {
 
   for (const piece of ordered) {
     if (canTranslate(state, piece, 0, 1)) {
-      piece.restingTicks = 0;
+      piece.restingWorldTicks = 0;
       piece.pendingLock = false;
       continue;
     }
 
     const support = supportKindBelow(state, piece);
     if (support === "active") {
-      piece.restingTicks = 0;
+      piece.restingWorldTicks = 0;
       piece.pendingLock = false;
       continue;
     }
 
-    piece.restingTicks += 1;
+    piece.restingWorldTicks += 1;
   }
 }
 
@@ -708,7 +699,7 @@ function applyGarbageRows(state, packet, rules, events) {
 
   for (const piece of state.activePieces) {
     piece.y -= rows;
-    piece.restingTicks = 0;
+    piece.restingWorldTicks = 0;
     piece.pendingLock = false;
     if (piece.cells.some((cell) => piece.y + cell.y < 0)) {
       state.status = "gameover";
@@ -727,11 +718,11 @@ function applyGarbageRows(state, packet, rules, events) {
 
 function applyScheduledGarbage(state, rules, events) {
   if (state.incomingGarbage.length === 0) return;
-  state.incomingGarbage.sort((a, b) => a.applyTick - b.applyTick || a.id.localeCompare(b.id));
+  state.incomingGarbage.sort((a, b) => a.applyAtWorldTick - b.applyAtWorldTick || a.id.localeCompare(b.id));
 
   while (state.incomingGarbage.length > 0) {
     const packet = state.incomingGarbage[0];
-    if (packet.applyTick > state.tick) break;
+    if (packet.applyAtWorldTick > state.worldTick) break;
     state.incomingGarbage.shift();
     if (packet.rows > 0) applyGarbageRows(state, packet, rules, events);
     if (state.status !== "playing") return;
@@ -741,7 +732,7 @@ function applyScheduledGarbage(state, rules, events) {
 export function cancelIncomingGarbage(state, rows) {
   let remaining = Math.max(0, Math.floor(rows));
   let cancelled = 0;
-  state.incomingGarbage.sort((a, b) => a.applyTick - b.applyTick || a.id.localeCompare(b.id));
+  state.incomingGarbage.sort((a, b) => a.applyAtWorldTick - b.applyAtWorldTick || a.id.localeCompare(b.id));
 
   for (const packet of state.incomingGarbage) {
     if (remaining <= 0) break;
@@ -760,7 +751,7 @@ export function cancelIncomingGarbage(state, rows) {
 
 export function queueGarbage(state, packet) {
   if (!packet || !packet.id || !Number.isInteger(packet.rows) || packet.rows <= 0) return false;
-  if (!Number.isInteger(packet.applyTick) || !Number.isInteger(packet.seed)) return false;
+  if (!Number.isInteger(packet.applyAtWorldTick) || !Number.isInteger(packet.seed)) return false;
   if (state.appliedGarbageIds.includes(packet.id)) return false;
   if (state.incomingGarbage.some((existing) => existing.id === packet.id)) return false;
 
@@ -768,7 +759,7 @@ export function queueGarbage(state, packet) {
     id: String(packet.id),
     sourcePlayerId: packet.sourcePlayerId == null ? null : String(packet.sourcePlayerId),
     rows: packet.rows,
-    applyTick: packet.applyTick,
+    applyAtWorldTick: packet.applyAtWorldTick,
     seed: packet.seed >>> 0
   });
   return true;
@@ -780,9 +771,9 @@ export function createGame({ seed = 1, rules }) {
   const state = {
     schemaVersion: GAME_SCHEMA_VERSION,
     rulesetId: rules.id,
-    tick: 0,
-    simulationTick: 0,
-    worldHoldTicks: 0,
+    worldTick: 0,
+    stepTick: 0,
+    worldHoldSteps: 0,
     board: {
       width: rules.board.width,
       height: boardHeight,
@@ -804,7 +795,7 @@ export function createGame({ seed = 1, rules }) {
     gameOverReason: null,
     nextPieceId: 1,
     nextSpawnIndex: 1,
-    nextScheduledSpawnTick: null,
+    nextScheduledSpawnWorldTick: null,
     random: {
       pieces: { state: hashSeed(seed >>> 0, 0x243f6a88) },
       rotations: { state: hashSeed(seed >>> 0, 0xa4093822) },
@@ -821,13 +812,12 @@ export function createGame({ seed = 1, rules }) {
 export function stepGame(state, commands, rules) {
   const events = [];
   if (state.status !== "playing") return events;
-  state.simulationTick += 1;
+  state.stepTick += 1;
 
-  const sculptedThisTick = applyCommands(state, commands || [], rules, events);
-  if (sculptedThisTick) refreshWorldHold(state, rules);
+  applyCommands(state, commands || [], rules, events);
 
-  if (state.worldHoldTicks > 0) {
-    state.worldHoldTicks -= 1;
+  if (state.worldHoldSteps > 0) {
+    state.worldHoldSteps -= 1;
     return events;
   }
 
@@ -837,7 +827,7 @@ export function stepGame(state, commands, rules) {
   }
 
   if (beginDueNaturalLocks(state, rules, events)) {
-    if (state.worldHoldTicks > 0) state.worldHoldTicks -= 1;
+    if (state.worldHoldSteps > 0) state.worldHoldSteps -= 1;
     return events;
   }
 
@@ -850,7 +840,7 @@ export function stepGame(state, commands, rules) {
   applyGravity(state, rules, events);
   updateResting(state);
   if (state.status === "playing") maintainDropQueue(state, rules, events);
-  state.tick += 1;
+  state.worldTick += 1;
   return events;
 }
 
@@ -870,9 +860,9 @@ function clonePiece(piece) {
 export function createGameView(state) {
   const focused = currentFocusedPiece(state);
   return {
-    tick: state.tick,
-    simulationTick: state.simulationTick,
-    worldHoldTicks: state.worldHoldTicks,
+    worldTick: state.worldTick,
+    stepTick: state.stepTick,
+    worldHoldSteps: state.worldHoldSteps,
     board: {
       width: state.board.width,
       height: state.board.height,
@@ -898,9 +888,9 @@ export function snapshotGame(state) {
   return {
     schemaVersion: state.schemaVersion,
     rulesetId: state.rulesetId,
-    tick: state.tick,
-    simulationTick: state.simulationTick,
-    worldHoldTicks: state.worldHoldTicks,
+    worldTick: state.worldTick,
+    stepTick: state.stepTick,
+    worldHoldSteps: state.worldHoldSteps,
     board: {
       width: state.board.width,
       height: state.board.height,
@@ -922,7 +912,7 @@ export function snapshotGame(state) {
     gameOverReason: state.gameOverReason,
     nextPieceId: state.nextPieceId,
     nextSpawnIndex: state.nextSpawnIndex,
-    nextScheduledSpawnTick: state.nextScheduledSpawnTick,
+    nextScheduledSpawnWorldTick: state.nextScheduledSpawnWorldTick,
     random: {
       pieces: { ...state.random.pieces },
       rotations: { ...state.random.rotations },
@@ -935,9 +925,9 @@ export function snapshotGame(state) {
 const CURRENT_SNAPSHOT_KEYS = Object.freeze([
   "schemaVersion",
   "rulesetId",
-  "tick",
-  "simulationTick",
-  "worldHoldTicks",
+  "worldTick",
+  "stepTick",
+  "worldHoldSteps",
   "board",
   "activePieces",
   "focusedPieceId",
@@ -953,7 +943,7 @@ const CURRENT_SNAPSHOT_KEYS = Object.freeze([
   "gameOverReason",
   "nextPieceId",
   "nextSpawnIndex",
-  "nextScheduledSpawnTick",
+  "nextScheduledSpawnWorldTick",
   "random"
 ]);
 

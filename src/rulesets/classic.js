@@ -1,33 +1,25 @@
 import { defineRules } from "../domain/rules.js";
 
 export const CLASSIC_RULESET = defineRules({
-  id: "carvemino-classic-rules-v1",
+  id: "carvemino-classic-rules-v2",
   board: Object.freeze({ width: 10, visibleHeight: 20, hiddenHeight: 4 }),
   simulation: Object.freeze({
-    ticksPerSecond: 60,
-    lockDelayTicks: 24,
-    operationGraceTicks: 8
+    stepsPerSecond: 60,
+    lockDelayWorldTicks: 24,
+    operationGraceSteps: 8
   }),
   sculpting: Object.freeze({ carveLimit: 2, minimumCells: 1, scrapPerCarve: 1, fillCost: 2 }),
   progression: Object.freeze({
     linesPerLevel: 5,
-    gravityStartTicks: 20,
-    gravityStepTicks: 2,
-    gravityMinimumTicks: 3,
-    spawnStartTicks: 480,
-    spawnStepTicks: 60,
-    spawnMinimumTicks: 60,
+    gravityStartWorldTicks: 20,
+    gravityStepWorldTicks: 2,
+    gravityMinimumWorldTicks: 3,
+    spawnStartWorldTicks: 480,
+    spawnStepWorldTicks: 60,
+    spawnMinimumWorldTicks: 60,
     previewCount: 2
   }),
   scoring: Object.freeze({ lineClear: Object.freeze([0, 100, 300, 500, 800]), carve: 5, fill: 10 }),
-  attack: Object.freeze({ lineClear: Object.freeze([0, 0, 1, 2, 4]) }),
-  garbage: Object.freeze({ warningTicks: 120, cancellation: true }),
-  survival: Object.freeze({
-    firstWaveTick: 900,
-    waveIntervalTicks: 600,
-    rowsPerWaveStep: 1800,
-    maximumRowsPerWave: 5
-  }),
   pieces: Object.freeze({
     garbageCellValue: 8,
     templates: Object.freeze({

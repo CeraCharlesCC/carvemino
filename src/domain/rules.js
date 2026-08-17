@@ -5,9 +5,6 @@ const RULE_KEYS = Object.freeze([
   "sculpting",
   "progression",
   "scoring",
-  "attack",
-  "garbage",
-  "survival",
   "pieces"
 ]);
 
@@ -34,10 +31,6 @@ function assertNonEmptyString(value, path) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`${path} must be a non-empty string`);
   }
-}
-
-function assertBoolean(value, path) {
-  if (typeof value !== "boolean") throw new Error(`${path} must be a boolean`);
 }
 
 function assertInteger(value, path, { minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER } = {}) {
@@ -114,12 +107,12 @@ function validateRules(rules) {
 
   assertExactKeys(
     rules.simulation,
-    ["ticksPerSecond", "lockDelayTicks", "operationGraceTicks"],
+    ["stepsPerSecond", "lockDelayWorldTicks", "operationGraceSteps"],
     "rules.simulation"
   );
-  assertInteger(rules.simulation.ticksPerSecond, "rules.simulation.ticksPerSecond", { minimum: 1 });
-  assertInteger(rules.simulation.lockDelayTicks, "rules.simulation.lockDelayTicks", { minimum: 0 });
-  assertInteger(rules.simulation.operationGraceTicks, "rules.simulation.operationGraceTicks", { minimum: 0 });
+  assertInteger(rules.simulation.stepsPerSecond, "rules.simulation.stepsPerSecond", { minimum: 1 });
+  assertInteger(rules.simulation.lockDelayWorldTicks, "rules.simulation.lockDelayWorldTicks", { minimum: 0 });
+  assertInteger(rules.simulation.operationGraceSteps, "rules.simulation.operationGraceSteps", { minimum: 0 });
 
   assertExactKeys(
     rules.sculpting,
@@ -135,46 +128,29 @@ function validateRules(rules) {
     rules.progression,
     [
       "linesPerLevel",
-      "gravityStartTicks",
-      "gravityStepTicks",
-      "gravityMinimumTicks",
-      "spawnStartTicks",
-      "spawnStepTicks",
-      "spawnMinimumTicks",
+      "gravityStartWorldTicks",
+      "gravityStepWorldTicks",
+      "gravityMinimumWorldTicks",
+      "spawnStartWorldTicks",
+      "spawnStepWorldTicks",
+      "spawnMinimumWorldTicks",
       "previewCount"
     ],
     "rules.progression"
   );
   assertInteger(rules.progression.linesPerLevel, "rules.progression.linesPerLevel", { minimum: 1 });
-  assertInteger(rules.progression.gravityStartTicks, "rules.progression.gravityStartTicks", { minimum: 1 });
-  assertInteger(rules.progression.gravityStepTicks, "rules.progression.gravityStepTicks", { minimum: 0 });
-  assertInteger(rules.progression.gravityMinimumTicks, "rules.progression.gravityMinimumTicks", { minimum: 1 });
-  assertInteger(rules.progression.spawnStartTicks, "rules.progression.spawnStartTicks", { minimum: 0 });
-  assertInteger(rules.progression.spawnStepTicks, "rules.progression.spawnStepTicks", { minimum: 0 });
-  assertInteger(rules.progression.spawnMinimumTicks, "rules.progression.spawnMinimumTicks", { minimum: 1 });
+  assertInteger(rules.progression.gravityStartWorldTicks, "rules.progression.gravityStartWorldTicks", { minimum: 1 });
+  assertInteger(rules.progression.gravityStepWorldTicks, "rules.progression.gravityStepWorldTicks", { minimum: 0 });
+  assertInteger(rules.progression.gravityMinimumWorldTicks, "rules.progression.gravityMinimumWorldTicks", { minimum: 1 });
+  assertInteger(rules.progression.spawnStartWorldTicks, "rules.progression.spawnStartWorldTicks", { minimum: 0 });
+  assertInteger(rules.progression.spawnStepWorldTicks, "rules.progression.spawnStepWorldTicks", { minimum: 0 });
+  assertInteger(rules.progression.spawnMinimumWorldTicks, "rules.progression.spawnMinimumWorldTicks", { minimum: 1 });
   assertInteger(rules.progression.previewCount, "rules.progression.previewCount", { minimum: 1 });
 
   assertExactKeys(rules.scoring, ["lineClear", "carve", "fill"], "rules.scoring");
   assertNumberTable(rules.scoring.lineClear, "rules.scoring.lineClear");
   assertInteger(rules.scoring.carve, "rules.scoring.carve", { minimum: 0 });
   assertInteger(rules.scoring.fill, "rules.scoring.fill", { minimum: 0 });
-
-  assertExactKeys(rules.attack, ["lineClear"], "rules.attack");
-  assertNumberTable(rules.attack.lineClear, "rules.attack.lineClear");
-
-  assertExactKeys(rules.garbage, ["warningTicks", "cancellation"], "rules.garbage");
-  assertInteger(rules.garbage.warningTicks, "rules.garbage.warningTicks", { minimum: 0 });
-  assertBoolean(rules.garbage.cancellation, "rules.garbage.cancellation");
-
-  assertExactKeys(
-    rules.survival,
-    ["firstWaveTick", "waveIntervalTicks", "rowsPerWaveStep", "maximumRowsPerWave"],
-    "rules.survival"
-  );
-  assertInteger(rules.survival.firstWaveTick, "rules.survival.firstWaveTick", { minimum: 0 });
-  assertInteger(rules.survival.waveIntervalTicks, "rules.survival.waveIntervalTicks", { minimum: 1 });
-  assertInteger(rules.survival.rowsPerWaveStep, "rules.survival.rowsPerWaveStep", { minimum: 1 });
-  assertInteger(rules.survival.maximumRowsPerWave, "rules.survival.maximumRowsPerWave", { minimum: 1 });
 
   assertExactKeys(rules.pieces, ["garbageCellValue", "templates"], "rules.pieces");
   assertInteger(rules.pieces.garbageCellValue, "rules.pieces.garbageCellValue", { minimum: 1, maximum: 255 });
@@ -245,19 +221,19 @@ export function getTemplateBounds(rules, templateId, rotation) {
   return { width: maxX + 1, height: maxY + 1 };
 }
 
-export function gravityIntervalForLevel(rules, level) {
+export function gravityIntervalWorldTicksForLevel(rules, level) {
   const p = rules.progression;
   return Math.max(
-    p.gravityMinimumTicks,
-    p.gravityStartTicks - (level - 1) * p.gravityStepTicks
+    p.gravityMinimumWorldTicks,
+    p.gravityStartWorldTicks - (level - 1) * p.gravityStepWorldTicks
   );
 }
 
-export function spawnIntervalForLevel(rules, level) {
+export function spawnIntervalWorldTicksForLevel(rules, level) {
   const p = rules.progression;
   return Math.max(
-    p.spawnMinimumTicks,
-    p.spawnStartTicks - (level - 1) * p.spawnStepTicks
+    p.spawnMinimumWorldTicks,
+    p.spawnStartWorldTicks - (level - 1) * p.spawnStepWorldTicks
   );
 }
 
@@ -265,9 +241,4 @@ export function scoreForLineClear(rules, count, level) {
   const table = rules.scoring.lineClear;
   const base = table[Math.min(count, table.length - 1)] || 0;
   return base * level;
-}
-
-export function attackForLineClear(rules, count) {
-  const table = rules.attack.lineClear;
-  return table[Math.min(count, table.length - 1)] || 0;
 }
