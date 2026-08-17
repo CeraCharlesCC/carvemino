@@ -81,7 +81,7 @@ test("sculpt fills only one empty orthogonal neighbor per command", () => {
   assert(game.activePieces[0].cells.some((cell) => cell.x === 1 && cell.y === 0));
 });
 
-test("successful sculpt suppresses global gravity for that tick", () => {
+test("successful sculpt pauses the whole playfield timeline for the grace window", () => {
   const rules = createRules();
   const game = createGame({ seed: 20, rules });
   game.tick = 20;
@@ -120,8 +120,69 @@ test("successful sculpt suppresses global gravity for that tick", () => {
   const events = stepGame(game, [{ type: "SCULPT", pieceId: "focus", x: 1, y: 0 }], rules);
 
   assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 5);
+  assert.equal(game.tick, 20, "the world clock pauses");
+  assert.equal(game.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
   assert(events.some((event) => event.type === "BLOCK_CARVED"));
   assert(!events.some((event) => event.type === "PIECE_MOVED"));
+
+  for (let i = 1; i < rules.simulation.operationGraceTicks; i += 1) {
+    stepGame(game, [], rules);
+  }
+  assert.equal(game.tick, 20);
+  assert.equal(game.worldHoldTicks, 0);
+  assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 5);
+
+  const resumed = stepGame(game, [], rules);
+  assert.equal(game.tick, 21);
+  assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 6);
+  assert(resumed.some((event) => event.type === "PIECE_MOVED" && event.pieceId === "other"));
+});
+
+test("global grace defers scheduled spawns and garbage", () => {
+  const rules = createRules({ simulation: { operationGraceTicks: 2 } });
+  const game = createGame({ seed: 24, rules });
+  game.tick = 20;
+  game.dropQueue[0].spawnTick = 20;
+  game.dropQueue[1].spawnTick = 1000;
+  game.nextScheduledSpawnTick = 1480;
+  game.activePieces = [{
+    id: "focus",
+    templateId: "I",
+    cellValue: 1,
+    x: 0,
+    y: 5,
+    cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+    carved: 0,
+    carveLimit: 2,
+    restingTicks: 0,
+    spawnIndex: 1,
+    committed: false
+  }];
+  game.focusedPieceId = "focus";
+  assert.equal(queueGarbage(game, {
+    id: "due-during-hold",
+    sourcePlayerId: "opponent",
+    rows: 1,
+    applyTick: 20,
+    seed: 7
+  }), true);
+
+  const sculpted = stepGame(game, [
+    { type: "SCULPT", pieceId: "focus", x: 1, y: 0 }
+  ], rules);
+  const held = stepGame(game, [], rules);
+
+  assert(![...sculpted, ...held].some((event) => (
+    event.type === "PIECE_SPAWNED" || event.type === "GARBAGE_APPLIED"
+  )));
+  assert.equal(game.tick, 20);
+  assert.equal(game.dropQueue[0].spawnTick, 20);
+  assert.equal(game.incomingGarbage.length, 1);
+
+  const resumed = stepGame(game, [], rules);
+  assert(resumed.some((event) => event.type === "PIECE_SPAWNED"));
+  assert(resumed.some((event) => event.type === "GARBAGE_APPLIED"));
+  assert.equal(game.incomingGarbage.length, 0);
 });
 
 test("invalid sculpt does not suppress gravity", () => {
@@ -167,7 +228,7 @@ test("invalid sculpt does not suppress gravity", () => {
   assert(events.some((event) => event.type === "PIECE_MOVED" && event.pieceId === "other"));
 });
 
-test("natural lock suppresses global gravity for that tick", () => {
+test("natural lock becomes pending while the whole playfield pauses", () => {
   const rules = createRules();
   const game = createGame({ seed: 22, rules });
   const bottom = game.board.height - 1;
@@ -206,9 +267,104 @@ test("natural lock suppresses global gravity for that tick", () => {
 
   const events = stepGame(game, [], rules);
 
-  assert(events.some((event) => event.type === "PIECE_LOCKED" && event.pieceId === "locking"));
+  assert(events.some((event) => event.type === "PIECE_LOCK_PENDING"
+    && event.pieceId === "locking"));
+  assert(!events.some((event) => event.type === "PIECE_LOCKED"));
+  assert.equal(game.activePieces.find((piece) => piece.id === "locking").pendingLock, true);
   assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
+  assert.equal(game.tick, 20);
   assert(!events.some((event) => event.type === "PIECE_MOVED"));
+
+  for (let i = 1; i < rules.simulation.operationGraceTicks; i += 1) {
+    const held = stepGame(game, [], rules);
+    assert(!held.some((event) => event.type === "PIECE_LOCKED"));
+  }
+
+  const locked = stepGame(game, [], rules);
+  assert(locked.some((event) => event.type === "PIECE_LOCKED"
+    && event.pieceId === "locking"));
+  assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
+  assert.equal(game.tick, 20, "lock resolution does not consume world time");
+});
+
+test("an ordinary gravity landing reaches pending lock without pulse alignment", () => {
+  const rules = createRules({
+    simulation: { lockDelayTicks: 4, operationGraceTicks: 3 },
+    progression: {
+      gravityStartTicks: 2,
+      gravityStepTicks: 0,
+      gravityMinimumTicks: 2,
+      spawnStartTicks: 1000,
+      spawnStepTicks: 0,
+      spawnMinimumTicks: 1000
+    }
+  });
+  const game = createGame({ seed: 26, rules });
+  let pendingEvent = null;
+
+  for (let i = 0; i < 100 && !pendingEvent; i += 1) {
+    pendingEvent = stepGame(game, [], rules)
+      .find((event) => event.type === "PIECE_LOCK_PENDING") || null;
+  }
+
+  assert(pendingEvent, "a naturally falling piece should enter pending lock");
+  const pending = game.activePieces.find((piece) => piece.id === pendingEvent.pieceId);
+  assert(pending);
+  assert.equal(pending.pendingLock, true);
+  assert.equal(game.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
+});
+
+test("sculpt can edit a pending piece and refreshes the global grace", () => {
+  const rules = createRules();
+  const game = createGame({ seed: 23, rules });
+  const bottom = game.board.height - 1;
+  game.tick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
+  game.nextScheduledSpawnTick = 1480;
+  game.activePieces = [
+    {
+      id: "editing",
+      templateId: "I",
+      cellValue: 1,
+      x: 0,
+      y: bottom,
+      cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: rules.simulation.lockDelayTicks - 1,
+      spawnIndex: 1,
+      committed: false
+    },
+    {
+      id: "falling",
+      templateId: "I",
+      cellValue: 1,
+      x: 9,
+      y: 5,
+      cells: [{ x: 0, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: 0,
+      spawnIndex: 2,
+      committed: false
+    }
+  ];
+  game.focusedPieceId = "editing";
+
+  stepGame(game, [], rules);
+  assert.equal(game.activePieces.find((piece) => piece.id === "editing").pendingLock, true);
+
+  const events = stepGame(game, [
+    { type: "SCULPT", pieceId: "editing", x: 1, y: 0 }
+  ], rules);
+
+  const editing = game.activePieces.find((piece) => piece.id === "editing");
+  assert(events.some((event) => event.type === "BLOCK_CARVED"));
+  assert(editing);
+  assert.equal(editing.pendingLock, false);
+  assert.equal(editing.restingTicks, 0);
+  assert.equal(game.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
+  assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
 });
 
 test("hard drop moves the focused piece to its lowest available position", () => {
@@ -293,7 +449,7 @@ test("drop planning balances between two sampled positions over a 48-drop histor
   stepGame(game, [], rules);
 
   const plan = game.dropQueue[0];
-  const maxX = game.board.width - getTemplateBounds(plan.templateId, plan.rotation).width;
+  const maxX = game.board.width - getTemplateBounds(rules, plan.templateId, plan.rotation).width;
   let randomState = 1;
   const sampledXs = Array.from({ length: 2 }, () => {
     randomState ^= randomState << 13;
@@ -305,11 +461,11 @@ test("drop planning balances between two sampled positions over a 48-drop histor
   });
   const coverage = Array(game.board.width).fill(0);
   for (const historyPlan of historyBeforePlanning) {
-    for (const cell of getTemplateCells(historyPlan.templateId, historyPlan.rotation)) {
+    for (const cell of getTemplateCells(rules, historyPlan.templateId, historyPlan.rotation)) {
       coverage[historyPlan.x + cell.x] += 1;
     }
   }
-  const cells = getTemplateCells(plan.templateId, plan.rotation);
+  const cells = getTemplateCells(rules, plan.templateId, plan.rotation);
   const score = (x) => cells.reduce((sum, cell) => sum + coverage[x + cell.x], 0);
   const expectedX = score(sampledXs[1]) < score(sampledXs[0]) ? sampledXs[1] : sampledXs[0];
 
@@ -318,14 +474,15 @@ test("drop planning balances between two sampled positions over a 48-drop histor
 });
 
 test("template rotation produces normalized unique orientations", () => {
-  assert.deepEqual(getTemplateCells("I", 1), [
+  const rules = createRules();
+  assert.deepEqual(getTemplateCells(rules, "I", 1), [
     { x: 0, y: 0 },
     { x: 0, y: 1 },
     { x: 0, y: 2 },
     { x: 0, y: 3 }
   ]);
-  assert.deepEqual(getTemplateBounds("I", 1), { width: 1, height: 4 });
-  assert.deepEqual(getTemplateCells("O", 3), getTemplateCells("O", 0));
+  assert.deepEqual(getTemplateBounds(rules, "I", 1), { width: 1, height: 4 });
+  assert.deepEqual(getTemplateCells(rules, "O", 3), getTemplateCells(rules, "O", 0));
 });
 
 test("planned rotation is fixed before spawn and used by the spawned piece", () => {
@@ -342,7 +499,7 @@ test("planned rotation is fixed before spawn and used by the spawned piece", () 
   assert(piece);
   assert.equal(piece.rotation, 1);
   assert.equal(piece.x, game.board.width - 1);
-  assert.deepEqual(piece.cells, getTemplateCells("I", 1));
+  assert.deepEqual(piece.cells, getTemplateCells(rules, "I", 1));
   assertGameState(game);
 });
 
@@ -379,9 +536,55 @@ test("snapshot round trip preserves deterministic hash", () => {
   assertGameState(restored);
 });
 
+test("snapshot round trip preserves a pending lock and global grace", () => {
+  const rules = createRules();
+  const game = createGame({ seed: 25, rules });
+  const bottom = game.board.height - 1;
+  game.tick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
+  game.activePieces = [{
+    id: "pending",
+    templateId: "I",
+    rotation: 0,
+    cellValue: 1,
+    x: 0,
+    y: bottom,
+    cells: [{ x: 0, y: 0 }],
+    carved: 0,
+    carveLimit: 2,
+    restingTicks: rules.simulation.lockDelayTicks - 1,
+    pendingLock: false,
+    spawnIndex: 1,
+    committed: false
+  }];
+  game.focusedPieceId = "pending";
+
+  stepGame(game, [], rules);
+  const restored = restoreGame(snapshotGame(game));
+
+  assert.equal(restored.activePieces[0].pendingLock, true);
+  assert.equal(restored.worldHoldTicks, rules.simulation.operationGraceTicks - 1);
+  assert.equal(hashGameState(restored), hashGameState(game));
+
+  for (let i = 0; i <= rules.simulation.operationGraceTicks; i += 1) {
+    assert.deepEqual(stepGame(restored, [], rules), stepGame(game, [], rules));
+    assert.equal(hashGameState(restored), hashGameState(game));
+  }
+});
+
+test("restore rejects snapshots from a non-current schema instead of migrating them", () => {
+  const rules = createRules();
+  const snapshot = snapshotGame(createGame({ seed: 26, rules }));
+  delete snapshot.simulationTick;
+  snapshot.version = 1;
+  delete snapshot.schemaVersion;
+
+  assert.throws(() => restoreGame(snapshot), /snapshot\.version is not supported|schemaVersion is required/);
+});
+
 test("two-line clear in versus produces queued garbage for the opponent", () => {
   const rules = createRules({
-    simulation: { lockDelayTicks: 1 },
+    simulation: { lockDelayTicks: 1, operationGraceTicks: 0 },
     garbage: { warningTicks: 20 }
   });
   const match = createMatch({

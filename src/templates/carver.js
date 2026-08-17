@@ -4,7 +4,11 @@ export const CARVER_TEMPLATE = Object.freeze({
   name: "Carver",
   description: "Chunky polyominoes, a taller dig site, and twice the carving budget.",
   board: Object.freeze({ width: 10, visibleHeight: 24, hiddenHeight: 6 }),
-  simulation: Object.freeze({ ticksPerSecond: 60, lockDelayTicks: 30 }),
+  simulation: Object.freeze({
+    ticksPerSecond: 60,
+    lockDelayTicks: 30,
+    operationGraceTicks: 8
+  }),
   sculpting: Object.freeze({ carveLimit: 4, minimumCells: 2, scrapPerCarve: 1, fillCost: 2 }),
   progression: Object.freeze({
     linesPerLevel: 4,

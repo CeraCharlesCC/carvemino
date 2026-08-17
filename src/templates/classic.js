@@ -4,7 +4,11 @@ export const CLASSIC_TEMPLATE = Object.freeze({
   name: "Classic",
   description: "The original Carvemino rules: familiar tetrominoes with precision carving.",
   board: Object.freeze({ width: 10, visibleHeight: 20, hiddenHeight: 4 }),
-  simulation: Object.freeze({ ticksPerSecond: 60, lockDelayTicks: 24 }),
+  simulation: Object.freeze({
+    ticksPerSecond: 60,
+    lockDelayTicks: 24,
+    operationGraceTicks: 8
+  }),
   sculpting: Object.freeze({ carveLimit: 2, minimumCells: 1, scrapPerCarve: 1, fillCost: 2 }),
   progression: Object.freeze({
     linesPerLevel: 5,

@@ -36,10 +36,11 @@ export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
 });
 
 const STORAGE_KEY = "carvemino-profile-v1";
+const PROFILE_SCHEMA_VERSION = 1;
 
 function createDefaultData() {
   return {
-    version: 1,
+    schemaVersion: PROFILE_SCHEMA_VERSION,
     highScores: { classic: 0, carver: 0 },
     achievements: {},
     settings: {
@@ -50,7 +51,7 @@ function createDefaultData() {
   };
 }
 
-function normalizeVolume(value, fallback) {
+function clampVolume(value, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.max(0, Math.min(1, number));
@@ -64,49 +65,49 @@ function safeParse(text) {
   }
 }
 
-function normalizeKeybindings(value) {
-  const saved = value && typeof value === "object" ? value : {};
-  return Object.fromEntries(Object.entries(DEFAULT_KEYBINDINGS).map(([action, fallback]) => [
-    action,
-    typeof saved[action] === "string" && saved[action] ? saved[action] : fallback
-  ]));
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function normalizeData(value) {
-  const defaults = createDefaultData();
-  if (!value || typeof value !== "object") return defaults;
-  return {
-    version: 1,
-    highScores: {
-      ...defaults.highScores,
-      ...(value.highScores || {})
-    },
-    achievements: { ...(value.achievements || {}) },
-    settings: {
-      theme: value.settings?.theme || defaults.settings.theme,
-      keybindings: normalizeKeybindings(value.settings?.keybindings),
-      audio: {
-        masterVolume: normalizeVolume(
-          value.settings?.audio?.masterVolume,
-          defaults.settings.audio.masterVolume
-        ),
-        musicVolume: normalizeVolume(
-          value.settings?.audio?.musicVolume,
-          defaults.settings.audio.musicVolume
-        ),
-        sfxVolume: normalizeVolume(
-          value.settings?.audio?.sfxVolume,
-          defaults.settings.audio.sfxVolume
-        ),
-        musicEnabled: typeof value.settings?.audio?.musicEnabled === "boolean"
-          ? value.settings.audio.musicEnabled
-          : defaults.settings.audio.musicEnabled,
-        sfxEnabled: typeof value.settings?.audio?.sfxEnabled === "boolean"
-          ? value.settings.audio.sfxEnabled
-          : defaults.settings.audio.sfxEnabled
-      }
-    }
-  };
+function hasExactKeys(value, keys) {
+  if (!isPlainObject(value)) return false;
+  const actual = Object.keys(value);
+  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function isCurrentProfileData(value) {
+  if (!hasExactKeys(value, ["schemaVersion", "highScores", "achievements", "settings"])) return false;
+  if (value.schemaVersion !== PROFILE_SCHEMA_VERSION) return false;
+
+  if (!hasExactKeys(value.highScores, ["classic", "carver"])) return false;
+  if (!Object.values(value.highScores).every((score) => Number.isSafeInteger(score) && score >= 0)) return false;
+
+  if (!isPlainObject(value.achievements)) return false;
+  const achievementIds = new Set(Object.values(ACHIEVEMENTS).map((achievement) => achievement.id));
+  for (const [achievementId, achievement] of Object.entries(value.achievements)) {
+    if (!achievementIds.has(achievementId)) return false;
+    if (!hasExactKeys(achievement, ["unlocked", "unlockedAt"])) return false;
+    if (achievement.unlocked !== true) return false;
+    if (typeof achievement.unlockedAt !== "string" || achievement.unlockedAt === "") return false;
+  }
+
+  if (!hasExactKeys(value.settings, ["theme", "keybindings", "audio"])) return false;
+  if (typeof value.settings.theme !== "string" || value.settings.theme === "") return false;
+
+  const keybindingActions = Object.keys(DEFAULT_KEYBINDINGS);
+  if (!hasExactKeys(value.settings.keybindings, keybindingActions)) return false;
+  if (!Object.values(value.settings.keybindings).every((code) => typeof code === "string" && code !== "")) {
+    return false;
+  }
+
+  const audio = value.settings.audio;
+  if (!hasExactKeys(audio, ["masterVolume", "musicVolume", "sfxVolume", "musicEnabled", "sfxEnabled"])) {
+    return false;
+  }
+  for (const setting of ["masterVolume", "musicVolume", "sfxVolume"]) {
+    if (!Number.isFinite(audio[setting]) || audio[setting] < 0 || audio[setting] > 1) return false;
+  }
+  return typeof audio.musicEnabled === "boolean" && typeof audio.sfxEnabled === "boolean";
 }
 
 function cloneData(data) {
@@ -125,7 +126,8 @@ export function createProfileStore(storage) {
 
   try {
     const saved = storage?.getItem?.(STORAGE_KEY);
-    if (saved) data = normalizeData(safeParse(saved));
+    const parsed = saved ? safeParse(saved) : null;
+    if (isCurrentProfileData(parsed)) data = cloneData(parsed);
   } catch {
     data = createDefaultData();
   }
@@ -200,7 +202,7 @@ export function createProfileStore(storage) {
 
   function setAudioSetting(setting, value) {
     if (setting === "masterVolume" || setting === "musicVolume" || setting === "sfxVolume") {
-      data.settings.audio[setting] = normalizeVolume(value, data.settings.audio[setting]);
+      data.settings.audio[setting] = clampVolume(value, data.settings.audio[setting]);
     } else if (setting === "musicEnabled" || setting === "sfxEnabled") {
       if (typeof value !== "boolean") return false;
       data.settings.audio[setting] = value;

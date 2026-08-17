@@ -20,6 +20,7 @@ const NEIGHBORS = Object.freeze([
 
 const DROP_COVERAGE_HISTORY_LIMIT = 48;
 const DROP_POSITION_CHOICES = 2;
+const GAME_SCHEMA_VERSION = 1;
 
 function hashSeed(seed, salt) {
   let x = (seed ^ salt) >>> 0;
@@ -240,6 +241,7 @@ function applyCarve(state, command, rules, events) {
   piece.cells.sort(compareCells);
   piece.carved += 1;
   piece.restingTicks = 0;
+  piece.pendingLock = false;
   state.scrap += rules.sculpting.scrapPerCarve;
   state.score += rules.scoring.carve;
 
@@ -268,6 +270,7 @@ function applyFill(state, command, rules, events) {
   piece.cells.push({ x: command.x, y: command.y });
   piece.cells.sort(compareCells);
   piece.restingTicks = 0;
+  piece.pendingLock = false;
   state.scrap -= rules.sculpting.fillCost;
   state.score += rules.scoring.fill;
 
@@ -311,6 +314,7 @@ function applyHardDrop(state, rules, events) {
 
   piece.y += distance;
   piece.restingTicks = 0;
+  piece.pendingLock = false;
   piece.committed = true;
   events.push({
     type: "PIECE_HARD_DROPPED",
@@ -358,7 +362,7 @@ function applyCommands(state, commands, rules, events) {
 function getDropCoverage(state, rules) {
   const coverage = Array(state.board.width).fill(0);
   for (const plan of state.dropCoverageHistory) {
-    for (const cell of getTemplateCells(rules, plan.templateId, plan.rotation ?? 0)) {
+    for (const cell of getTemplateCells(rules, plan.templateId, plan.rotation)) {
       const x = plan.x + cell.x;
       if (x >= 0 && x < coverage.length) coverage[x] += 1;
     }
@@ -440,7 +444,7 @@ function maintainDropQueue(state, rules, events) {
 function spawnDuePieces(state, rules, events) {
   while (state.dropQueue.length > 0 && state.dropQueue[0].spawnTick <= state.tick) {
     const plan = state.dropQueue.shift();
-    const rotation = plan.rotation ?? 0;
+    const rotation = plan.rotation;
     const cells = getTemplateCells(rules, plan.templateId, rotation);
     const piece = {
       id: plan.pieceId,
@@ -453,6 +457,7 @@ function spawnDuePieces(state, rules, events) {
       carved: 0,
       carveLimit: rules.sculpting.carveLimit,
       restingTicks: 0,
+      pendingLock: false,
       spawnIndex: state.nextSpawnIndex++,
       committed: false
     };
@@ -496,12 +501,12 @@ function applyGravity(state, rules, events) {
   }
 }
 
-function hasNaturalLockDue(state, rules) {
-  return state.activePieces.some((piece) => (
-    !canTranslate(state, piece, 0, 1)
-    && supportKindBelow(state, piece) !== "active"
-    && piece.restingTicks + 1 >= rules.simulation.lockDelayTicks
-  ));
+function operationGraceTicks(rules) {
+  return Math.max(0, Math.floor(rules.simulation.operationGraceTicks || 0));
+}
+
+function refreshWorldHold(state, rules) {
+  state.worldHoldTicks = Math.max(state.worldHoldTicks, operationGraceTicks(rules));
 }
 
 function clearCompletedLines(state) {
@@ -576,32 +581,9 @@ function resolveLineClearRewards(state, rules, cleared, events) {
   }
 }
 
-function updateRestingAndLock(state, rules, events) {
-  const toLock = [];
-  const ordered = [...state.activePieces].sort(
-    (a, b) => pieceBottom(b) - pieceBottom(a) || a.spawnIndex - b.spawnIndex
-  );
-
-  for (const piece of ordered) {
-    if (canTranslate(state, piece, 0, 1)) {
-      piece.restingTicks = 0;
-      continue;
-    }
-
-    const support = supportKindBelow(state, piece);
-    if (support === "active") {
-      piece.restingTicks = 0;
-      continue;
-    }
-
-    piece.restingTicks += 1;
-    if (piece.restingTicks >= rules.simulation.lockDelayTicks) {
-      toLock.push(piece);
-    }
-  }
-
+function resolveLocks(state, pieces, rules, events) {
   let lockedAny = false;
-  for (const piece of toLock) {
+  for (const piece of pieces) {
     if (!findPiece(state, piece.id)) continue;
     if (canTranslate(state, piece, 0, 1)) continue;
     if (supportKindBelow(state, piece) === "active") continue;
@@ -613,6 +595,74 @@ function updateRestingAndLock(state, rules, events) {
   if (lockedAny && state.status === "playing") {
     const cleared = clearCompletedLines(state);
     resolveLineClearRewards(state, rules, cleared, events);
+  }
+  return lockedAny;
+}
+
+function beginDueNaturalLocks(state, rules, events) {
+  const ordered = [...state.activePieces].sort(
+    (a, b) => pieceBottom(b) - pieceBottom(a) || a.spawnIndex - b.spawnIndex
+  );
+  const due = ordered.filter((piece) => (
+    !piece.pendingLock
+    && !canTranslate(state, piece, 0, 1)
+    && supportKindBelow(state, piece) !== "active"
+    && piece.restingTicks + 1 >= rules.simulation.lockDelayTicks
+  ));
+  if (due.length === 0) return false;
+
+  if (operationGraceTicks(rules) === 0) {
+    resolveLocks(state, due, rules, events);
+    return true;
+  }
+
+  for (const piece of due) {
+    piece.restingTicks = rules.simulation.lockDelayTicks;
+    piece.pendingLock = true;
+    events.push({ type: "PIECE_LOCK_PENDING", pieceId: piece.id });
+  }
+  refreshWorldHold(state, rules);
+  return true;
+}
+
+function finalizePendingLocks(state, rules, events) {
+  const ordered = [...state.activePieces]
+    .filter((piece) => piece.pendingLock)
+    .sort((a, b) => pieceBottom(b) - pieceBottom(a) || a.spawnIndex - b.spawnIndex);
+  if (ordered.length === 0) return false;
+
+  const toLock = [];
+  for (const piece of ordered) {
+    piece.pendingLock = false;
+    if (canTranslate(state, piece, 0, 1) || supportKindBelow(state, piece) === "active") {
+      piece.restingTicks = 0;
+    } else {
+      toLock.push(piece);
+    }
+  }
+  return resolveLocks(state, toLock, rules, events);
+}
+
+function updateResting(state) {
+  const ordered = [...state.activePieces].sort(
+    (a, b) => pieceBottom(b) - pieceBottom(a) || a.spawnIndex - b.spawnIndex
+  );
+
+  for (const piece of ordered) {
+    if (canTranslate(state, piece, 0, 1)) {
+      piece.restingTicks = 0;
+      piece.pendingLock = false;
+      continue;
+    }
+
+    const support = supportKindBelow(state, piece);
+    if (support === "active") {
+      piece.restingTicks = 0;
+      piece.pendingLock = false;
+      continue;
+    }
+
+    piece.restingTicks += 1;
   }
 }
 
@@ -659,6 +709,7 @@ function applyGarbageRows(state, packet, rules, events) {
   for (const piece of state.activePieces) {
     piece.y -= rows;
     piece.restingTicks = 0;
+    piece.pendingLock = false;
     if (piece.cells.some((cell) => piece.y + cell.y < 0)) {
       state.status = "gameover";
       state.gameOverReason = "garbage-pushed-piece-out";
@@ -727,9 +778,11 @@ export function createGame({ seed = 1, rules }) {
   if (!rules) throw new Error("rules are required");
   const boardHeight = rules.board.visibleHeight + rules.board.hiddenHeight;
   const state = {
-    version: 1,
+    schemaVersion: GAME_SCHEMA_VERSION,
     rulesetId: rules.id,
     tick: 0,
+    simulationTick: 0,
+    worldHoldTicks: 0,
     board: {
       width: rules.board.width,
       height: boardHeight,
@@ -768,17 +821,34 @@ export function createGame({ seed = 1, rules }) {
 export function stepGame(state, commands, rules) {
   const events = [];
   if (state.status !== "playing") return events;
+  state.simulationTick += 1;
 
   const sculptedThisTick = applyCommands(state, commands || [], rules, events);
+  if (sculptedThisTick) refreshWorldHold(state, rules);
+
+  if (state.worldHoldTicks > 0) {
+    state.worldHoldTicks -= 1;
+    return events;
+  }
+
+  if (finalizePendingLocks(state, rules, events)) {
+    if (state.status === "playing") maintainDropQueue(state, rules, events);
+    return events;
+  }
+
+  if (beginDueNaturalLocks(state, rules, events)) {
+    if (state.worldHoldTicks > 0) state.worldHoldTicks -= 1;
+    return events;
+  }
+
   applyScheduledGarbage(state, rules, events);
   if (state.status !== "playing") return events;
 
   spawnDuePieces(state, rules, events);
   if (state.status !== "playing") return events;
 
-  const naturalLockDue = hasNaturalLockDue(state, rules);
-  if (!sculptedThisTick && !naturalLockDue) applyGravity(state, rules, events);
-  updateRestingAndLock(state, rules, events);
+  applyGravity(state, rules, events);
+  updateResting(state);
   if (state.status === "playing") maintainDropQueue(state, rules, events);
   state.tick += 1;
   return events;
@@ -792,6 +862,7 @@ export function getFocusedPiece(state) {
 function clonePiece(piece) {
   return {
     ...piece,
+    pendingLock: Boolean(piece.pendingLock),
     cells: normalizeCells(piece.cells)
   };
 }
@@ -800,6 +871,8 @@ export function createGameView(state) {
   const focused = currentFocusedPiece(state);
   return {
     tick: state.tick,
+    simulationTick: state.simulationTick,
+    worldHoldTicks: state.worldHoldTicks,
     board: {
       width: state.board.width,
       height: state.board.height,
@@ -823,9 +896,11 @@ export function createGameView(state) {
 
 export function snapshotGame(state) {
   return {
-    version: state.version,
+    schemaVersion: state.schemaVersion,
     rulesetId: state.rulesetId,
     tick: state.tick,
+    simulationTick: state.simulationTick,
+    worldHoldTicks: state.worldHoldTicks,
     board: {
       width: state.board.width,
       height: state.board.height,
@@ -857,8 +932,73 @@ export function snapshotGame(state) {
   };
 }
 
+const CURRENT_SNAPSHOT_KEYS = Object.freeze([
+  "schemaVersion",
+  "rulesetId",
+  "tick",
+  "simulationTick",
+  "worldHoldTicks",
+  "board",
+  "activePieces",
+  "focusedPieceId",
+  "dropQueue",
+  "dropCoverageHistory",
+  "incomingGarbage",
+  "appliedGarbageIds",
+  "scrap",
+  "score",
+  "totalLines",
+  "level",
+  "status",
+  "gameOverReason",
+  "nextPieceId",
+  "nextSpawnIndex",
+  "nextScheduledSpawnTick",
+  "random"
+]);
+
+function assertCurrentSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    throw new Error("game snapshot must be an object");
+  }
+  const expected = new Set(CURRENT_SNAPSHOT_KEYS);
+  for (const key of Object.keys(snapshot)) {
+    if (!expected.has(key)) throw new Error(`snapshot.${key} is not supported`);
+  }
+  for (const key of CURRENT_SNAPSHOT_KEYS) {
+    if (!Object.hasOwn(snapshot, key)) throw new Error(`snapshot.${key} is required`);
+  }
+  if (snapshot.schemaVersion !== GAME_SCHEMA_VERSION) {
+    throw new Error(`Unsupported game snapshot schema: ${snapshot.schemaVersion}`);
+  }
+  if (!snapshot.random || typeof snapshot.random !== "object") {
+    throw new Error("snapshot.random is required");
+  }
+  for (const stream of ["pieces", "rotations", "drops", "garbage"]) {
+    if (!Object.hasOwn(snapshot.random, stream)) {
+      throw new Error(`snapshot.random.${stream} is required`);
+    }
+  }
+  for (const [index, plan] of snapshot.dropQueue.entries()) {
+    if (!Object.hasOwn(plan, "rotation")) throw new Error(`snapshot.dropQueue[${index}].rotation is required`);
+  }
+  for (const [index, plan] of snapshot.dropCoverageHistory.entries()) {
+    if (!Object.hasOwn(plan, "rotation")) {
+      throw new Error(`snapshot.dropCoverageHistory[${index}].rotation is required`);
+    }
+  }
+  for (const [index, piece] of snapshot.activePieces.entries()) {
+    for (const field of ["rotation", "pendingLock", "committed"]) {
+      if (!Object.hasOwn(piece, field)) {
+        throw new Error(`snapshot.activePieces[${index}].${field} is required`);
+      }
+    }
+  }
+}
+
 export function restoreGame(snapshot) {
-  return {
+  assertCurrentSnapshot(snapshot);
+  const state = {
     ...snapshot,
     board: {
       ...snapshot.board,
@@ -866,18 +1006,18 @@ export function restoreGame(snapshot) {
     },
     activePieces: snapshot.activePieces.map(clonePiece),
     dropQueue: snapshot.dropQueue.map((plan) => ({ ...plan })),
-    dropCoverageHistory: (snapshot.dropCoverageHistory || []).map((plan) => ({ ...plan })),
+    dropCoverageHistory: snapshot.dropCoverageHistory.map((plan) => ({ ...plan })),
     incomingGarbage: snapshot.incomingGarbage.map((packet) => ({ ...packet })),
     appliedGarbageIds: [...snapshot.appliedGarbageIds],
     random: {
       pieces: { ...snapshot.random.pieces },
-      rotations: snapshot.random.rotations
-        ? { ...snapshot.random.rotations }
-        : { state: hashSeed(snapshot.random.pieces.state >>> 0, 0xa4093822) },
+      rotations: { ...snapshot.random.rotations },
       drops: { ...snapshot.random.drops },
       garbage: { ...snapshot.random.garbage }
     }
   };
+  assertGameState(state);
+  return state;
 }
 
 export function hashGameState(state) {

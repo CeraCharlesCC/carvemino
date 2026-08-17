@@ -89,33 +89,38 @@ test("rebinding swaps collisions and reset restores defaults", () => {
   assert.deepEqual(snapshot.settings.keybindings, DEFAULT_KEYBINDINGS);
 });
 
-test("legacy direct-restart bindings are discarded", () => {
-  const storage = new MemoryStorage();
-  storage.setItem("carvemino-profile-v1", JSON.stringify({
-    version: 1,
-    settings: {
-      keybindings: { ...DEFAULT_KEYBINDINGS, restart: "KeyR", unknown: "KeyX" }
-    }
-  }));
-
-  const bindings = createProfileStore(storage).getSnapshot().settings.keybindings;
-  assert.deepEqual(bindings, DEFAULT_KEYBINDINGS);
-  assert.equal("restart" in bindings, false);
-  assert.equal("unknown" in bindings, false);
-});
-
-test("audio settings persist, clamp volumes, and migrate old profiles", () => {
+test("profiles with a non-current schema are reset instead of migrated", () => {
   const storage = new MemoryStorage();
   storage.setItem("carvemino-profile-v1", JSON.stringify({
     version: 1,
     highScores: { classic: 99 },
-    settings: { theme: "default", keybindings: {} }
+    settings: {
+      theme: "default",
+      keybindings: DEFAULT_KEYBINDINGS
+    }
   }));
 
-  const profile = createProfileStore(storage);
-  let snapshot = profile.getSnapshot();
+  const snapshot = createProfileStore(storage).getSnapshot();
+  assert.equal(snapshot.schemaVersion, 1);
+  assert.deepEqual(snapshot.highScores, { classic: 0, carver: 0 });
   assert.deepEqual(snapshot.settings.audio, DEFAULT_AUDIO_SETTINGS);
+});
 
+test("unknown fields invalidate the current profile schema instead of being normalized", () => {
+  const storage = new MemoryStorage();
+  const saved = createProfileStore(new MemoryStorage()).getSnapshot();
+  saved.highScores.classic = 99;
+  saved.settings.keybindings.restart = "KeyR";
+  storage.setItem("carvemino-profile-v1", JSON.stringify(saved));
+
+  const snapshot = createProfileStore(storage).getSnapshot();
+  assert.equal(snapshot.highScores.classic, 0);
+  assert.deepEqual(snapshot.settings.keybindings, DEFAULT_KEYBINDINGS);
+});
+
+test("audio settings persist and clamp volumes", () => {
+  const storage = new MemoryStorage();
+  const profile = createProfileStore(storage);
   assert.equal(profile.setAudioSetting("masterVolume", 2), true);
   assert.equal(profile.setAudioSetting("musicVolume", -1), true);
   assert.equal(profile.setAudioSetting("sfxVolume", 0.35), true);
@@ -123,7 +128,7 @@ test("audio settings persist, clamp volumes, and migrate old profiles", () => {
   assert.equal(profile.setAudioSetting("sfxEnabled", false), true);
   assert.equal(profile.setAudioSetting("unknown", 1), false);
 
-  snapshot = createProfileStore(storage).getSnapshot();
+  const snapshot = createProfileStore(storage).getSnapshot();
   assert.equal(snapshot.settings.audio.masterVolume, 1);
   assert.equal(snapshot.settings.audio.musicVolume, 0);
   assert.equal(snapshot.settings.audio.sfxVolume, 0.35);

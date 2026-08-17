@@ -93,12 +93,12 @@ function clearCanvas(canvas, context) {
   context.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-function drawCell(context, x, y, size, value, focused = false) {
+function drawCell(context, x, y, size, value, focused = false, pendingLock = false) {
   const inset = 1.5;
   context.fillStyle = PALETTE[value] || "#c8ccbe";
   context.fillRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
-  context.strokeStyle = focused ? "#9aa592" : "#0a0b0866";
-  context.lineWidth = focused ? 2 : 1;
+  context.strokeStyle = pendingLock ? "#f0b35d" : focused ? "#9aa592" : "#0a0b0866";
+  context.lineWidth = pendingLock || focused ? 2 : 1;
   context.strokeRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
 }
 
@@ -349,7 +349,15 @@ export function createUi({
         const x = piece.x + cell.x;
         const y = piece.y + cell.y - visibleTop;
         if (y < 0 || y >= board.visibleHeight) continue;
-        drawCell(field, x * cellSize, y * cellSize, cellSize, piece.cellValue, isFocused);
+        drawCell(
+          field,
+          x * cellSize,
+          y * cellSize,
+          cellSize,
+          piece.cellValue,
+          isFocused,
+          piece.pendingLock
+        );
       }
     }
 
@@ -369,7 +377,7 @@ export function createUi({
   function renderNext(view) {
     clearCanvas(nextCanvas, next);
     if (!view.next || !rules) return;
-    const cells = getTemplateCells(rules, view.next.templateId, view.next.rotation ?? 0);
+    const cells = getTemplateCells(rules, view.next.templateId, view.next.rotation);
     let maxX = 0;
     let maxY = 0;
     for (const cell of cells) {

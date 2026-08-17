@@ -24,7 +24,10 @@ export class GameRuntime {
     const commands = this.pendingCommands;
     this.pendingCommands = [];
     for (const command of commands) {
-      this.commandLog.push({ tick: this.game.tick, ...command });
+      this.commandLog.push({
+        tick: this.game.simulationTick,
+        ...command
+      });
     }
     const events = stepGame(this.game, commands, this.rules);
     if (events.length > 0) this.onEvents(events, this.game);
