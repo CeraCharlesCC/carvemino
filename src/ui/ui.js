@@ -22,8 +22,7 @@ const KEYBINDING_ACTIONS = Object.freeze([
   ["cursorRight", "Cursor right"],
   ["carve", "Carve"],
   ["fill", "Fill"],
-  ["hardDrop", "Hard drop"],
-  ["restart", "Restart"]
+  ["hardDrop", "Hard drop"]
 ]);
 
 const ATTRACT_PANELS = Object.freeze([
@@ -58,6 +57,14 @@ const ATTRACT_DEMO_STEPS = Object.freeze([
 
 const MENU_PREVIOUS_KEYS = new Set(["ArrowUp", "ArrowLeft", "KeyW", "KeyA"]);
 const MENU_NEXT_KEYS = new Set(["ArrowDown", "ArrowRight", "KeyS", "KeyD"]);
+const NON_REPEATING_UI_KEYS = new Set(["Enter", "Space", "Escape", "KeyR", "KeyO"]);
+
+export function getTitleScreenAction(code) {
+  if (code === "Enter") return "start";
+  if (code === "KeyR") return "records";
+  if (code === "KeyO") return "options";
+  return null;
+}
 
 function clearCanvas(canvas, context) {
   context.clearRect(0, 0, canvas.width, canvas.height);
@@ -147,7 +154,10 @@ export function createUi({
   const fillCost = document.querySelector("#fill-cost");
   const cursor = document.querySelector("#drop-cursor");
   const gameOver = document.querySelector("#game-over");
-  const restartHint = document.querySelector("#restart-hint");
+  const finalScore = document.querySelector("#final-score");
+  const playAgainButton = document.querySelector("#play-again");
+  const gameOverBackButton = document.querySelector("#game-over-back");
+  const pauseGameButton = document.querySelector("#pause-game");
   const modeName = document.querySelector("#mode-name");
   const highScore = document.querySelector("#high-score");
   const keybindingList = document.querySelector("#keybinding-list");
@@ -159,6 +169,7 @@ export function createUi({
   const achievementList = document.querySelector("#achievement-list");
   const achievementSummary = document.querySelector("#achievement-summary");
   const pauseOverlay = document.querySelector("#pause-overlay");
+  const resumeGameButton = document.querySelector("#resume-game");
   const focusPrevKey = document.querySelector("#focus-prev-key");
   const focusNextKey = document.querySelector("#focus-next-key");
   const focusConnector = document.querySelector("#focus-connector");
@@ -266,7 +277,9 @@ export function createUi({
     const button = screenName === "menu"
       ? pressStart
       : screen?.querySelector(".menu-button:not([disabled])");
-    if (button) requestAnimationFrame(() => button.focus());
+    if (button) requestAnimationFrame(() => {
+      if (currentScreen === screenName) button.focus();
+    });
   }
 
   function showScreen(screenName) {
@@ -427,9 +440,26 @@ export function createUi({
       const px = originX + (focusCursor.x - minX) * cellSize;
       const py = originY + (focusCursor.y - minY) * cellSize;
       focus.save();
-      focus.strokeStyle = "#9aa592";
+      focus.fillStyle = "#f1f5e624";
+      focus.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
+      focus.strokeStyle = "#080a07";
+      focus.lineWidth = 7;
+      focus.strokeRect(px + 2.5, py + 2.5, cellSize - 5, cellSize - 5);
+      focus.strokeStyle = "#f1f5e6";
       focus.lineWidth = 3;
       focus.strokeRect(px + 2.5, py + 2.5, cellSize - 5, cellSize - 5);
+
+      const bracket = Math.max(5, Math.floor(cellSize * 0.24));
+      const left = px + 0.5;
+      const top = py + 0.5;
+      const right = px + cellSize - 0.5;
+      const bottom = py + cellSize - 0.5;
+      focus.beginPath();
+      focus.moveTo(left, top + bracket); focus.lineTo(left, top); focus.lineTo(left + bracket, top);
+      focus.moveTo(right - bracket, top); focus.lineTo(right, top); focus.lineTo(right, top + bracket);
+      focus.moveTo(right, bottom - bracket); focus.lineTo(right, bottom); focus.lineTo(right - bracket, bottom);
+      focus.moveTo(left + bracket, bottom); focus.lineTo(left, bottom); focus.lineTo(left, bottom - bracket);
+      focus.stroke();
       focus.restore();
     }
   }
@@ -484,7 +514,10 @@ export function createUi({
   }
 
   function renderHud(view) {
+    const wasGameOverHidden = gameOver.hidden;
+    const isGameOver = view.status === "gameover";
     score.textContent = String(view.score).padStart(7, "0");
+    finalScore.textContent = String(view.score).padStart(7, "0");
     level.textContent = String(view.level);
     lines.textContent = String(view.totalLines);
     scrap.textContent = String(view.scrap).padStart(2, "0");
@@ -506,7 +539,13 @@ export function createUi({
       cursor.style.left = `${cursorCenter}px`;
       cursor.style.setProperty("--cursor-label-shift", `${labelCenter - cursorCenter}px`);
     }
-    gameOver.hidden = view.status !== "gameover";
+    gameOver.hidden = !isGameOver;
+    pauseGameButton.disabled = isGameOver;
+    if (isGameOver && wasGameOverHidden) {
+      requestAnimationFrame(() => {
+        if (lastView?.status === "gameover") playAgainButton.focus();
+      });
+    }
   }
 
   function render(view) {
@@ -581,7 +620,6 @@ export function createUi({
     const bindings = profile.settings.keybindings;
     focusPrevKey.textContent = keyLabel(bindings.focusPrevious);
     focusNextKey.textContent = keyLabel(bindings.focusNext);
-    restartHint.textContent = `Press ${keyLabel(bindings.restart)} to restart`;
   }
 
   function renderKeybindings() {
@@ -649,9 +687,12 @@ export function createUi({
     pauseOverlay.hidden = !paused;
     if (paused) {
       pauseGame();
-      requestAnimationFrame(() => document.querySelector("#resume-game").focus());
+      requestAnimationFrame(() => {
+        if (gamePaused) resumeGameButton.focus();
+      });
     } else {
       resumeGame();
+      requestAnimationFrame(() => document.querySelector("#pause-game").focus());
     }
   }
 
@@ -692,7 +733,6 @@ export function createUi({
       case "carve": sculptAtCursor("CARVE"); break;
       case "fill": sculptAtCursor("FILL"); break;
       case "hardDrop": sendCommand({ type: "HARD_DROP_FOCUSED" }); break;
-      case "restart": restart(); break;
       default: return false;
     }
     event.preventDefault();
@@ -722,6 +762,20 @@ export function createUi({
     return true;
   }
 
+  function trapMenuFocus(event, container) {
+    if (event.code !== "Tab") return false;
+    const buttons = getMenuButtons(container);
+    if (buttons.length === 0) return false;
+    const currentIndex = buttons.indexOf(document.activeElement);
+    const direction = event.shiftKey ? -1 : 1;
+    const nextIndex = currentIndex < 0
+      ? (event.shiftKey ? buttons.length - 1 : 0)
+      : (currentIndex + direction + buttons.length) % buttons.length;
+    buttons[nextIndex].focus();
+    event.preventDefault();
+    return true;
+  }
+
   window.addEventListener("keydown", (event) => {
     if (pendingBinding) {
       event.preventDefault();
@@ -738,12 +792,38 @@ export function createUi({
       return;
     }
 
+    if (event.repeat && NON_REPEATING_UI_KEYS.has(event.code)) {
+      event.preventDefault();
+      return;
+    }
+
     if (currentScreen === "game") {
+      if (lastView?.status === "gameover") {
+        if (event.code === "Escape") {
+          onAudioEvent("back");
+          quitToSingleplayer();
+          event.preventDefault();
+        } else if (event.code === "Enter" || event.code === "Space") {
+          const buttons = getMenuButtons(gameOver);
+          const activeButton = buttons.includes(document.activeElement)
+            ? document.activeElement
+            : playAgainButton;
+          activeButton.click();
+          event.preventDefault();
+        } else if (trapMenuFocus(event, gameOver)) {
+          return;
+        } else {
+          handleMenuNavigation(event, gameOver);
+        }
+        return;
+      }
       if (gamePaused) {
         if (event.code === "Escape") {
           onAudioEvent("back");
           setPaused(false);
           event.preventDefault();
+        } else if (trapMenuFocus(event, pauseOverlay)) {
+          return;
         } else {
           handleMenuNavigation(event, pauseOverlay);
         }
@@ -753,27 +833,19 @@ export function createUi({
       return;
     }
 
-    if (currentScreen === "menu" && (event.code === "Enter" || event.code === "Space")) {
-      const buttons = getMenuButtons(screens.get("menu"));
-      const activeButton = buttons.includes(document.activeElement) ? document.activeElement : pressStart;
-      activeButton.click();
-      event.preventDefault();
-      return;
-    }
-
-    if ((currentScreen === "menu" || currentScreen === "singleplayer") && event.code === "KeyR") {
-      secondaryReturnScreen = currentScreen;
-      onAudioEvent("confirm");
-      showScreen("records");
-      event.preventDefault();
-      return;
-    }
-
-    if ((currentScreen === "menu" || currentScreen === "singleplayer") && event.code === "KeyO") {
-      secondaryReturnScreen = currentScreen;
-      onAudioEvent("confirm");
-      showScreen("options");
-      event.preventDefault();
+    if (currentScreen === "menu") {
+      const action = getTitleScreenAction(event.code);
+      if (action === "start") {
+        pressStart.click();
+      } else if (action === "records" || action === "options") {
+        secondaryReturnScreen = "menu";
+        onAudioEvent("confirm");
+        showScreen(action);
+      }
+      if (action || event.code === "Space" || MENU_PREVIOUS_KEYS.has(event.code)
+          || MENU_NEXT_KEYS.has(event.code)) {
+        event.preventDefault();
+      }
       return;
     }
 
@@ -783,6 +855,13 @@ export function createUi({
       if (currentScreen === "records" || currentScreen === "options") showScreen(secondaryReturnScreen);
       else showScreen("menu");
       event.preventDefault();
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && currentScreen === "game"
+        && !gamePaused && lastView?.status === "playing") {
+      setPaused(true);
     }
   });
 
@@ -807,7 +886,8 @@ export function createUi({
     });
   }
 
-  document.querySelector("#pause-game").addEventListener("click", () => {
+  pauseGameButton.addEventListener("click", () => {
+    if (lastView?.status === "gameover") return;
     onAudioEvent("confirm");
     setPaused(true);
   });
@@ -819,8 +899,19 @@ export function createUi({
     onAudioEvent("confirm");
     clearPause();
     restart();
+    requestAnimationFrame(() => pauseGameButton.focus());
   });
   document.querySelector("#quit-game").addEventListener("click", () => {
+    onAudioEvent("back");
+    quitToSingleplayer();
+  });
+  playAgainButton.addEventListener("click", () => {
+    onAudioEvent("confirm");
+    clearPause();
+    restart();
+    requestAnimationFrame(() => pauseGameButton.focus());
+  });
+  gameOverBackButton.addEventListener("click", () => {
     onAudioEvent("back");
     quitToSingleplayer();
   });

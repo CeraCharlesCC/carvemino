@@ -60,13 +60,13 @@
             </div>
           </div>
 
-          <button class="start-button" id="press-start" type="button" data-nav="singleplayer">
+          <button class="start-button" id="press-start" type="button" data-nav="singleplayer" aria-keyshortcuts="Enter">
             <span>PRESS ENTER TO START</span>
           </button>
           <nav class="attract-secondary" aria-label="Secondary menu">
-            <button type="button" data-nav="records"><kbd>R</kbd> RECORDS</button>
+            <button type="button" data-nav="records" tabindex="-1" aria-keyshortcuts="R"><kbd>R</kbd> RECORDS</button>
             <span aria-hidden="true">•</span>
-            <button type="button" data-nav="options"><kbd>O</kbd> OPTIONS</button>
+            <button type="button" data-nav="options" tabindex="-1" aria-keyshortcuts="O"><kbd>O</kbd> OPTIONS</button>
           </nav>
           <p class="cabinet-credit">CARVEMINO SYSTEM 94 // 1 PLAYER</p>
         </section>
@@ -168,10 +168,6 @@
                 </div>
               </div>
               <canvas id="field" width="320" height="640" aria-label="playfield"></canvas>
-              <div class="game-over" id="game-over" hidden>
-                <strong>GAME OVER</strong>
-                <span id="restart-hint">Press R to restart</span>
-              </div>
             </section>
 
             <aside class="hud">
@@ -204,6 +200,21 @@
             </svg>
 
             <div class="vertical-logo" aria-hidden="true">CARVEMINO</div>
+          </div>
+
+          <div class="game-over" id="game-over" role="dialog" aria-modal="true" aria-labelledby="game-over-title" hidden>
+            <div class="game-over-panel">
+              <p class="eyebrow">RUN COMPLETE</p>
+              <h2 id="game-over-title">GAME OVER</h2>
+              <div class="final-score">
+                <span>FINAL SCORE</span>
+                <output id="final-score">0000000</output>
+              </div>
+              <nav class="arcade-menu game-over-menu" aria-label="Game over actions">
+                <button class="menu-button" type="button" id="play-again"><span>Play Again</span></button>
+                <button class="menu-button" type="button" id="game-over-back"><span>Back</span></button>
+              </nav>
+            </div>
           </div>
 
           <div class="pause-overlay" id="pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>

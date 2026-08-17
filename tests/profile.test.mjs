@@ -89,6 +89,21 @@ test("rebinding swaps collisions and reset restores defaults", () => {
   assert.deepEqual(snapshot.settings.keybindings, DEFAULT_KEYBINDINGS);
 });
 
+test("legacy direct-restart bindings are discarded", () => {
+  const storage = new MemoryStorage();
+  storage.setItem("carvemino-profile-v1", JSON.stringify({
+    version: 1,
+    settings: {
+      keybindings: { ...DEFAULT_KEYBINDINGS, restart: "KeyR", unknown: "KeyX" }
+    }
+  }));
+
+  const bindings = createProfileStore(storage).getSnapshot().settings.keybindings;
+  assert.deepEqual(bindings, DEFAULT_KEYBINDINGS);
+  assert.equal("restart" in bindings, false);
+  assert.equal("unknown" in bindings, false);
+});
+
 test("audio settings persist, clamp volumes, and migrate old profiles", () => {
   const storage = new MemoryStorage();
   storage.setItem("carvemino-profile-v1", JSON.stringify({

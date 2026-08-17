@@ -47,7 +47,12 @@ export class GameRuntime {
       interpolation: this.accumulator / this.stepSeconds,
       stateHash: hashGameState(this.game)
     });
-    this.frameHandle = requestAnimationFrame(this.boundFrame);
+    if (this.game.status === "playing") {
+      this.frameHandle = requestAnimationFrame(this.boundFrame);
+    } else {
+      this.running = false;
+      this.frameHandle = null;
+    }
   }
 
   start() {

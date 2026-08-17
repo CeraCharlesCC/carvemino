@@ -25,8 +25,7 @@ export const DEFAULT_KEYBINDINGS = Object.freeze({
   cursorRight: "KeyD",
   carve: "KeyZ",
   fill: "KeyF",
-  hardDrop: "Space",
-  restart: "KeyR"
+  hardDrop: "Space"
 });
 
 export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
@@ -66,6 +65,14 @@ function safeParse(text) {
   }
 }
 
+function normalizeKeybindings(value) {
+  const saved = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(Object.entries(DEFAULT_KEYBINDINGS).map(([action, fallback]) => [
+    action,
+    typeof saved[action] === "string" && saved[action] ? saved[action] : fallback
+  ]));
+}
+
 function normalizeData(value) {
   const defaults = createDefaultData();
   if (!value || typeof value !== "object") return defaults;
@@ -78,10 +85,7 @@ function normalizeData(value) {
     achievements: { ...(value.achievements || {}) },
     settings: {
       theme: value.settings?.theme || defaults.settings.theme,
-      keybindings: {
-        ...defaults.settings.keybindings,
-        ...(value.settings?.keybindings || {})
-      },
+      keybindings: normalizeKeybindings(value.settings?.keybindings),
       audio: {
         masterVolume: normalizeVolume(
           value.settings?.audio?.masterVolume,
