@@ -1,81 +1,9 @@
-export const PIECE_TEMPLATES = Object.freeze({
-  I: Object.freeze([[0, 0], [1, 0], [2, 0], [3, 0]]),
-  O: Object.freeze([[0, 0], [1, 0], [0, 1], [1, 1]]),
-  T: Object.freeze([[0, 0], [1, 0], [2, 0], [1, 1]]),
-  S: Object.freeze([[1, 0], [2, 0], [0, 1], [1, 1]]),
-  Z: Object.freeze([[0, 0], [1, 0], [1, 1], [2, 1]]),
-  J: Object.freeze([[0, 0], [0, 1], [1, 1], [2, 1]]),
-  L: Object.freeze([[2, 0], [0, 1], [1, 1], [2, 1]])
-});
+import { CLASSIC_TEMPLATE } from "../templates/classic.js";
+import { CARVER_TEMPLATE } from "../templates/carver.js";
 
-export const TEMPLATE_IDS = Object.freeze(Object.keys(PIECE_TEMPLATES));
-
-export const TEMPLATE_ROTATIONS = Object.freeze({
-  I: Object.freeze([0, 1]),
-  O: Object.freeze([0]),
-  T: Object.freeze([0, 1, 2, 3]),
-  S: Object.freeze([0, 1]),
-  Z: Object.freeze([0, 1]),
-  J: Object.freeze([0, 1, 2, 3]),
-  L: Object.freeze([0, 1, 2, 3])
-});
-
-export const TEMPLATE_CELL_VALUES = Object.freeze({
-  I: 1,
-  O: 2,
-  T: 3,
-  S: 4,
-  Z: 5,
-  J: 6,
-  L: 7,
-  GARBAGE: 8
-});
-
-export const STANDARD_RULES = Object.freeze({
-  id: "carvemino-standard-v1",
-  board: Object.freeze({
-    width: 10,
-    visibleHeight: 20,
-    hiddenHeight: 4
-  }),
-  simulation: Object.freeze({
-    ticksPerSecond: 60,
-    lockDelayTicks: 24
-  }),
-  sculpting: Object.freeze({
-    carveLimit: 2,
-    minimumCells: 1,
-    scrapPerCarve: 1,
-    fillCost: 2
-  }),
-  progression: Object.freeze({
-    linesPerLevel: 5,
-    gravityStartTicks: 20,
-    gravityStepTicks: 2,
-    gravityMinimumTicks: 3,
-    spawnStartTicks: 480,
-    spawnStepTicks: 60,
-    spawnMinimumTicks: 60,
-    previewCount: 2
-  }),
-  scoring: Object.freeze({
-    lineClear: Object.freeze([0, 100, 300, 500, 800]),
-    carve: 5,
-    fill: 10
-  }),
-  attack: Object.freeze({
-    lineClear: Object.freeze([0, 0, 1, 2, 4])
-  }),
-  garbage: Object.freeze({
-    warningTicks: 120,
-    cancellation: true
-  }),
-  survival: Object.freeze({
-    firstWaveTick: 900,
-    waveIntervalTicks: 600,
-    rowsPerWaveStep: 1800,
-    maximumRowsPerWave: 5
-  })
+export const GAME_TEMPLATES = Object.freeze({
+  classic: CLASSIC_TEMPLATE,
+  carver: CARVER_TEMPLATE
 });
 
 function mergeValue(base, override) {
@@ -92,20 +20,107 @@ function mergeValue(base, override) {
   return override;
 }
 
-export function createRules(overrides = {}) {
-  return mergeValue(STANDARD_RULES, overrides);
+function validateRules(rules) {
+  if (!rules.id) throw new Error("rules template requires an id");
+  if (!rules.board || !Number.isInteger(rules.board.width) || rules.board.width <= 0) {
+    throw new Error("rules template requires a positive board width");
+  }
+  if (!rules.pieces || !rules.pieces.templates || Object.keys(rules.pieces.templates).length === 0) {
+    throw new Error("rules template requires at least one piece template");
+  }
+  for (const [templateId, template] of Object.entries(rules.pieces.templates)) {
+    if (!Array.isArray(template.cells) || template.cells.length === 0) {
+      throw new Error(`piece template ${templateId} requires cells`);
+    }
+    if (!Array.isArray(template.rotations) || template.rotations.length === 0) {
+      throw new Error(`piece template ${templateId} requires rotations`);
+    }
+  }
+  return rules;
 }
+
+export function createRulesFromTemplate(template, overrides = {}) {
+  if (!template || typeof template !== "object") throw new Error("template is required");
+  return validateRules(mergeValue(template, overrides));
+}
+
+export function createRules(overrides = {}) {
+  return createRulesFromTemplate(CLASSIC_TEMPLATE, overrides);
+}
+
+export function createRulesForMode(modeId, overrides = {}) {
+  const template = GAME_TEMPLATES[modeId];
+  if (!template) throw new Error(`Unknown game mode: ${modeId}`);
+  return createRulesFromTemplate(template, overrides);
+}
+
+export const STANDARD_RULES = createRules();
+
+// Backwards-compatible exports for integrations that still inspect the classic set.
+export const PIECE_TEMPLATES = Object.freeze(Object.fromEntries(
+  Object.entries(STANDARD_RULES.pieces.templates).map(([id, template]) => [id, template.cells])
+));
+export const TEMPLATE_IDS = Object.freeze(Object.keys(PIECE_TEMPLATES));
+export const TEMPLATE_ROTATIONS = Object.freeze(Object.fromEntries(
+  Object.entries(STANDARD_RULES.pieces.templates).map(([id, template]) => [id, template.rotations])
+));
+export const TEMPLATE_CELL_VALUES = Object.freeze({
+  ...Object.fromEntries(
+    Object.entries(STANDARD_RULES.pieces.templates).map(([id, template]) => [id, template.cellValue])
+  ),
+  GARBAGE: STANDARD_RULES.pieces.garbageCellValue
+});
 
 function normalizeRotation(rotation) {
   if (!Number.isInteger(rotation)) throw new Error(`Invalid rotation: ${rotation}`);
   return ((rotation % 4) + 4) % 4;
 }
 
-export function getTemplateCells(templateId, rotation = 0) {
-  const cells = PIECE_TEMPLATES[templateId];
-  if (!cells) throw new Error(`Unknown template: ${templateId}`);
+function resolveTemplateArgs(rulesOrTemplateId, templateIdOrRotation, maybeRotation) {
+  if (typeof rulesOrTemplateId === "string") {
+    return {
+      rules: STANDARD_RULES,
+      templateId: rulesOrTemplateId,
+      rotation: templateIdOrRotation ?? 0
+    };
+  }
+  return {
+    rules: rulesOrTemplateId,
+    templateId: templateIdOrRotation,
+    rotation: maybeRotation ?? 0
+  };
+}
+
+export function getTemplateIds(rules) {
+  return Object.keys(rules.pieces.templates);
+}
+
+export function getTemplateRotations(rules, templateId) {
+  const template = rules.pieces.templates[templateId];
+  if (!template) throw new Error(`Unknown template: ${templateId}`);
+  return template.rotations;
+}
+
+export function getTemplateCellValue(rules, templateId) {
+  const template = rules.pieces.templates[templateId];
+  if (!template) throw new Error(`Unknown template: ${templateId}`);
+  return template.cellValue;
+}
+
+export function getGarbageCellValue(rules) {
+  return rules.pieces.garbageCellValue;
+}
+
+export function getTemplateCells(rulesOrTemplateId, templateIdOrRotation, maybeRotation) {
+  const { rules, templateId, rotation } = resolveTemplateArgs(
+    rulesOrTemplateId,
+    templateIdOrRotation,
+    maybeRotation
+  );
+  const template = rules.pieces.templates[templateId];
+  if (!template) throw new Error(`Unknown template: ${templateId}`);
   const turns = normalizeRotation(rotation);
-  let rotated = cells.map(([x, y]) => ({ x, y }));
+  let rotated = template.cells.map(([x, y]) => ({ x, y }));
 
   for (let turn = 0; turn < turns; turn += 1) {
     rotated = rotated.map(({ x, y }) => ({ x: -y, y: x }));
@@ -118,8 +133,13 @@ export function getTemplateCells(templateId, rotation = 0) {
     .sort((a, b) => a.y - b.y || a.x - b.x);
 }
 
-export function getTemplateBounds(templateId, rotation = 0) {
-  const cells = getTemplateCells(templateId, rotation);
+export function getTemplateBounds(rulesOrTemplateId, templateIdOrRotation, maybeRotation) {
+  const { rules, templateId, rotation } = resolveTemplateArgs(
+    rulesOrTemplateId,
+    templateIdOrRotation,
+    maybeRotation
+  );
+  const cells = getTemplateCells(rules, templateId, rotation);
 
   let maxX = 0;
   let maxY = 0;

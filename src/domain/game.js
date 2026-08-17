@@ -1,10 +1,11 @@
 import {
-  TEMPLATE_CELL_VALUES,
-  TEMPLATE_IDS,
-  TEMPLATE_ROTATIONS,
   attackForLineClear,
+  getGarbageCellValue,
   getTemplateBounds,
+  getTemplateCellValue,
   getTemplateCells,
+  getTemplateIds,
+  getTemplateRotations,
   gravityIntervalForLevel,
   scoreForLineClear,
   spawnIntervalForLevel
@@ -17,7 +18,8 @@ const NEIGHBORS = Object.freeze([
   [0, -1]
 ]);
 
-const DROP_COVERAGE_HISTORY_LIMIT = 12;
+const DROP_COVERAGE_HISTORY_LIMIT = 48;
+const DROP_POSITION_CHOICES = 2;
 
 function hashSeed(seed, salt) {
   let x = (seed ^ salt) >>> 0;
@@ -244,7 +246,9 @@ function applyCarve(state, command, rules, events) {
   events.push({
     type: "BLOCK_CARVED",
     pieceId: piece.id,
-    cell: { x: command.x, y: command.y }
+    cell: { x: command.x, y: command.y },
+    carved: piece.carved,
+    carveLimit: piece.carveLimit
   });
   events.push({ type: "SCRAP_CHANGED", value: state.scrap });
   events.push({ type: "SCORE_CHANGED", value: state.score });
@@ -338,10 +342,10 @@ function applyCommands(state, commands, rules, events) {
   }
 }
 
-function getDropCoverage(state) {
+function getDropCoverage(state, rules) {
   const coverage = Array(state.board.width).fill(0);
   for (const plan of state.dropCoverageHistory) {
-    for (const cell of getTemplateCells(plan.templateId, plan.rotation ?? 0)) {
+    for (const cell of getTemplateCells(rules, plan.templateId, plan.rotation ?? 0)) {
       const x = plan.x + cell.x;
       if (x >= 0 && x < coverage.length) coverage[x] += 1;
     }
@@ -349,31 +353,27 @@ function getDropCoverage(state) {
   return coverage;
 }
 
-function chooseCoverageBalancedX(state, templateId, rotation) {
-  const cells = getTemplateCells(templateId, rotation);
-  const bounds = getTemplateBounds(templateId, rotation);
+function chooseCoverageBalancedX(state, rules, templateId, rotation) {
+  const cells = getTemplateCells(rules, templateId, rotation);
+  const bounds = getTemplateBounds(rules, templateId, rotation);
   const maxX = state.board.width - bounds.width;
-  const coverage = getDropCoverage(state);
-  let bestScore = Infinity;
-  const bestXs = [];
+  const coverage = getDropCoverage(state, rules);
+  let chosenX = randomInt(state.random.drops, maxX + 1);
+  let chosenScore = cells.reduce((sum, cell) => sum + coverage[chosenX + cell.x], 0);
 
-  for (let x = 0; x <= maxX; x += 1) {
-    const candidateCoverage = [...coverage];
-    for (const cell of cells) candidateCoverage[x + cell.x] += 1;
-
-    // The candidate always adds the same number of cells, so minimizing the
-    // sum of squares is equivalent to minimizing variance across columns.
-    const score = candidateCoverage.reduce((sum, value) => sum + value * value, 0);
-    if (score < bestScore) {
-      bestScore = score;
-      bestXs.length = 0;
-      bestXs.push(x);
-    } else if (score === bestScore) {
-      bestXs.push(x);
+  // Sample only a small number of legal positions instead of globally
+  // optimizing every drop. This nudges the long-run distribution toward
+  // under-covered columns while still allowing local streaks and droughts.
+  for (let choice = 1; choice < DROP_POSITION_CHOICES; choice += 1) {
+    const x = randomInt(state.random.drops, maxX + 1);
+    const score = cells.reduce((sum, cell) => sum + coverage[x + cell.x], 0);
+    if (score < chosenScore) {
+      chosenX = x;
+      chosenScore = score;
     }
   }
 
-  return bestXs[randomInt(state.random.drops, bestXs.length)];
+  return chosenX;
 }
 
 function rememberDropCoverage(state, templateId, rotation, x) {
@@ -386,11 +386,12 @@ function rememberDropCoverage(state, templateId, rotation, x) {
   }
 }
 
-function makeDropPlan(state, spawnTick) {
-  const templateId = TEMPLATE_IDS[randomInt(state.random.pieces, TEMPLATE_IDS.length)];
-  const rotations = TEMPLATE_ROTATIONS[templateId];
+function makeDropPlan(state, spawnTick, rules) {
+  const templateIds = getTemplateIds(rules);
+  const templateId = templateIds[randomInt(state.random.pieces, templateIds.length)];
+  const rotations = getTemplateRotations(rules, templateId);
   const rotation = rotations[randomInt(state.random.rotations, rotations.length)];
-  const x = chooseCoverageBalancedX(state, templateId, rotation);
+  const x = chooseCoverageBalancedX(state, rules, templateId, rotation);
   const pieceId = `p${state.nextPieceId++}`;
   rememberDropCoverage(state, templateId, rotation, x);
 
@@ -416,7 +417,7 @@ function maintainDropQueue(state, rules, events) {
       spawnTick = state.nextScheduledSpawnTick;
     }
 
-    const plan = makeDropPlan(state, spawnTick);
+    const plan = makeDropPlan(state, spawnTick, rules);
     state.dropQueue.push(plan);
     state.nextScheduledSpawnTick = plan.spawnTick + spawnIntervalForLevel(rules, state.level);
     events.push({ type: "PIECE_PLANNED", plan: { ...plan } });
@@ -427,12 +428,12 @@ function spawnDuePieces(state, rules, events) {
   while (state.dropQueue.length > 0 && state.dropQueue[0].spawnTick <= state.tick) {
     const plan = state.dropQueue.shift();
     const rotation = plan.rotation ?? 0;
-    const cells = getTemplateCells(plan.templateId, rotation);
+    const cells = getTemplateCells(rules, plan.templateId, rotation);
     const piece = {
       id: plan.pieceId,
       templateId: plan.templateId,
       rotation,
-      cellValue: TEMPLATE_CELL_VALUES[plan.templateId],
+      cellValue: getTemplateCellValue(rules, plan.templateId),
       x: plan.x,
       y: 0,
       cells,
@@ -601,7 +602,7 @@ function garbageHoleSequence(seed, rows, width) {
   return holes;
 }
 
-function applyGarbageRows(state, packet, events) {
+function applyGarbageRows(state, packet, rules, events) {
   const rows = Math.min(packet.rows, state.board.height);
   if (rows <= 0) return;
   state.appliedGarbageIds.push(packet.id);
@@ -629,7 +630,7 @@ function applyGarbageRows(state, packet, events) {
   for (let row = 0; row < rows; row += 1) {
     const y = board.height - rows + row;
     for (let x = 0; x < board.width; x += 1) {
-      shifted[y * board.width + x] = x === holes[row] ? 0 : TEMPLATE_CELL_VALUES.GARBAGE;
+      shifted[y * board.width + x] = x === holes[row] ? 0 : getGarbageCellValue(rules);
     }
   }
   board.cells = shifted;
@@ -652,7 +653,7 @@ function applyGarbageRows(state, packet, events) {
   });
 }
 
-function applyScheduledGarbage(state, events) {
+function applyScheduledGarbage(state, rules, events) {
   if (state.incomingGarbage.length === 0) return;
   state.incomingGarbage.sort((a, b) => a.applyTick - b.applyTick || a.id.localeCompare(b.id));
 
@@ -660,7 +661,7 @@ function applyScheduledGarbage(state, events) {
     const packet = state.incomingGarbage[0];
     if (packet.applyTick > state.tick) break;
     state.incomingGarbage.shift();
-    if (packet.rows > 0) applyGarbageRows(state, packet, events);
+    if (packet.rows > 0) applyGarbageRows(state, packet, rules, events);
     if (state.status !== "playing") return;
   }
 }
@@ -748,7 +749,7 @@ export function stepGame(state, commands, rules) {
   if (state.status !== "playing") return events;
 
   applyCommands(state, commands || [], rules, events);
-  applyScheduledGarbage(state, events);
+  applyScheduledGarbage(state, rules, events);
   if (state.status !== "playing") return events;
 
   spawnDuePieces(state, rules, events);

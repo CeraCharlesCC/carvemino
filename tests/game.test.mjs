@@ -145,22 +145,44 @@ test("commit focuses another useful active piece without spawning an extra one",
   assert(!events.some((event) => event.type === "PIECE_SPAWNED"));
 });
 
-test("drop planning prefers under-covered edge lanes", () => {
+test("drop planning balances between two sampled positions over a 48-drop history", () => {
   const rules = createRules();
   const game = createGame({ seed: 24, rules });
   game.dropQueue = [];
-  game.dropCoverageHistory = Array.from({ length: 12 }, (_, index) => ({
+  game.dropCoverageHistory = Array.from({ length: 48 }, (_, index) => ({
     templateId: "O",
     rotation: 0,
     x: [2, 4, 6][index % 3]
   }));
+  const historyBeforePlanning = game.dropCoverageHistory.map((historyPlan) => ({ ...historyPlan }));
+  game.random.drops.state = 1;
   game.nextScheduledSpawnTick = game.tick + 100;
 
   stepGame(game, [], rules);
 
   const plan = game.dropQueue[0];
   const maxX = game.board.width - getTemplateBounds(plan.templateId, plan.rotation).width;
-  assert([0, maxX].includes(plan.x), `expected an edge-biased plan, got x=${plan.x}`);
+  let randomState = 1;
+  const sampledXs = Array.from({ length: 2 }, () => {
+    randomState ^= randomState << 13;
+    randomState ^= randomState >>> 17;
+    randomState ^= randomState << 5;
+    randomState >>>= 0;
+    if (randomState === 0) randomState = 1;
+    return randomState % (maxX + 1);
+  });
+  const coverage = Array(game.board.width).fill(0);
+  for (const historyPlan of historyBeforePlanning) {
+    for (const cell of getTemplateCells(historyPlan.templateId, historyPlan.rotation)) {
+      coverage[historyPlan.x + cell.x] += 1;
+    }
+  }
+  const cells = getTemplateCells(plan.templateId, plan.rotation);
+  const score = (x) => cells.reduce((sum, cell) => sum + coverage[x + cell.x], 0);
+  const expectedX = score(sampledXs[1]) < score(sampledXs[0]) ? sampledXs[1] : sampledXs[0];
+
+  assert.equal(plan.x, expectedX);
+  assert.equal(game.dropCoverageHistory.length, 48);
 });
 
 test("template rotation produces normalized unique orientations", () => {
