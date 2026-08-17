@@ -97,7 +97,10 @@ function playedPeaks(context) {
 
 test("audio engine owns menu interaction beeps", () => {
   const context = new FakeAudioContext();
-  const engine = createAudioEngine({ contextFactory: () => context });
+  const engine = createAudioEngine({
+    contextFactory: () => context,
+    musicController: createSilentMusicController()
+  });
 
   engine.setScreen("menu");
   engine.handleUiEvent("select");
@@ -111,7 +114,10 @@ test("audio engine owns menu interaction beeps", () => {
 
 test("sound effects use the boosted overall peak gain", () => {
   const context = new FakeAudioContext();
-  const engine = createAudioEngine({ contextFactory: () => context });
+  const engine = createAudioEngine({
+    contextFactory: () => context,
+    musicController: createSilentMusicController()
+  });
 
   engine.handleUiEvent("select");
 
@@ -172,7 +178,7 @@ test("line clears coalesce the lock sound and game over supersedes other cues", 
   assert.deepEqual(gameOverFrequencies, [420, 315, 210]);
 });
 
-test("muted SFX does not create an AudioContext", () => {
+test("fully muted audio does not create an AudioContext", () => {
   let contextCreations = 0;
   const engine = createAudioEngine({
     contextFactory() {
@@ -181,11 +187,31 @@ test("muted SFX does not create an AudioContext", () => {
     }
   });
 
-  engine.setSettings({ sfxEnabled: false });
+  engine.setSettings({ sfxEnabled: false, musicEnabled: false });
   engine.handleUiEvent("confirm");
   engine.handleGameEvents([{ type: "BLOCK_CARVED" }]);
 
   assert.equal(contextCreations, 0);
+});
+
+test("menu BGM can unlock from a menu interaction even when SFX is muted", () => {
+  let contextCreations = 0;
+  const context = new FakeAudioContext();
+  const engine = createAudioEngine({
+    contextFactory() {
+      contextCreations += 1;
+      return context;
+    }
+  });
+
+  engine.setSettings({ sfxEnabled: false, musicEnabled: true, musicVolume: 0.5 });
+  engine.setScreen("menu");
+  engine.handleUiEvent("select");
+
+  assert.equal(contextCreations, 1);
+  assert.equal(engine.getState().music.scene, "menu");
+  assert.equal(engine.getState().music.playing, true);
+  engine.dispose();
 });
 
 test("gameplay can create the audio graph for music even when SFX is muted", () => {

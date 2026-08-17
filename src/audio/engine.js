@@ -148,6 +148,15 @@ export function createAudioEngine({
     else musicController.setScene("menu");
   }
 
+  function shouldStartMusicGraph() {
+    return (
+      (lifecycle === "menu" || lifecycle === "playing")
+      && settings.musicEnabled
+      && settings.masterVolume > 0
+      && settings.musicVolume > 0
+    );
+  }
+
   function setScreen(nextScreen) {
     screen = nextScreen || "menu";
     if (screen !== "game") {
@@ -161,6 +170,12 @@ export function createAudioEngine({
   function handleUiEvent(type) {
     const cueName = MENU_AUDIO_EVENTS[type];
     if (!cueName) return;
+    // The first menu interaction is also the browser-safe unlock point for the
+    // menu BGM. This still works when SFX are muted.
+    if (lifecycle === "menu" && shouldStartMusicGraph()) {
+      ensureGraph();
+      unlock();
+    }
     // Menu/pause interaction sounds are owned here, not in the UI layer.
     playCue(cueName);
   }
@@ -231,12 +246,7 @@ export function createAudioEngine({
 
   function setSettings(nextSettings) {
     settings = normalizeSettings({ ...settings, ...(nextSettings || {}) });
-    if (
-      lifecycle === "playing"
-      && settings.musicEnabled
-      && settings.masterVolume > 0
-      && settings.musicVolume > 0
-    ) {
+    if (lifecycle === "playing" && shouldStartMusicGraph()) {
       ensureGraph();
       unlock();
     }

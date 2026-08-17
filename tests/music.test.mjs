@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createMusicController, getGameplayBpm } from "../src/audio/music.js";
+import { createMusicController, getGameplayBpm, getMenuBpm } from "../src/audio/music.js";
 
 class FakeAudioParam {
   constructor() {
@@ -76,13 +76,14 @@ function createFakeTimers() {
 }
 
 test("gameplay tempo is constant within a level and rises in discrete level steps", () => {
+  assert.equal(getMenuBpm(), 104);
   assert.equal(getGameplayBpm(1), 116);
   assert.equal(getGameplayBpm(2), 123);
   assert.equal(getGameplayBpm(5), 144);
   assert.equal(getGameplayBpm(99), 200);
 });
 
-test("Kalinka BGM schedules only in gameplay and stops for pause/menu/game over", () => {
+test("Amur Waves menu BGM and Kalinka gameplay BGM follow the audio scene", () => {
   const context = new FakeAudioContext();
   const output = new FakeGain();
   const timers = createFakeTimers();
@@ -90,11 +91,14 @@ test("Kalinka BGM schedules only in gameplay and stops for pause/menu/game over"
 
   music.setScene("menu");
   music.attach({ context, output });
-  assert.equal(context.oscillators.length, 0);
-  assert.equal(timers.activeCount, 0);
+  assert(context.oscillators.length >= 8, "menu lead, bass, and waltz chord stabs should be scheduled");
+  assert.equal(timers.activeCount, 1);
+  assert.equal(music.getState().playing, true);
+  assert.equal(music.getState().bpm, 104);
 
+  const menuBatch = context.oscillators.length;
   music.setScene("gameplay");
-  assert(context.oscillators.length >= 2, "lead and bass should both be scheduled");
+  assert(context.oscillators.length > menuBatch, "gameplay lead and bass should replace the menu arrangement");
   assert.equal(timers.activeCount, 1);
   assert.equal(music.getState().playing, true);
   assert.equal(music.getState().bpm, 116);
@@ -118,5 +122,9 @@ test("Kalinka BGM schedules only in gameplay and stops for pause/menu/game over"
   assert.equal(timers.activeCount, 0);
 
   music.setScene("menu");
+  assert.equal(music.getState().playing, true);
+  assert.equal(timers.activeCount, 1);
+
+  music.dispose();
   assert.equal(timers.activeCount, 0);
 });
