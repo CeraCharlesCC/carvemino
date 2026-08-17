@@ -3,14 +3,14 @@ import { getTemplateCellValue, getTemplateCells } from "../domain/rules.js";
 
 const PALETTE = [
   "#000000",
-  "#16a6c9",
-  "#e1bc36",
-  "#9a5bb8",
-  "#42b85f",
-  "#cf4949",
-  "#4269bd",
-  "#dc7b2d",
-  "#666b6b"
+  "#6b9e8f",
+  "#b5a66a",
+  "#8a7b96",
+  "#7a9a6d",
+  "#a6645c",
+  "#6882a3",
+  "#b0864e",
+  "#5a5d55"
 ];
 
 const KEYBINDING_ACTIONS = Object.freeze([
@@ -26,24 +26,100 @@ const KEYBINDING_ACTIONS = Object.freeze([
   ["restart", "Restart"]
 ]);
 
+const ATTRACT_PANELS = Object.freeze([
+  ["title", 5200],
+  ["demo", 6000],
+  ["records", 4200]
+]);
+
+const ATTRACT_DEMO_STEPS = Object.freeze([
+  {
+    action: "CUT",
+    caption: "REMOVE ONE CELL",
+    piece: [[3, 1], [4, 1], [2, 2], [3, 2], [4, 2], [5, 2], [3, 3], [4, 3]],
+    actionCells: [[5, 2]],
+    ghost: []
+  },
+  {
+    action: "FILL",
+    caption: "PATCH AN OPEN EDGE",
+    piece: [[3, 1], [4, 1], [2, 2], [3, 2], [4, 2], [3, 3], [4, 3]],
+    actionCells: [[2, 3]],
+    ghost: []
+  },
+  {
+    action: "DROP",
+    caption: "LOCK THE NEW SHAPE",
+    piece: [[3, 3], [4, 3], [2, 4], [3, 4], [4, 4], [2, 5], [3, 5], [4, 5]],
+    actionCells: [],
+    ghost: [[3, 1], [4, 1], [2, 2], [3, 2], [4, 2], [2, 3], [3, 3], [4, 3]]
+  }
+]);
+
+const MENU_PREVIOUS_KEYS = new Set(["ArrowUp", "ArrowLeft", "KeyW", "KeyA"]);
+const MENU_NEXT_KEYS = new Set(["ArrowDown", "ArrowRight", "KeyS", "KeyD"]);
+
+function createArcadeAudio() {
+  let context = null;
+
+  function getContext() {
+    if (context) return context;
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return null;
+    context = new AudioContext();
+    return context;
+  }
+
+  function tone(frequency, duration = 0.04, volume = 0.025, delay = 0) {
+    const audio = getContext();
+    if (!audio) return;
+    if (audio.state === "suspended") void audio.resume();
+    const start = audio.currentTime + delay;
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
+    oscillator.type = "square";
+    oscillator.frequency.setValueAtTime(frequency, start);
+    gain.gain.setValueAtTime(volume, start);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
+    oscillator.start(start);
+    oscillator.stop(start + duration);
+  }
+
+  return {
+    select() {
+      tone(520, 0.025, 0.018);
+    },
+    confirm() {
+      tone(330, 0.04, 0.025);
+      tone(660, 0.055, 0.022, 0.045);
+    },
+    back() {
+      tone(440, 0.035, 0.018);
+      tone(260, 0.045, 0.018, 0.035);
+    }
+  };
+}
+
 function clearCanvas(canvas, context) {
   context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#080a0b";
+  context.fillStyle = "#080a07";
   context.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 function drawCell(context, x, y, size, value, focused = false) {
   const inset = 1.5;
-  context.fillStyle = PALETTE[value] || "#eef1f3";
+  context.fillStyle = PALETTE[value] || "#c8ccbe";
   context.fillRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
-  context.strokeStyle = focused ? "#f0e7ce" : "#00000088";
+  context.strokeStyle = focused ? "#9aa592" : "#0a0b0866";
   context.lineWidth = focused ? 2 : 1;
   context.strokeRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
 }
 
 function drawGrid(context, width, height, cellSize) {
   context.save();
-  context.strokeStyle = "#f0e7ce12";
+  context.strokeStyle = "#9aa59212";
   context.lineWidth = 1;
   context.beginPath();
   for (let x = 0; x <= width; x += 1) {
@@ -118,6 +194,13 @@ export function createUi({
   const focusNextKey = document.querySelector("#focus-next-key");
   const focusConnector = document.querySelector("#focus-connector");
   const focusConnectorPath = document.querySelector("#focus-connector-path");
+  const pressStart = document.querySelector("#press-start");
+  const attractPanels = [...document.querySelectorAll("[data-attract-panel]")];
+  const attractDemoGrid = document.querySelector("#sculpt-demo-grid");
+  const attractDemoNumber = document.querySelector("#sculpt-demo-number");
+  const attractDemoAction = document.querySelector("#sculpt-demo-action");
+  const attractDemoCaption = document.querySelector("#sculpt-demo-caption");
+  const audio = createArcadeAudio();
 
   let rules = null;
   let profile = emptyProfile();
@@ -128,19 +211,113 @@ export function createUi({
   let focusCursorPieceId = null;
   let pendingBinding = null;
   let gamePaused = false;
+  let secondaryReturnScreen = "menu";
+  let attractPanelIndex = 0;
+  let attractPanelTimer = null;
+  let attractDemoTimer = null;
+  let attractDemoStep = 0;
+
+  const attractDemoCells = Array.from({ length: 56 }, () => {
+    const cell = document.createElement("span");
+    cell.className = "sculpt-demo-cell";
+    cell.setAttribute("aria-hidden", "true");
+    return cell;
+  });
+  attractDemoGrid?.replaceChildren(...attractDemoCells);
+
+  function cellKey(x, y) {
+    return `${x},${y}`;
+  }
+
+  function renderAttractDemoStep(index) {
+    const step = ATTRACT_DEMO_STEPS[index % ATTRACT_DEMO_STEPS.length];
+    const piece = new Set(step.piece.map(([x, y]) => cellKey(x, y)));
+    const action = new Set(step.actionCells.map(([x, y]) => cellKey(x, y)));
+    const ghost = new Set(step.ghost.map(([x, y]) => cellKey(x, y)));
+
+    attractDemoCells.forEach((cell, cellIndex) => {
+      const x = cellIndex % 8;
+      const y = Math.floor(cellIndex / 8);
+      const key = cellKey(x, y);
+      cell.className = "sculpt-demo-cell";
+      if (y === 6) cell.classList.add("is-floor");
+      if (ghost.has(key)) cell.classList.add("is-ghost");
+      if (piece.has(key)) cell.classList.add("is-piece");
+      if (action.has(key)) cell.classList.add("is-action");
+    });
+    attractDemoNumber.textContent = String(index + 1).padStart(2, "0");
+    attractDemoAction.textContent = step.action;
+    attractDemoCaption.textContent = step.caption;
+  }
+
+  function stopAttractDemo() {
+    if (attractDemoTimer) window.clearInterval(attractDemoTimer);
+    attractDemoTimer = null;
+  }
+
+  function startAttractDemo() {
+    stopAttractDemo();
+    attractDemoStep = 0;
+    renderAttractDemoStep(attractDemoStep);
+    attractDemoTimer = window.setInterval(() => {
+      attractDemoStep = (attractDemoStep + 1) % ATTRACT_DEMO_STEPS.length;
+      renderAttractDemoStep(attractDemoStep);
+    }, 1250);
+  }
+
+  function setAttractPanel(panelName) {
+    for (const panel of attractPanels) panel.hidden = panel.dataset.attractPanel !== panelName;
+    if (panelName === "demo") startAttractDemo();
+    else stopAttractDemo();
+  }
+
+  function stopAttractLoop() {
+    if (attractPanelTimer) window.clearTimeout(attractPanelTimer);
+    attractPanelTimer = null;
+    stopAttractDemo();
+  }
+
+  function scheduleAttractPanel() {
+    const [, duration] = ATTRACT_PANELS[attractPanelIndex];
+    attractPanelTimer = window.setTimeout(() => {
+      attractPanelIndex = (attractPanelIndex + 1) % ATTRACT_PANELS.length;
+      setAttractPanel(ATTRACT_PANELS[attractPanelIndex][0]);
+      scheduleAttractPanel();
+    }, duration);
+  }
+
+  function startAttractLoop() {
+    stopAttractLoop();
+    attractPanelIndex = 0;
+    setAttractPanel(ATTRACT_PANELS[0][0]);
+    scheduleAttractPanel();
+  }
 
   function focusFirstMenuButton(screenName) {
     const screen = screens.get(screenName);
-    const button = screen?.querySelector(".menu-button:not([disabled])");
+    const button = screenName === "menu"
+      ? pressStart
+      : screen?.querySelector(".menu-button:not([disabled])");
     if (button) requestAnimationFrame(() => button.focus());
   }
 
   function showScreen(screenName) {
     if (!screens.has(screenName)) return;
+    if (currentScreen === "menu" && screenName !== "menu") stopAttractLoop();
     currentScreen = screenName;
     for (const [name, screen] of screens) screen.hidden = name !== screenName;
     if (screenName === "options") renderKeybindings();
+    if (screenName === "menu") startAttractLoop();
     if (screenName !== "game") focusFirstMenuButton(screenName);
+  }
+
+  function navigateTo(screenName) {
+    if ((screenName === "records" || screenName === "options") && currentScreen !== screenName) {
+      secondaryReturnScreen = currentScreen === "records" || currentScreen === "options"
+        ? "menu"
+        : currentScreen;
+    }
+    showScreen(screenName);
   }
 
   function resetFocusCursor(piece) {
@@ -243,7 +420,7 @@ export function createUi({
       resetFocusCursor(piece);
     }
 
-    focus.strokeStyle = "#f0e7ce16";
+    focus.strokeStyle = "#9aa59216";
     focus.lineWidth = 1;
     for (let x = 0; x <= columns; x += 1) {
       const px = originX + x * cellSize + 0.5;
@@ -262,7 +439,7 @@ export function createUi({
 
     focus.save();
     focus.setLineDash([3, 4]);
-    focus.strokeStyle = "#d4bd7777";
+    focus.strokeStyle = "#9aa59266";
     focus.lineWidth = 1.5;
     for (const cell of editable) {
       const px = originX + (cell.x - minX) * cellSize;
@@ -281,7 +458,7 @@ export function createUi({
       const px = originX + (focusCursor.x - minX) * cellSize;
       const py = originY + (focusCursor.y - minY) * cellSize;
       focus.save();
-      focus.strokeStyle = "#f0e7ce";
+      focus.strokeStyle = "#9aa592";
       focus.lineWidth = 3;
       focus.strokeRect(px + 2.5, py + 2.5, cellSize - 5, cellSize - 5);
       focus.restore();
@@ -410,12 +587,24 @@ export function createUi({
   }
 
   function renderProfileNumbers() {
-    const classicScore = String(profile.highScores.classic || 0).padStart(7, "0");
-    const carverScore = String(profile.highScores.carver || 0).padStart(7, "0");
+    const classicValue = profile.highScores.classic || 0;
+    const carverValue = profile.highScores.carver || 0;
+    const classicScore = String(classicValue).padStart(7, "0");
+    const carverScore = String(carverValue).padStart(7, "0");
+    const ranking = [
+      ["CLASSIC", classicValue],
+      ["CARVER", carverValue]
+    ].sort((left, right) => right[1] - left[1]);
+    const bestScore = String(ranking[0][1]).padStart(7, "0");
     document.querySelector("#classic-high-score").textContent = classicScore;
     document.querySelector("#carver-high-score").textContent = carverScore;
     document.querySelector("#records-classic-score").textContent = classicScore;
     document.querySelector("#records-carver-score").textContent = carverScore;
+    document.querySelector("#attract-high-score").textContent = bestScore;
+    ranking.forEach(([mode, value], index) => {
+      document.querySelector(`#attract-rank-${index + 1}-mode`).textContent = mode;
+      document.querySelector(`#attract-rank-${index + 1}-score`).textContent = String(value).padStart(7, "0");
+    });
     if (rules) highScore.textContent = String(profile.highScores[rules.modeId] || 0).padStart(7, "0");
   }
 
@@ -440,6 +629,7 @@ export function createUi({
         ? "PRESS KEY"
         : keyLabel(profile.settings.keybindings[action]);
       button.addEventListener("click", () => {
+        audio.confirm();
         pendingBinding = action;
         renderKeybindings();
       });
@@ -495,6 +685,7 @@ export function createUi({
 
   function handleGameKey(event) {
     if (event.code === "Escape") {
+      audio.confirm();
       setPaused(true);
       event.preventDefault();
       return true;
@@ -525,15 +716,25 @@ export function createUi({
     return true;
   }
 
-  function handleMenuArrows(event, container = screens.get(currentScreen)) {
+  function getMenuButtons(container) {
+    return [...container.querySelectorAll([
+      ".menu-button:not([disabled])",
+      ".start-button:not([disabled])",
+      ".attract-secondary button:not([disabled])"
+    ].join(", "))];
+  }
+
+  function handleMenuNavigation(event, container = screens.get(currentScreen)) {
     if (event.target instanceof HTMLSelectElement) return false;
-    if (event.code !== "ArrowUp" && event.code !== "ArrowDown") return false;
-    const buttons = [...container.querySelectorAll(".menu-button:not([disabled])")];
+    const movingPrevious = MENU_PREVIOUS_KEYS.has(event.code);
+    if (!movingPrevious && !MENU_NEXT_KEYS.has(event.code)) return false;
+    const buttons = getMenuButtons(container);
     if (buttons.length === 0) return false;
     let index = buttons.indexOf(document.activeElement);
     if (index < 0) index = 0;
-    index = (index + (event.code === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+    index = (index + (movingPrevious ? -1 : 1) + buttons.length) % buttons.length;
     buttons[index].focus();
+    audio.select();
     event.preventDefault();
     return true;
   }
@@ -557,10 +758,11 @@ export function createUi({
     if (currentScreen === "game") {
       if (gamePaused) {
         if (event.code === "Escape") {
+          audio.back();
           setPaused(false);
           event.preventDefault();
         } else {
-          handleMenuArrows(event, pauseOverlay);
+          handleMenuNavigation(event, pauseOverlay);
         }
         return;
       }
@@ -568,32 +770,79 @@ export function createUi({
       return;
     }
 
-    if (handleMenuArrows(event)) return;
+    if (currentScreen === "menu" && (event.code === "Enter" || event.code === "Space")) {
+      const buttons = getMenuButtons(screens.get("menu"));
+      const activeButton = buttons.includes(document.activeElement) ? document.activeElement : pressStart;
+      activeButton.click();
+      event.preventDefault();
+      return;
+    }
+
+    if ((currentScreen === "menu" || currentScreen === "singleplayer") && event.code === "KeyR") {
+      secondaryReturnScreen = currentScreen;
+      audio.confirm();
+      showScreen("records");
+      event.preventDefault();
+      return;
+    }
+
+    if ((currentScreen === "menu" || currentScreen === "singleplayer") && event.code === "KeyO") {
+      secondaryReturnScreen = currentScreen;
+      audio.confirm();
+      showScreen("options");
+      event.preventDefault();
+      return;
+    }
+
+    if (handleMenuNavigation(event)) return;
     if (event.code === "Escape" && currentScreen !== "menu") {
-      showScreen("menu");
+      audio.back();
+      if (currentScreen === "records" || currentScreen === "options") showScreen(secondaryReturnScreen);
+      else showScreen("menu");
       event.preventDefault();
     }
   });
 
   for (const button of document.querySelectorAll("[data-nav]")) {
-    button.addEventListener("click", () => showScreen(button.dataset.nav));
+    button.addEventListener("click", () => {
+      audio.confirm();
+      navigateTo(button.dataset.nav);
+    });
+  }
+  for (const button of document.querySelectorAll("[data-back]")) {
+    button.addEventListener("click", () => {
+      audio.back();
+      showScreen(secondaryReturnScreen);
+    });
   }
   for (const button of document.querySelectorAll("[data-mode]")) {
     button.addEventListener("click", () => {
+      audio.confirm();
       clearPause();
       startMode(button.dataset.mode);
       showScreen("game");
     });
   }
 
-  document.querySelector("#pause-game").addEventListener("click", () => setPaused(true));
-  document.querySelector("#resume-game").addEventListener("click", () => setPaused(false));
+  document.querySelector("#pause-game").addEventListener("click", () => {
+    audio.confirm();
+    setPaused(true);
+  });
+  document.querySelector("#resume-game").addEventListener("click", () => {
+    audio.back();
+    setPaused(false);
+  });
   document.querySelector("#restart-game").addEventListener("click", () => {
+    audio.confirm();
     clearPause();
     restart();
   });
-  document.querySelector("#quit-game").addEventListener("click", quitToSingleplayer);
+  document.querySelector("#quit-game").addEventListener("click", () => {
+    audio.back();
+    quitToSingleplayer();
+  });
   document.querySelector("#reset-keybindings").addEventListener("click", () => {
+    audio.confirm();
     pendingBinding = null;
     const nextProfile = resetKeybindings();
     if (nextProfile) setProfile(nextProfile);

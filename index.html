@@ -4,158 +4,202 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Carvemino</title>
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main class="arcade-cabinet" aria-label="Carvemino">
-    <section class="screen menu-screen" id="menu-screen" data-screen="menu">
-      <div class="title-lockup">
-        <p class="eyebrow">BLOCK PUZZLE</p>
-        <h1>CARVEMINO</h1>
-        <p class="subtitle">CUT / FILL / DROP</p>
-      </div>
-      <nav class="arcade-menu" aria-label="Main menu">
-        <button class="menu-button" type="button" data-nav="singleplayer">
-          <span>Singleplayer</span>
-        </button>
-        <button class="menu-button" type="button" data-nav="records">
-          <span>Records</span>
-        </button>
-        <button class="menu-button" type="button" data-nav="options">
-          <span>Options</span>
-        </button>
-        <button class="menu-button" type="button" disabled>
-          <span>Multiplayer</span><b>NOT AVAILABLE</b>
-        </button>
-      </nav>
-      <div class="menu-footer">
-        <span>↑↓ SELECT</span><span>ENTER CONFIRM</span>
-      </div>
-    </section>
+  <main class="arcade-cabinet" aria-label="Carvemino arcade cabinet">
+    <div class="crt-frame">
+      <div class="crt-glass">
+        <div class="scanlines" aria-hidden="true"></div>
+        <div class="glass-shine" aria-hidden="true"></div>
+        <span class="corner-decor corner-tl" aria-hidden="true"></span>
+        <span class="corner-decor corner-tr" aria-hidden="true"></span>
+        <span class="corner-decor corner-bl" aria-hidden="true"></span>
+        <span class="corner-decor corner-br" aria-hidden="true"></span>
 
-    <section class="screen menu-screen" id="singleplayer-screen" data-screen="singleplayer" hidden>
-      <header class="screen-heading">
-        <p class="eyebrow">SELECT DIG SITE</p>
-        <h2>SINGLEPLAYER</h2>
-      </header>
-      <nav class="arcade-menu mode-menu" aria-label="Singleplayer modes">
-        <button class="menu-button mode-button" type="button" data-mode="classic">
-          <span>Classic</span>
-          <b>HI <output id="classic-high-score">0000000</output></b>
-        </button>
-        <button class="menu-button mode-button" type="button" data-mode="carver">
-          <span>Carver</span>
-          <b>HI <output id="carver-high-score">0000000</output></b>
-        </button>
-        <button class="menu-button back-button" type="button" data-nav="menu"><span>Back</span></button>
-      </nav>
-    </section>
+        <section class="screen menu-screen attract-screen" id="menu-screen" data-screen="menu">
+          <div class="attract-scoreline" aria-label="Arcade status">
+            <span>HI-SCORE <output id="attract-high-score">0000000</output></span>
+            <span>FREE PLAY</span>
+          </div>
 
-    <section class="screen menu-screen" id="records-screen" data-screen="records" hidden>
-      <header class="screen-heading">
-        <p class="eyebrow">PLAYER DATA</p>
-        <h2>RECORDS</h2>
-      </header>
-      <div class="records-panel">
-        <section class="record-section">
-          <h3>HIGH SCORES</h3>
-          <div class="record-score"><span>CLASSIC</span><output id="records-classic-score">0000000</output></div>
-          <div class="record-score"><span>CARVER</span><output id="records-carver-score">0000000</output></div>
-        </section>
-        <section class="record-section">
-          <h3>ACHIEVEMENTS <span id="achievement-summary">0 / 3</span></h3>
-          <div id="achievement-list" class="achievement-list"></div>
-        </section>
-      </div>
-      <nav class="arcade-menu compact-menu">
-        <button class="menu-button back-button" type="button" data-nav="menu"><span>Back</span></button>
-      </nav>
-    </section>
+          <div class="attract-stage" aria-live="off">
+            <div class="attract-card attract-title-card" data-attract-panel="title">
+              <div class="title-lockup">
+                <p class="eyebrow">BLOCK PUZZLE // CM-94</p>
+                <h1 class="carvemino-mark"><span>CARVEMINO</span></h1>
+                <p class="subtitle">CUT / FILL / DROP</p>
+              </div>
+            </div>
 
-    <section class="screen menu-screen options-screen" id="options-screen" data-screen="options" hidden>
-      <header class="screen-heading">
-        <p class="eyebrow">PLAYER SETUP</p>
-        <h2>OPTIONS</h2>
-      </header>
-      <div class="options-panel">
-        <div class="keybinding-heading">
-          <b>KEYBINDINGS</b>
-          <button class="utility-button" type="button" id="reset-keybindings">RESET</button>
-        </div>
-        <div class="keybinding-list" id="keybinding-list"></div>
-      </div>
-      <nav class="arcade-menu compact-menu">
-        <button class="menu-button back-button" type="button" data-nav="menu"><span>Back</span></button>
-      </nav>
-    </section>
+            <div class="attract-card attract-demo-card" data-attract-panel="demo" hidden>
+              <header class="attract-card-heading">
+                <p class="eyebrow">SCULPTING SYSTEM</p>
+                <h2>HOW TO PLAY</h2>
+              </header>
+              <div class="sculpt-demo" aria-hidden="true">
+                <div class="sculpt-demo-grid" id="sculpt-demo-grid"></div>
+                <div class="sculpt-demo-readout">
+                  <span>STEP <b id="sculpt-demo-number">01</b></span>
+                  <strong id="sculpt-demo-action">CUT</strong>
+                  <small id="sculpt-demo-caption">REMOVE ONE CELL</small>
+                </div>
+              </div>
+            </div>
 
-    <section class="screen game-screen" id="game-screen" data-screen="game" hidden>
-      <header class="game-header">
-        <div><span class="eyebrow">MODE</span><strong id="mode-name">CLASSIC</strong></div>
-        <div class="header-score">HI <output id="high-score">0000000</output></div>
-        <button class="utility-button" type="button" id="pause-game">PAUSE</button>
-      </header>
-
-      <div class="game-shell" id="game-shell">
-        <section class="playfield-panel">
-          <div class="drop-guide" aria-hidden="true">
-            <div class="cursor-label" id="drop-cursor">
-              <span>DROP CURSOR</span>
-              <b>v</b>
+            <div class="attract-card attract-record-card" data-attract-panel="records" hidden>
+              <header class="attract-card-heading">
+                <p class="eyebrow">TODAY'S BEST</p>
+                <h2>SCORE RANKING</h2>
+              </header>
+              <div class="attract-ranking">
+                <div><b>1ST</b><span id="attract-rank-1-mode">CLASSIC</span><output id="attract-rank-1-score">0000000</output></div>
+                <div><b>2ND</b><span id="attract-rank-2-mode">CARVER</span><output id="attract-rank-2-score">0000000</output></div>
+              </div>
             </div>
           </div>
-          <canvas id="field" width="320" height="640" aria-label="playfield"></canvas>
-          <div class="game-over" id="game-over" hidden>
-            <strong>GAME OVER</strong>
-            <span id="restart-hint">Press R to restart</span>
-          </div>
-        </section>
 
-        <aside class="hud">
-          <section class="hud-section next-section">
-            <h2>NEXT</h2>
-            <canvas id="next" width="180" height="105" aria-label="next piece"></canvas>
-          </section>
-
-          <section class="hud-section score-section">
-            <h2>SCORE</h2>
-            <output id="score">0000000</output>
-            <div class="minor-stats">
-              <span>LV <b id="level">1</b></span>
-              <span>LINES <b id="lines">0</b></span>
-            </div>
-          </section>
-
-          <section class="hud-section focus-section">
-            <h2>FOCUS</h2>
-            <canvas id="focus" width="220" height="220" aria-label="focused piece sculpting grid"></canvas>
-            <div class="resource-row"><span>CUT</span><b id="cut">-</b></div>
-            <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
-            <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
-            <div class="focus-nav"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
-          </section>
-        </aside>
-
-        <svg class="focus-connector" id="focus-connector" aria-hidden="true">
-          <path id="focus-connector-path"></path>
-        </svg>
-
-        <div class="vertical-logo" aria-hidden="true">CARVEMINO</div>
-      </div>
-
-      <div class="pause-overlay" id="pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
-        <div class="pause-panel">
-          <p class="eyebrow">GAME SUSPENDED</p>
-          <h2 id="pause-title">PAUSED</h2>
-          <nav class="arcade-menu pause-menu" aria-label="Pause menu">
-            <button class="menu-button" type="button" id="resume-game"><span>Resume</span></button>
-            <button class="menu-button" type="button" id="restart-game"><span>Restart</span></button>
-            <button class="menu-button" type="button" id="quit-game"><span>Quit Game</span></button>
+          <button class="start-button" id="press-start" type="button" data-nav="singleplayer">
+            <span>PRESS ENTER TO START</span>
+          </button>
+          <nav class="attract-secondary" aria-label="Secondary menu">
+            <button type="button" data-nav="records"><kbd>R</kbd> RECORDS</button>
+            <span aria-hidden="true">•</span>
+            <button type="button" data-nav="options"><kbd>O</kbd> OPTIONS</button>
           </nav>
-          <p class="pause-hint">ESC RESUME</p>
-        </div>
+          <p class="cabinet-credit">CARVEMINO SYSTEM 94 // 1 PLAYER</p>
+        </section>
+
+        <section class="screen menu-screen select-game-screen" id="singleplayer-screen" data-screen="singleplayer" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">PLAYER 1 // SELECT GAME</p>
+            <h2>SELECT GAME</h2>
+          </header>
+          <nav class="arcade-menu mode-menu" aria-label="Singleplayer modes">
+            <button class="menu-button mode-button" type="button" data-mode="classic">
+              <span>Classic</span>
+              <b>HI <output id="classic-high-score">0000000</output></b>
+            </button>
+            <button class="menu-button mode-button" type="button" data-mode="carver">
+              <span>Carver</span>
+              <b>HI <output id="carver-high-score">0000000</output></b>
+            </button>
+          </nav>
+          <div class="menu-footer"><span>WASD / ARROWS SELECT</span><span>ENTER START</span></div>
+        </section>
+
+        <section class="screen menu-screen" id="records-screen" data-screen="records" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">PLAYER DATA</p>
+            <h2>RECORDS</h2>
+          </header>
+          <div class="records-panel">
+            <section class="record-section">
+              <h3>HIGH SCORES</h3>
+              <div class="record-score"><span>CLASSIC</span><output id="records-classic-score">0000000</output></div>
+              <div class="record-score"><span>CARVER</span><output id="records-carver-score">0000000</output></div>
+            </section>
+            <section class="record-section">
+              <h3>ACHIEVEMENTS <span id="achievement-summary">0 / 3</span></h3>
+              <div id="achievement-list" class="achievement-list"></div>
+            </section>
+          </div>
+          <nav class="arcade-menu compact-menu">
+            <button class="menu-button back-button" type="button" data-back><span>Back</span></button>
+          </nav>
+        </section>
+
+        <section class="screen menu-screen options-screen" id="options-screen" data-screen="options" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">PLAYER SETUP</p>
+            <h2>OPTIONS</h2>
+          </header>
+          <div class="options-panel">
+            <div class="keybinding-heading">
+              <b>KEYBINDINGS</b>
+              <button class="utility-button" type="button" id="reset-keybindings">RESET</button>
+            </div>
+            <div class="keybinding-list" id="keybinding-list"></div>
+          </div>
+          <nav class="arcade-menu compact-menu">
+            <button class="menu-button back-button" type="button" data-back><span>Back</span></button>
+          </nav>
+        </section>
+
+        <section class="screen game-screen" id="game-screen" data-screen="game" hidden>
+          <header class="game-header">
+            <div><span class="eyebrow">MODE</span><strong id="mode-name">CLASSIC</strong></div>
+            <div class="header-score">HI <output id="high-score">0000000</output></div>
+            <button class="utility-button" type="button" id="pause-game">PAUSE</button>
+          </header>
+
+          <div class="game-shell" id="game-shell">
+            <section class="playfield-panel">
+              <div class="drop-guide" aria-hidden="true">
+                <div class="cursor-label" id="drop-cursor">
+                  <span>DROP CURSOR</span>
+                  <b>v</b>
+                </div>
+              </div>
+              <canvas id="field" width="320" height="640" aria-label="playfield"></canvas>
+              <div class="game-over" id="game-over" hidden>
+                <strong>GAME OVER</strong>
+                <span id="restart-hint">Press R to restart</span>
+              </div>
+            </section>
+
+            <aside class="hud">
+              <section class="hud-section next-section">
+                <h2>NEXT</h2>
+                <canvas id="next" width="180" height="105" aria-label="next piece"></canvas>
+              </section>
+
+              <section class="hud-section score-section">
+                <h2>SCORE</h2>
+                <output id="score">0000000</output>
+                <div class="minor-stats">
+                  <span>LV <b id="level">1</b></span>
+                  <span>LINES <b id="lines">0</b></span>
+                </div>
+              </section>
+
+              <section class="hud-section focus-section">
+                <h2>FOCUS</h2>
+                <canvas id="focus" width="220" height="220" aria-label="focused piece sculpting grid"></canvas>
+                <div class="resource-row"><span>CUT</span><b id="cut">-</b></div>
+                <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
+                <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
+                <div class="focus-nav"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
+              </section>
+            </aside>
+
+            <svg class="focus-connector" id="focus-connector" aria-hidden="true">
+              <path id="focus-connector-path"></path>
+            </svg>
+
+            <div class="vertical-logo" aria-hidden="true">CARVEMINO</div>
+          </div>
+
+          <div class="pause-overlay" id="pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+            <div class="pause-panel">
+              <p class="eyebrow">GAME SUSPENDED</p>
+              <h2 id="pause-title">PAUSED</h2>
+              <nav class="arcade-menu pause-menu" aria-label="Pause menu">
+                <button class="menu-button" type="button" id="resume-game"><span>Resume</span></button>
+                <button class="menu-button" type="button" id="restart-game"><span>Restart</span></button>
+                <button class="menu-button" type="button" id="quit-game"><span>Quit Game</span></button>
+              </nav>
+              <p class="pause-hint">ESC RESUME</p>
+            </div>
+          </div>
+        </section>
       </div>
-    </section>
+    </div>
+    <div class="cabinet-hardware" aria-hidden="true">
+      <span>CARVEMINO / CM-94</span>
+      <i></i><i></i><i></i>
+    </div>
   </main>
 
   <script type="module" src="./src/main.js"></script>
