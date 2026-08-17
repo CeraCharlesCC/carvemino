@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Carvemino</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="game-shell" aria-label="Carvemino prototype">
+    <section class="playfield-panel">
+      <div class="cursor-label" id="drop-cursor" aria-label="next drop position">
+        <span>DROP CURSOR</span>
+        <b>v</b>
+      </div>
+      <canvas id="field" width="320" height="640" aria-label="playfield"></canvas>
+      <div class="game-over" id="game-over" hidden>
+        <strong>GAME OVER</strong>
+        <span>Press R to restart</span>
+      </div>
+    </section>
+
+    <aside class="hud">
+      <section class="hud-section next-section">
+        <h2>NEXT</h2>
+        <canvas id="next" width="180" height="105" aria-label="next piece"></canvas>
+      </section>
+
+      <section class="hud-section score-section">
+        <h2>SCORE</h2>
+        <output id="score">0000000</output>
+        <div class="minor-stats">
+          <span>LV <b id="level">1</b></span>
+          <span>LINES <b id="lines">0</b></span>
+        </div>
+      </section>
+
+      <section class="hud-section focus-section">
+        <h2>FOCUS</h2>
+        <canvas id="focus" width="220" height="220" aria-label="focused piece sculpting grid"></canvas>
+        <div class="resource-row"><span>CUT</span><b id="cut">-</b></div>
+        <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
+        <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
+        <div class="focus-nav"><kbd>Q</kbd><span>&lt; FOCUS &gt;</span><kbd>E</kbd></div>
+        <p class="hint">WASD: cursor · Z/Enter: carve · F/X/Right Shift: fill · Space: drop focused block</p>
+      </section>
+    </aside>
+
+    <div class="vertical-logo" aria-hidden="true">CARVEMINO</div>
+  </main>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
