@@ -116,7 +116,8 @@ export function createUi({
   const pauseOverlay = document.querySelector("#pause-overlay");
   const focusPrevKey = document.querySelector("#focus-prev-key");
   const focusNextKey = document.querySelector("#focus-next-key");
-  const controlHint = document.querySelector("#control-hint");
+  const focusConnector = document.querySelector("#focus-connector");
+  const focusConnectorPath = document.querySelector("#focus-connector-path");
 
   let rules = null;
   let profile = emptyProfile();
@@ -287,6 +288,55 @@ export function createUi({
     }
   }
 
+  function renderFocusConnector(view) {
+    const piece = view.focusedPiece;
+    const visibleCells = piece?.cells.filter((cell) => {
+      const y = piece.y + cell.y - view.board.hiddenHeight;
+      return y >= 0 && y < view.board.visibleHeight;
+    }) || [];
+
+    if (view.status === "gameover" || visibleCells.length === 0) {
+      focusConnectorPath.setAttribute("d", "");
+      return;
+    }
+
+    const shellRect = gameShell.getBoundingClientRect();
+    const fieldRect = fieldCanvas.getBoundingClientRect();
+    const focusRect = focusCanvas.getBoundingClientRect();
+    if (shellRect.width === 0 || shellRect.height === 0 || focusRect.width === 0) {
+      focusConnectorPath.setAttribute("d", "");
+      return;
+    }
+
+    const scaleX = shellRect.width / gameShell.clientWidth;
+    const scaleY = shellRect.height / gameShell.clientHeight;
+    const fieldLeft = (fieldRect.left - shellRect.left) / scaleX;
+    const fieldTop = (fieldRect.top - shellRect.top) / scaleY;
+    const cellWidth = fieldCanvas.clientWidth / view.board.width;
+    const cellHeight = fieldCanvas.clientHeight / view.board.visibleHeight;
+    const centerX = visibleCells.reduce(
+      (sum, cell) => sum + piece.x + cell.x + 0.5,
+      0
+    ) / visibleCells.length;
+    const centerY = visibleCells.reduce(
+      (sum, cell) => sum + piece.y + cell.y - view.board.hiddenHeight + 0.5,
+      0
+    ) / visibleCells.length;
+    const startX = fieldLeft + centerX * cellWidth;
+    const startY = fieldTop + centerY * cellHeight;
+    const endX = (focusRect.left - shellRect.left) / scaleX + 0.5;
+    const endY = (focusRect.top - shellRect.top + focusRect.height / 2) / scaleY;
+
+    focusConnector.setAttribute(
+      "viewBox",
+      `0 0 ${gameShell.clientWidth} ${gameShell.clientHeight}`
+    );
+    focusConnectorPath.setAttribute(
+      "d",
+      `M ${startX} ${startY} L ${endX} ${endY}`
+    );
+  }
+
   function renderHud(view) {
     score.textContent = String(view.score).padStart(7, "0");
     level.textContent = String(view.level);
@@ -301,7 +351,14 @@ export function createUi({
 
     if (view.next) {
       const boardCellPx = fieldCanvas.clientWidth / view.board.width;
-      cursor.style.left = `${(view.next.x + 0.5) * boardCellPx}px`;
+      const cursorCenter = (view.next.x + 0.5) * boardCellPx;
+      const labelHalfWidth = 37;
+      const labelCenter = Math.max(
+        labelHalfWidth,
+        Math.min(fieldCanvas.clientWidth - labelHalfWidth, cursorCenter)
+      );
+      cursor.style.left = `${cursorCenter}px`;
+      cursor.style.setProperty("--cursor-label-shift", `${labelCenter - cursorCenter}px`);
     }
     gameOver.hidden = view.status !== "gameover";
   }
@@ -313,6 +370,7 @@ export function createUi({
     renderNext(view);
     renderFocus(view);
     renderHud(view);
+    renderFocusConnector(view);
   }
 
   function moveFocusCursor(dx, dy) {
@@ -361,17 +419,11 @@ export function createUi({
     if (rules) highScore.textContent = String(profile.highScores[rules.modeId] || 0).padStart(7, "0");
   }
 
-  function renderControlHints() {
+  function renderControlKeys() {
     const bindings = profile.settings.keybindings;
     focusPrevKey.textContent = keyLabel(bindings.focusPrevious);
     focusNextKey.textContent = keyLabel(bindings.focusNext);
     restartHint.textContent = `Press ${keyLabel(bindings.restart)} to restart`;
-    controlHint.textContent = [
-      `${keyLabel(bindings.cursorUp)}/${keyLabel(bindings.cursorLeft)}/${keyLabel(bindings.cursorDown)}/${keyLabel(bindings.cursorRight)} MOVE`,
-      `${keyLabel(bindings.carve)}/ENTER CUT`,
-      `${keyLabel(bindings.fill)} FILL`,
-      `${keyLabel(bindings.hardDrop)} DROP`
-    ].join("  ·  ");
   }
 
   function renderKeybindings() {
@@ -401,7 +453,7 @@ export function createUi({
     document.documentElement.dataset.theme = profile.settings.theme || "default";
     renderProfileNumbers();
     renderAchievements();
-    renderControlHints();
+    renderControlKeys();
     if (currentScreen === "options") renderKeybindings();
   }
 

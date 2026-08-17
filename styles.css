@@ -10,6 +10,7 @@
   --panel: #101214;
   --panel-2: #15181a;
   --field-height: 640px;
+  --drop-guide-height: 40px;
 }
 
 * { box-sizing: border-box; }
@@ -253,10 +254,17 @@ h1 {
 .playfield-panel { position: relative; border-right: 1px solid var(--line); }
 #field { display: block; width: 320px; height: auto; background: #080a0b; }
 
+.drop-guide {
+  position: relative;
+  height: var(--drop-guide-height);
+  border-bottom: 1px solid #262925;
+  background: #080a0b;
+}
+
 .cursor-label {
   position: absolute;
   z-index: 4;
-  top: -1px;
+  top: 5px;
   left: 0;
   width: 32px;
   color: var(--accent);
@@ -269,15 +277,15 @@ h1 {
 }
 .cursor-label span {
   position: absolute;
-  top: 7px;
+  top: 0;
   left: 50%;
   width: 74px;
   letter-spacing: 1px;
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--cursor-label-shift, 0px)));
 }
-.cursor-label b { display: block; margin-top: 20px; font-size: 16px; }
+.cursor-label b { display: block; margin-top: 17px; font-size: 16px; }
 
-.hud { min-height: var(--field-height); background: var(--panel-2); }
+.hud { min-height: calc(var(--field-height) + var(--drop-guide-height)); background: var(--panel-2); }
 .hud-section { padding: 13px 15px; border-bottom: 1px solid var(--line); }
 .hud-section h2 {
   margin: 0 0 8px;
@@ -320,7 +328,23 @@ kbd {
   font: inherit;
   font-size: 9px;
 }
-.hint { margin: 10px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
+
+.focus-connector {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.focus-connector path {
+  fill: none;
+  stroke: #eee8d5c7;
+  stroke-width: .75;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
 
 .vertical-logo {
   display: flex;
@@ -383,6 +407,6 @@ kbd {
   .game-header { position: sticky; top: 0; z-index: 12; }
   .game-shell {
     transform: scale(.72);
-    margin-bottom: calc(var(--field-height) * -.28);
+    margin-bottom: calc((var(--field-height) + var(--drop-guide-height)) * -.28);
   }
 }

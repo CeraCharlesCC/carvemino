@@ -98,9 +98,11 @@
 
       <div class="game-shell" id="game-shell">
         <section class="playfield-panel">
-          <div class="cursor-label" id="drop-cursor" aria-label="next drop position">
-            <span>DROP CURSOR</span>
-            <b>v</b>
+          <div class="drop-guide" aria-hidden="true">
+            <div class="cursor-label" id="drop-cursor">
+              <span>DROP CURSOR</span>
+              <b>v</b>
+            </div>
           </div>
           <canvas id="field" width="320" height="640" aria-label="playfield"></canvas>
           <div class="game-over" id="game-over" hidden>
@@ -131,9 +133,12 @@
             <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
             <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
             <div class="focus-nav"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
-            <p class="hint" id="control-hint">WASD MOVE · Z/ENTER CUT · F FILL · SPACE DROP</p>
           </section>
         </aside>
+
+        <svg class="focus-connector" id="focus-connector" aria-hidden="true">
+          <path id="focus-connector-path"></path>
+        </svg>
 
         <div class="vertical-logo" aria-hidden="true">CARVEMINO</div>
       </div>
