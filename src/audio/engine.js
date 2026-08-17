@@ -108,7 +108,7 @@ export function createAudioEngine({
     const end = start + duration;
     const oscillator = audio.createOscillator();
     const envelope = audio.createGain();
-    const peak = Math.max(0.0001, Math.min(1, (Number(tone.gain) || 0.5) * 0.04));
+    const peak = Math.max(0.0001, Math.min(1, (Number(tone.gain) || 0.5) * 0.08));
 
     oscillator.type = tone.type || "square";
     oscillator.frequency.setValueAtTime(Number(tone.frequency) || 440, start);
@@ -141,13 +141,11 @@ export function createAudioEngine({
   }
 
   function syncMusicScene() {
-    // The music controller contains no BGM content yet; these transitions are
-    // kept now so adding tracks later does not require changing app/UI wiring.
+    musicController.setIntensity(level);
     if (lifecycle === "playing") musicController.setScene("gameplay");
     else if (lifecycle === "paused") musicController.setScene("paused");
     else if (lifecycle === "gameover") musicController.setScene("gameover");
     else musicController.setScene("menu");
-    musicController.setIntensity(level);
   }
 
   function setScreen(nextScreen) {
@@ -170,6 +168,11 @@ export function createAudioEngine({
   function startGame({ modeId: nextModeId = null, level: nextLevel = 1 } = {}) {
     modeId = nextModeId;
     level = Math.max(1, Math.floor(Number(nextLevel) || 1));
+    musicController.stop?.();
+    if (settings.musicEnabled && settings.masterVolume > 0 && settings.musicVolume > 0) {
+      ensureGraph();
+      unlock();
+    }
     lifecycle = "playing";
     syncMusicScene();
   }
@@ -182,6 +185,10 @@ export function createAudioEngine({
 
   function resumeGame() {
     if (lifecycle !== "paused") return;
+    if (settings.musicEnabled && settings.masterVolume > 0 && settings.musicVolume > 0) {
+      ensureGraph();
+      unlock();
+    }
     lifecycle = "playing";
     syncMusicScene();
   }
@@ -224,6 +231,15 @@ export function createAudioEngine({
 
   function setSettings(nextSettings) {
     settings = normalizeSettings({ ...settings, ...(nextSettings || {}) });
+    if (
+      lifecycle === "playing"
+      && settings.musicEnabled
+      && settings.masterVolume > 0
+      && settings.musicVolume > 0
+    ) {
+      ensureGraph();
+      unlock();
+    }
     applyMixerSettings();
   }
 

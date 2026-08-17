@@ -3,6 +3,19 @@ import test from "node:test";
 
 import { createAudioEngine } from "../src/audio/engine.js";
 
+function createSilentMusicController() {
+  let scene = "silent";
+  let intensity = 1;
+  return {
+    attach() {},
+    setScene(nextScene) { scene = nextScene; },
+    setIntensity(nextIntensity) { intensity = nextIntensity; },
+    stop() { scene = "silent"; },
+    dispose() { scene = "silent"; },
+    getState() { return { scene, intensity, attached: false }; }
+  };
+}
+
 class FakeAudioParam {
   constructor() {
     this.values = [];
@@ -40,7 +53,9 @@ class FakeOscillator {
     this.type = "sine";
   }
 
-  connect() {}
+  connect(target) {
+    this.output = target;
+  }
   disconnect() {}
   start() {}
   stop() {}
@@ -73,6 +88,13 @@ function playedFrequencies(context) {
   );
 }
 
+function playedPeaks(context) {
+  return context.oscillators.map((oscillator) => {
+    const envelope = oscillator.output;
+    return envelope?.gain.values.find(([kind]) => kind === "ramp")?.[1];
+  });
+}
+
 test("audio engine owns menu interaction beeps", () => {
   const context = new FakeAudioContext();
   const engine = createAudioEngine({ contextFactory: () => context });
@@ -87,7 +109,16 @@ test("audio engine owns menu interaction beeps", () => {
   assert.equal(engine.getState().music.scene, "menu");
 });
 
-test("audio lifecycle follows game state while BGM remains content-free", () => {
+test("sound effects use the boosted overall peak gain", () => {
+  const context = new FakeAudioContext();
+  const engine = createAudioEngine({ contextFactory: () => context });
+
+  engine.handleUiEvent("select");
+
+  assert.deepEqual(playedPeaks(context), [0.0576]);
+});
+
+test("audio lifecycle routes gameplay state and level into the BGM controller", () => {
   const engine = createAudioEngine({ contextFactory: () => null });
 
   engine.startGame({ modeId: "carver", level: 2 });
@@ -115,7 +146,10 @@ test("audio lifecycle follows game state while BGM remains content-free", () => 
 
 test("line clears coalesce the lock sound and game over supersedes other cues", () => {
   const context = new FakeAudioContext();
-  const engine = createAudioEngine({ contextFactory: () => context });
+  const engine = createAudioEngine({
+    contextFactory: () => context,
+    musicController: createSilentMusicController()
+  });
 
   engine.startGame({ modeId: "classic" });
   engine.handleGameEvents([
@@ -152,4 +186,21 @@ test("muted SFX does not create an AudioContext", () => {
   engine.handleGameEvents([{ type: "BLOCK_CARVED" }]);
 
   assert.equal(contextCreations, 0);
+});
+
+test("gameplay can create the audio graph for music even when SFX is muted", () => {
+  let contextCreations = 0;
+  const engine = createAudioEngine({
+    contextFactory() {
+      contextCreations += 1;
+      return new FakeAudioContext();
+    },
+    musicController: createSilentMusicController()
+  });
+
+  engine.setSettings({ sfxEnabled: false, musicEnabled: true, musicVolume: 0.5 });
+  engine.startGame({ modeId: "classic", level: 1 });
+
+  assert.equal(contextCreations, 1);
+  assert.equal(engine.getState().music.scene, "gameplay");
 });
