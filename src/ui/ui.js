@@ -13,6 +13,12 @@ const PALETTE = [
   "#5a5d55"
 ];
 
+const SCULPT_CURSOR_COLORS = Object.freeze({
+  CARVE: "#d98b43",
+  FILL: "#6fb879",
+  NONE: "#f1f5e6"
+});
+
 const KEYBINDING_ACTIONS = Object.freeze([
   ["focusPrevious", "Focus previous"],
   ["focusNext", "Focus next"],
@@ -20,8 +26,7 @@ const KEYBINDING_ACTIONS = Object.freeze([
   ["cursorLeft", "Cursor left"],
   ["cursorDown", "Cursor down"],
   ["cursorRight", "Cursor right"],
-  ["carve", "Carve"],
-  ["fill", "Fill"],
+  ["sculpt", "Sculpt"],
   ["hardDrop", "Hard drop"]
 ]);
 
@@ -64,6 +69,22 @@ export function getTitleScreenAction(code) {
   if (code === "KeyR") return "records";
   if (code === "KeyO") return "options";
   return null;
+}
+
+export function getSculptAction(view, cursor, rules) {
+  const piece = view?.focusedPiece;
+  if (!piece || !cursor || !rules) return null;
+
+  const isOccupied = piece.cells.some((cell) => cell.x === cursor.x && cell.y === cursor.y);
+  if (isOccupied) {
+    const canCarve = piece.carved < piece.carveLimit
+      && piece.cells.length > rules.sculpting.minimumCells;
+    return canCarve ? "CARVE" : null;
+  }
+
+  if (view.scrap < rules.sculpting.fillCost) return null;
+  const canFill = view.editableFillCells.some((cell) => cell.x === cursor.x && cell.y === cursor.y);
+  return canFill ? "FILL" : null;
 }
 
 function clearCanvas(canvas, context) {
@@ -439,13 +460,15 @@ export function createUi({
     if (focusCursor) {
       const px = originX + (focusCursor.x - minX) * cellSize;
       const py = originY + (focusCursor.y - minY) * cellSize;
+      const sculptAction = getSculptAction(view, focusCursor, rules);
+      const cursorColor = SCULPT_CURSOR_COLORS[sculptAction || "NONE"];
       focus.save();
       focus.fillStyle = "#f1f5e624";
       focus.fillRect(px + 2, py + 2, cellSize - 4, cellSize - 4);
       focus.strokeStyle = "#080a07";
       focus.lineWidth = 7;
       focus.strokeRect(px + 2.5, py + 2.5, cellSize - 5, cellSize - 5);
-      focus.strokeStyle = "#f1f5e6";
+      focus.strokeStyle = cursorColor;
       focus.lineWidth = 3;
       focus.strokeRect(px + 2.5, py + 2.5, cellSize - 5, cellSize - 5);
 
@@ -569,12 +592,11 @@ export function createUi({
     renderFocus(lastView);
   }
 
-  function sculptAtCursor(type) {
+  function sculptAtCursor() {
     if (!lastView || !lastView.focusedPiece || !focusCursor) return;
     const piece = lastView.focusedPiece;
-    const cells = type === "CARVE" ? piece.cells : lastView.editableFillCells;
-    if (!cells.some((cell) => cell.x === focusCursor.x && cell.y === focusCursor.y)) return;
-    sendCommand({ type, pieceId: piece.id, x: focusCursor.x, y: focusCursor.y });
+    if (!getSculptAction(lastView, focusCursor, rules)) return;
+    sendCommand({ type: "SCULPT", pieceId: piece.id, x: focusCursor.x, y: focusCursor.y });
   }
 
   function renderAchievements() {
@@ -717,7 +739,7 @@ export function createUi({
     const bindings = profile.settings.keybindings;
     const action = KEYBINDING_ACTIONS.find(([actionId]) => bindings[actionId] === event.code)?.[0];
     if (!action && event.code === "Enter") {
-      sculptAtCursor("CARVE");
+      sculptAtCursor();
       event.preventDefault();
       return true;
     }
@@ -730,8 +752,7 @@ export function createUi({
       case "cursorLeft": moveFocusCursor(-1, 0); break;
       case "cursorDown": moveFocusCursor(0, 1); break;
       case "cursorRight": moveFocusCursor(1, 0); break;
-      case "carve": sculptAtCursor("CARVE"); break;
-      case "fill": sculptAtCursor("FILL"); break;
+      case "sculpt": sculptAtCursor(); break;
       case "hardDrop": sendCommand({ type: "HARD_DROP_FOCUSED" }); break;
       default: return false;
     }

@@ -46,8 +46,8 @@ test("carving may split a piece into disconnected regions", () => {
   const game = createGame({ seed: 1, rules });
   const piece = spawnI(game, rules);
 
-  stepGame(game, [{ type: "CARVE", pieceId: piece.id, x: 1, y: 0 }], rules);
-  stepGame(game, [{ type: "CARVE", pieceId: piece.id, x: 2, y: 0 }], rules);
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 1, y: 0 }], rules);
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 2, y: 0 }], rules);
 
   assert.deepEqual(
     game.activePieces[0].cells,
@@ -58,27 +58,157 @@ test("carving may split a piece into disconnected regions", () => {
   assertGameState(game);
 });
 
-test("fill accepts only one empty orthogonal neighbor per command", () => {
+test("sculpt fills only one empty orthogonal neighbor per command", () => {
   const rules = createRules();
   const game = createGame({ seed: 2, rules });
   const piece = spawnI(game, rules);
 
-  stepGame(game, [{ type: "CARVE", pieceId: piece.id, x: 1, y: 0 }], rules);
-  stepGame(game, [{ type: "CARVE", pieceId: piece.id, x: 2, y: 0 }], rules);
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 1, y: 0 }], rules);
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 2, y: 0 }], rules);
   assert.equal(game.scrap, 2);
 
   const editable = getEditableFillCells(game, piece.id);
   assert(editable.some((cell) => cell.x === 1 && cell.y === 0));
   assert(!editable.some((cell) => cell.x === 1 && cell.y === 2));
 
-  stepGame(game, [{ type: "FILL", pieceId: piece.id, x: 1, y: 2 }], rules);
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 1, y: 2 }], rules);
   assert.equal(game.scrap, 2, "non-adjacent fill must be rejected");
   assert.equal(game.activePieces[0].cells.length, 2);
 
-  stepGame(game, [{ type: "FILL", pieceId: piece.id, x: 1, y: 0 }], rules);
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 1, y: 0 }], rules);
   assert.equal(game.scrap, 0);
   assert.equal(game.activePieces[0].cells.length, 3, "one fill command adds exactly one cell");
   assert(game.activePieces[0].cells.some((cell) => cell.x === 1 && cell.y === 0));
+});
+
+test("successful sculpt suppresses global gravity for that tick", () => {
+  const rules = createRules();
+  const game = createGame({ seed: 20, rules });
+  game.tick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
+  game.nextScheduledSpawnTick = 1480;
+  game.activePieces = [
+    {
+      id: "focus",
+      templateId: "I",
+      cellValue: 1,
+      x: 0,
+      y: 5,
+      cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: 0,
+      spawnIndex: 1,
+      committed: false
+    },
+    {
+      id: "other",
+      templateId: "I",
+      cellValue: 1,
+      x: 9,
+      y: 5,
+      cells: [{ x: 0, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: 0,
+      spawnIndex: 2,
+      committed: false
+    }
+  ];
+  game.focusedPieceId = "focus";
+
+  const events = stepGame(game, [{ type: "SCULPT", pieceId: "focus", x: 1, y: 0 }], rules);
+
+  assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 5);
+  assert(events.some((event) => event.type === "BLOCK_CARVED"));
+  assert(!events.some((event) => event.type === "PIECE_MOVED"));
+});
+
+test("invalid sculpt does not suppress gravity", () => {
+  const rules = createRules();
+  const game = createGame({ seed: 21, rules });
+  game.tick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
+  game.nextScheduledSpawnTick = 1480;
+  game.activePieces = [
+    {
+      id: "focus",
+      templateId: "I",
+      cellValue: 1,
+      x: 0,
+      y: 5,
+      cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: 0,
+      spawnIndex: 1,
+      committed: false
+    },
+    {
+      id: "other",
+      templateId: "I",
+      cellValue: 1,
+      x: 9,
+      y: 5,
+      cells: [{ x: 0, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: 0,
+      spawnIndex: 2,
+      committed: false
+    }
+  ];
+  game.focusedPieceId = "focus";
+
+  const events = stepGame(game, [{ type: "SCULPT", pieceId: "focus", x: 5, y: 5 }], rules);
+
+  assert.equal(game.activePieces.find((piece) => piece.id === "other").y, 6);
+  assert(!events.some((event) => event.type === "BLOCK_CARVED" || event.type === "BLOCK_FILLED"));
+  assert(events.some((event) => event.type === "PIECE_MOVED" && event.pieceId === "other"));
+});
+
+test("natural lock suppresses global gravity for that tick", () => {
+  const rules = createRules();
+  const game = createGame({ seed: 22, rules });
+  const bottom = game.board.height - 1;
+  game.tick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
+  game.nextScheduledSpawnTick = 1480;
+  game.activePieces = [
+    {
+      id: "locking",
+      templateId: "I",
+      cellValue: 1,
+      x: 0,
+      y: bottom,
+      cells: [{ x: 0, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: rules.simulation.lockDelayTicks - 1,
+      spawnIndex: 1,
+      committed: true
+    },
+    {
+      id: "falling",
+      templateId: "I",
+      cellValue: 1,
+      x: 9,
+      y: 5,
+      cells: [{ x: 0, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingTicks: 0,
+      spawnIndex: 2,
+      committed: false
+    }
+  ];
+  game.focusedPieceId = "falling";
+
+  const events = stepGame(game, [], rules);
+
+  assert(events.some((event) => event.type === "PIECE_LOCKED" && event.pieceId === "locking"));
+  assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
+  assert(!events.some((event) => event.type === "PIECE_MOVED"));
 });
 
 test("hard drop moves the focused piece to its lowest available position", () => {
@@ -142,6 +272,8 @@ test("commit focuses another useful active piece without spawning an extra one",
 
   assert.equal(game.focusedPieceId, "newer");
   assert.equal(game.activePieces.find((piece) => piece.id === "older").committed, true);
+  assert.equal(game.activePieces.find((piece) => piece.id === "newer").y, 4,
+    "hard drop does not suppress the gravity pulse");
   assert(!events.some((event) => event.type === "PIECE_SPAWNED"));
 });
 

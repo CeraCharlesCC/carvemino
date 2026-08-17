@@ -79,10 +79,10 @@ test("achievement events unlock once and persist", () => {
 
 test("rebinding swaps collisions and reset restores defaults", () => {
   const profile = createProfileStore(new MemoryStorage());
-  profile.setKeybinding("carve", DEFAULT_KEYBINDINGS.fill);
+  profile.setKeybinding("sculpt", DEFAULT_KEYBINDINGS.hardDrop);
   let snapshot = profile.getSnapshot();
-  assert.equal(snapshot.settings.keybindings.carve, DEFAULT_KEYBINDINGS.fill);
-  assert.equal(snapshot.settings.keybindings.fill, DEFAULT_KEYBINDINGS.carve);
+  assert.equal(snapshot.settings.keybindings.sculpt, DEFAULT_KEYBINDINGS.hardDrop);
+  assert.equal(snapshot.settings.keybindings.hardDrop, DEFAULT_KEYBINDINGS.sculpt);
 
   profile.resetKeybindings();
   snapshot = profile.getSnapshot();

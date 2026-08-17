@@ -23,8 +23,7 @@ export const DEFAULT_KEYBINDINGS = Object.freeze({
   cursorLeft: "KeyA",
   cursorDown: "KeyS",
   cursorRight: "KeyD",
-  carve: "KeyZ",
-  fill: "KeyF",
+  sculpt: "KeyZ",
   hardDrop: "Space"
 });
 

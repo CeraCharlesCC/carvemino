@@ -227,11 +227,11 @@ export function getEditableFillCells(state, pieceId) {
 
 function applyCarve(state, command, rules, events) {
   const piece = currentFocusedPiece(state);
-  if (!piece || command.pieceId !== piece.id) return;
-  if (!Number.isInteger(command.x) || !Number.isInteger(command.y)) return;
-  if (!hasLocalCell(piece, command.x, command.y)) return;
-  if (piece.carved >= piece.carveLimit) return;
-  if (piece.cells.length <= rules.sculpting.minimumCells) return;
+  if (!piece || command.pieceId !== piece.id) return false;
+  if (!Number.isInteger(command.x) || !Number.isInteger(command.y)) return false;
+  if (!hasLocalCell(piece, command.x, command.y)) return false;
+  if (piece.carved >= piece.carveLimit) return false;
+  if (piece.cells.length <= rules.sculpting.minimumCells) return false;
 
   const index = piece.cells.findIndex(
     (cell) => cell.x === command.x && cell.y === command.y
@@ -252,17 +252,18 @@ function applyCarve(state, command, rules, events) {
   });
   events.push({ type: "SCRAP_CHANGED", value: state.scrap });
   events.push({ type: "SCORE_CHANGED", value: state.score });
+  return true;
 }
 
 function applyFill(state, command, rules, events) {
   const piece = currentFocusedPiece(state);
-  if (!piece || command.pieceId !== piece.id) return;
-  if (!Number.isInteger(command.x) || !Number.isInteger(command.y)) return;
-  if (state.scrap < rules.sculpting.fillCost) return;
-  if (hasLocalCell(piece, command.x, command.y)) return;
+  if (!piece || command.pieceId !== piece.id) return false;
+  if (!Number.isInteger(command.x) || !Number.isInteger(command.y)) return false;
+  if (state.scrap < rules.sculpting.fillCost) return false;
+  if (hasLocalCell(piece, command.x, command.y)) return false;
 
   const editable = getEditableFillCells(state, piece.id);
-  if (!editable.some((cell) => cell.x === command.x && cell.y === command.y)) return;
+  if (!editable.some((cell) => cell.x === command.x && cell.y === command.y)) return false;
 
   piece.cells.push({ x: command.x, y: command.y });
   piece.cells.sort(compareCells);
@@ -277,6 +278,17 @@ function applyFill(state, command, rules, events) {
   });
   events.push({ type: "SCRAP_CHANGED", value: state.scrap });
   events.push({ type: "SCORE_CHANGED", value: state.score });
+  return true;
+}
+
+function applySculpt(state, command, rules, events) {
+  const piece = currentFocusedPiece(state);
+  if (!piece || command.pieceId !== piece.id) return false;
+  if (!Number.isInteger(command.x) || !Number.isInteger(command.y)) return false;
+
+  return hasLocalCell(piece, command.x, command.y)
+    ? applyCarve(state, command, rules, events)
+    : applyFill(state, command, rules, events);
 }
 
 function bringNextSpawnForward(state) {
@@ -316,7 +328,9 @@ function applyHardDrop(state, rules, events) {
 }
 
 function applyCommands(state, commands, rules, events) {
-  if (state.status !== "playing") return;
+  if (state.status !== "playing") return false;
+
+  let sculptedThisTick = false;
 
   for (const command of commands) {
     if (!command || typeof command.type !== "string") continue;
@@ -327,11 +341,8 @@ function applyCommands(state, commands, rules, events) {
       case "FOCUS_PREVIOUS":
         cycleFocus(state, -1, events);
         break;
-      case "CARVE":
-        applyCarve(state, command, rules, events);
-        break;
-      case "FILL":
-        applyFill(state, command, rules, events);
+      case "SCULPT":
+        sculptedThisTick = applySculpt(state, command, rules, events) || sculptedThisTick;
         break;
       case "HARD_DROP_FOCUSED":
         applyHardDrop(state, rules, events);
@@ -340,6 +351,8 @@ function applyCommands(state, commands, rules, events) {
         break;
     }
   }
+
+  return sculptedThisTick;
 }
 
 function getDropCoverage(state, rules) {
@@ -481,6 +494,14 @@ function applyGravity(state, rules, events) {
     piece.restingTicks = 0;
     events.push({ type: "PIECE_MOVED", pieceId: piece.id, x: piece.x, y: piece.y });
   }
+}
+
+function hasNaturalLockDue(state, rules) {
+  return state.activePieces.some((piece) => (
+    !canTranslate(state, piece, 0, 1)
+    && supportKindBelow(state, piece) !== "active"
+    && piece.restingTicks + 1 >= rules.simulation.lockDelayTicks
+  ));
 }
 
 function clearCompletedLines(state) {
@@ -748,14 +769,15 @@ export function stepGame(state, commands, rules) {
   const events = [];
   if (state.status !== "playing") return events;
 
-  applyCommands(state, commands || [], rules, events);
+  const sculptedThisTick = applyCommands(state, commands || [], rules, events);
   applyScheduledGarbage(state, rules, events);
   if (state.status !== "playing") return events;
 
   spawnDuePieces(state, rules, events);
   if (state.status !== "playing") return events;
 
-  applyGravity(state, rules, events);
+  const naturalLockDue = hasNaturalLockDue(state, rules);
+  if (!sculptedThisTick && !naturalLockDue) applyGravity(state, rules, events);
   updateRestingAndLock(state, rules, events);
   if (state.status === "playing") maintainDropQueue(state, rules, events);
   state.tick += 1;
