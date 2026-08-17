@@ -1,10 +1,13 @@
 import { createProfileStore } from "./app/profile.js";
 import { GameRuntime } from "./app/runtime.js";
+import { createAudioEngine } from "./audio/engine.js";
 import { createGame, createGameView } from "./domain/game.js";
 import { createRulesForMode } from "./domain/rules.js";
 import { createUi } from "./ui/ui.js";
 
 const profile = createProfileStore();
+const audio = createAudioEngine();
+audio.setSettings(profile.getSnapshot().settings.audio);
 
 let runtime = null;
 let rules = null;
@@ -33,12 +36,14 @@ function startGame(modeId = activeModeId) {
   rules = createRulesForMode(modeId);
   seed = freshSeed();
   const game = createGame({ seed, rules });
+  audio.startGame({ modeId, level: game.level });
 
   ui.setGameMode(rules);
   runtime = new GameRuntime({
     game,
     rules,
     onEvents(events, gameState) {
+      audio.handleGameEvents(events, gameState);
       const result = profile.processGameEvents(activeModeId, events, gameState.score);
       if (result.highScoreChanged || result.unlocked.length > 0) {
         ui.setProfile(profile.getSnapshot());
@@ -62,14 +67,22 @@ const ui = createUi({
   startMode(modeId) {
     startGame(modeId);
   },
+  onAudioEvent(type) {
+    audio.handleUiEvent(type);
+  },
+  onScreenChange(screenName) {
+    audio.setScreen(screenName);
+  },
   quitGame() {
     stopGame();
   },
   pauseGame() {
     if (runtime) runtime.stop();
+    audio.pauseGame();
   },
   resumeGame() {
     if (runtime) runtime.start();
+    audio.resumeGame();
   },
   changeKeybinding(action, code) {
     profile.setKeybinding(action, code);
@@ -78,8 +91,16 @@ const ui = createUi({
   resetKeybindings() {
     profile.resetKeybindings();
     return profile.getSnapshot();
+  },
+  changeAudioSetting(setting, value) {
+    if (!profile.setAudioSetting(setting, value)) return null;
+    const snapshot = profile.getSnapshot();
+    audio.setSettings(snapshot.settings.audio);
+    return snapshot;
   }
 });
 
 ui.setProfile(profile.getSnapshot());
 ui.showScreen("menu");
+
+window.addEventListener("pagehide", () => audio.dispose(), { once: true });

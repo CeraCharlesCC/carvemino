@@ -117,6 +117,31 @@
           </header>
           <div class="options-panel">
             <div class="keybinding-heading">
+              <b>AUDIO</b>
+            </div>
+            <div class="audio-settings">
+              <label class="audio-setting-row" for="audio-master-volume">
+                <span>MASTER</span>
+                <input id="audio-master-volume" data-audio-setting="masterVolume" type="range" min="0" max="1" step="0.05">
+              </label>
+              <div class="audio-setting-row">
+                <label for="audio-music-volume">MUSIC</label>
+                <input id="audio-music-volume" data-audio-setting="musicVolume" type="range" min="0" max="1" step="0.05">
+                <label class="audio-toggle" for="audio-music-enabled">
+                  <input id="audio-music-enabled" data-audio-setting="musicEnabled" type="checkbox">
+                  <span>ON</span>
+                </label>
+              </div>
+              <div class="audio-setting-row">
+                <label for="audio-sfx-volume">SFX</label>
+                <input id="audio-sfx-volume" data-audio-setting="sfxVolume" type="range" min="0" max="1" step="0.05">
+                <label class="audio-toggle" for="audio-sfx-enabled">
+                  <input id="audio-sfx-enabled" data-audio-setting="sfxEnabled" type="checkbox">
+                  <span>ON</span>
+                </label>
+              </div>
+            </div>
+            <div class="keybinding-heading">
               <b>KEYBINDINGS</b>
               <button class="utility-button" type="button" id="reset-keybindings">RESET</button>
             </div>

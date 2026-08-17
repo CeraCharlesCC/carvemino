@@ -1,4 +1,4 @@
-import { ACHIEVEMENTS } from "../app/profile.js";
+import { ACHIEVEMENTS, DEFAULT_AUDIO_SETTINGS } from "../app/profile.js";
 import { getTemplateCellValue, getTemplateCells } from "../domain/rules.js";
 
 const PALETTE = [
@@ -59,49 +59,6 @@ const ATTRACT_DEMO_STEPS = Object.freeze([
 const MENU_PREVIOUS_KEYS = new Set(["ArrowUp", "ArrowLeft", "KeyW", "KeyA"]);
 const MENU_NEXT_KEYS = new Set(["ArrowDown", "ArrowRight", "KeyS", "KeyD"]);
 
-function createArcadeAudio() {
-  let context = null;
-
-  function getContext() {
-    if (context) return context;
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return null;
-    context = new AudioContext();
-    return context;
-  }
-
-  function tone(frequency, duration = 0.04, volume = 0.025, delay = 0) {
-    const audio = getContext();
-    if (!audio) return;
-    if (audio.state === "suspended") void audio.resume();
-    const start = audio.currentTime + delay;
-    const oscillator = audio.createOscillator();
-    const gain = audio.createGain();
-    oscillator.type = "square";
-    oscillator.frequency.setValueAtTime(frequency, start);
-    gain.gain.setValueAtTime(volume, start);
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-    oscillator.connect(gain);
-    gain.connect(audio.destination);
-    oscillator.start(start);
-    oscillator.stop(start + duration);
-  }
-
-  return {
-    select() {
-      tone(520, 0.025, 0.018);
-    },
-    confirm() {
-      tone(330, 0.04, 0.025);
-      tone(660, 0.055, 0.022, 0.045);
-    },
-    back() {
-      tone(440, 0.035, 0.018);
-      tone(260, 0.045, 0.018, 0.035);
-    }
-  };
-}
-
 function clearCanvas(canvas, context) {
   context.clearRect(0, 0, canvas.width, canvas.height);
   context.fillStyle = "#080a07";
@@ -151,7 +108,11 @@ function emptyProfile() {
   return {
     highScores: { classic: 0, carver: 0 },
     achievements: {},
-    settings: { theme: "default", keybindings: {} }
+    settings: {
+      theme: "default",
+      keybindings: {},
+      audio: { ...DEFAULT_AUDIO_SETTINGS }
+    }
   };
 }
 
@@ -162,8 +123,11 @@ export function createUi({
   quitGame,
   pauseGame,
   resumeGame,
+  onAudioEvent = () => {},
+  onScreenChange = () => {},
   changeKeybinding,
-  resetKeybindings
+  resetKeybindings,
+  changeAudioSetting
 }) {
   const screens = new Map(
     [...document.querySelectorAll("[data-screen]")].map((screen) => [screen.dataset.screen, screen])
@@ -187,6 +151,11 @@ export function createUi({
   const modeName = document.querySelector("#mode-name");
   const highScore = document.querySelector("#high-score");
   const keybindingList = document.querySelector("#keybinding-list");
+  const masterVolume = document.querySelector("#audio-master-volume");
+  const musicVolume = document.querySelector("#audio-music-volume");
+  const sfxVolume = document.querySelector("#audio-sfx-volume");
+  const musicEnabled = document.querySelector("#audio-music-enabled");
+  const sfxEnabled = document.querySelector("#audio-sfx-enabled");
   const achievementList = document.querySelector("#achievement-list");
   const achievementSummary = document.querySelector("#achievement-summary");
   const pauseOverlay = document.querySelector("#pause-overlay");
@@ -200,7 +169,6 @@ export function createUi({
   const attractDemoNumber = document.querySelector("#sculpt-demo-number");
   const attractDemoAction = document.querySelector("#sculpt-demo-action");
   const attractDemoCaption = document.querySelector("#sculpt-demo-caption");
-  const audio = createArcadeAudio();
 
   let rules = null;
   let profile = emptyProfile();
@@ -306,9 +274,10 @@ export function createUi({
     if (currentScreen === "menu" && screenName !== "menu") stopAttractLoop();
     currentScreen = screenName;
     for (const [name, screen] of screens) screen.hidden = name !== screenName;
-    if (screenName === "options") renderKeybindings();
+    if (screenName === "options") renderOptions();
     if (screenName === "menu") startAttractLoop();
     if (screenName !== "game") focusFirstMenuButton(screenName);
+    onScreenChange(screenName);
   }
 
   function navigateTo(screenName) {
@@ -629,7 +598,7 @@ export function createUi({
         ? "PRESS KEY"
         : keyLabel(profile.settings.keybindings[action]);
       button.addEventListener("click", () => {
-        audio.confirm();
+        onAudioEvent("confirm");
         pendingBinding = action;
         renderKeybindings();
       });
@@ -638,13 +607,27 @@ export function createUi({
     }));
   }
 
+  function renderAudioSettings() {
+    const settings = profile.settings.audio || DEFAULT_AUDIO_SETTINGS;
+    masterVolume.value = String(settings.masterVolume);
+    musicVolume.value = String(settings.musicVolume);
+    sfxVolume.value = String(settings.sfxVolume);
+    musicEnabled.checked = settings.musicEnabled;
+    sfxEnabled.checked = settings.sfxEnabled;
+  }
+
+  function renderOptions() {
+    renderAudioSettings();
+    renderKeybindings();
+  }
+
   function setProfile(nextProfile) {
     profile = nextProfile || emptyProfile();
     document.documentElement.dataset.theme = profile.settings.theme || "default";
     renderProfileNumbers();
     renderAchievements();
     renderControlKeys();
-    if (currentScreen === "options") renderKeybindings();
+    if (currentScreen === "options") renderOptions();
   }
 
   function setGameMode(nextRules) {
@@ -685,7 +668,7 @@ export function createUi({
 
   function handleGameKey(event) {
     if (event.code === "Escape") {
-      audio.confirm();
+      onAudioEvent("confirm");
       setPaused(true);
       event.preventDefault();
       return true;
@@ -725,7 +708,7 @@ export function createUi({
   }
 
   function handleMenuNavigation(event, container = screens.get(currentScreen)) {
-    if (event.target instanceof HTMLSelectElement) return false;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return false;
     const movingPrevious = MENU_PREVIOUS_KEYS.has(event.code);
     if (!movingPrevious && !MENU_NEXT_KEYS.has(event.code)) return false;
     const buttons = getMenuButtons(container);
@@ -734,7 +717,7 @@ export function createUi({
     if (index < 0) index = 0;
     index = (index + (movingPrevious ? -1 : 1) + buttons.length) % buttons.length;
     buttons[index].focus();
-    audio.select();
+    onAudioEvent("select");
     event.preventDefault();
     return true;
   }
@@ -758,7 +741,7 @@ export function createUi({
     if (currentScreen === "game") {
       if (gamePaused) {
         if (event.code === "Escape") {
-          audio.back();
+          onAudioEvent("back");
           setPaused(false);
           event.preventDefault();
         } else {
@@ -780,7 +763,7 @@ export function createUi({
 
     if ((currentScreen === "menu" || currentScreen === "singleplayer") && event.code === "KeyR") {
       secondaryReturnScreen = currentScreen;
-      audio.confirm();
+      onAudioEvent("confirm");
       showScreen("records");
       event.preventDefault();
       return;
@@ -788,7 +771,7 @@ export function createUi({
 
     if ((currentScreen === "menu" || currentScreen === "singleplayer") && event.code === "KeyO") {
       secondaryReturnScreen = currentScreen;
-      audio.confirm();
+      onAudioEvent("confirm");
       showScreen("options");
       event.preventDefault();
       return;
@@ -796,7 +779,7 @@ export function createUi({
 
     if (handleMenuNavigation(event)) return;
     if (event.code === "Escape" && currentScreen !== "menu") {
-      audio.back();
+      onAudioEvent("back");
       if (currentScreen === "records" || currentScreen === "options") showScreen(secondaryReturnScreen);
       else showScreen("menu");
       event.preventDefault();
@@ -805,19 +788,19 @@ export function createUi({
 
   for (const button of document.querySelectorAll("[data-nav]")) {
     button.addEventListener("click", () => {
-      audio.confirm();
+      onAudioEvent("confirm");
       navigateTo(button.dataset.nav);
     });
   }
   for (const button of document.querySelectorAll("[data-back]")) {
     button.addEventListener("click", () => {
-      audio.back();
+      onAudioEvent("back");
       showScreen(secondaryReturnScreen);
     });
   }
   for (const button of document.querySelectorAll("[data-mode]")) {
     button.addEventListener("click", () => {
-      audio.confirm();
+      onAudioEvent("confirm");
       clearPause();
       startMode(button.dataset.mode);
       showScreen("game");
@@ -825,28 +808,42 @@ export function createUi({
   }
 
   document.querySelector("#pause-game").addEventListener("click", () => {
-    audio.confirm();
+    onAudioEvent("confirm");
     setPaused(true);
   });
   document.querySelector("#resume-game").addEventListener("click", () => {
-    audio.back();
+    onAudioEvent("back");
     setPaused(false);
   });
   document.querySelector("#restart-game").addEventListener("click", () => {
-    audio.confirm();
+    onAudioEvent("confirm");
     clearPause();
     restart();
   });
   document.querySelector("#quit-game").addEventListener("click", () => {
-    audio.back();
+    onAudioEvent("back");
     quitToSingleplayer();
   });
   document.querySelector("#reset-keybindings").addEventListener("click", () => {
-    audio.confirm();
+    onAudioEvent("confirm");
     pendingBinding = null;
     const nextProfile = resetKeybindings();
     if (nextProfile) setProfile(nextProfile);
   });
+
+  for (const input of [masterVolume, musicVolume, sfxVolume]) {
+    input.addEventListener("input", () => {
+      const nextProfile = changeAudioSetting?.(input.dataset.audioSetting, Number(input.value));
+      if (nextProfile) profile = nextProfile;
+    });
+  }
+  for (const input of [musicEnabled, sfxEnabled]) {
+    input.addEventListener("change", () => {
+      const nextProfile = changeAudioSetting?.(input.dataset.audioSetting, input.checked);
+      if (nextProfile) profile = nextProfile;
+      onAudioEvent("confirm");
+    });
+  }
   showScreen("menu");
 
   return {

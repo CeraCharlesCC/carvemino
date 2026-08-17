@@ -658,6 +658,42 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 }
 .keybinding-row button { min-width: 72px; }
 
+.audio-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-bottom: 1px solid var(--arrow);
+}
+
+.audio-setting-row {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: auto minmax(70px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--line);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.audio-setting-row:first-child { grid-template-columns: auto minmax(70px, 1fr); }
+.audio-setting-row:last-child { border-right: 0; }
+
+.audio-setting-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--moss);
+}
+
+.audio-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.audio-toggle input { accent-color: var(--moss); }
+
 .utility-button {
   padding: 6px 10px;
   border: 1px solid var(--arrow);
@@ -934,6 +970,9 @@ kbd {
   body { place-items: start center; }
   .arcade-cabinet { width: 100%; border-left: 0; border-right: 0; }
   .menu-screen { padding: 40px 24px 30px; }
+  .audio-settings { grid-template-columns: 1fr; }
+  .audio-setting-row { border-right: 0; border-bottom: 1px solid var(--line); }
+  .audio-setting-row:last-child { border-bottom: 0; }
   .keybinding-list { grid-template-columns: 1fr; }
   .game-screen { overflow: auto; }
   .game-shell { transform-origin: top left; }

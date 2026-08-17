@@ -29,6 +29,14 @@ export const DEFAULT_KEYBINDINGS = Object.freeze({
   restart: "KeyR"
 });
 
+export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
+  masterVolume: 0.8,
+  musicVolume: 0.55,
+  sfxVolume: 0.8,
+  musicEnabled: true,
+  sfxEnabled: true
+});
+
 const STORAGE_KEY = "carvemino-profile-v1";
 
 function createDefaultData() {
@@ -38,9 +46,16 @@ function createDefaultData() {
     achievements: {},
     settings: {
       theme: "default",
-      keybindings: { ...DEFAULT_KEYBINDINGS }
+      keybindings: { ...DEFAULT_KEYBINDINGS },
+      audio: { ...DEFAULT_AUDIO_SETTINGS }
     }
   };
+}
+
+function normalizeVolume(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(0, Math.min(1, number));
 }
 
 function safeParse(text) {
@@ -66,6 +81,26 @@ function normalizeData(value) {
       keybindings: {
         ...defaults.settings.keybindings,
         ...(value.settings?.keybindings || {})
+      },
+      audio: {
+        masterVolume: normalizeVolume(
+          value.settings?.audio?.masterVolume,
+          defaults.settings.audio.masterVolume
+        ),
+        musicVolume: normalizeVolume(
+          value.settings?.audio?.musicVolume,
+          defaults.settings.audio.musicVolume
+        ),
+        sfxVolume: normalizeVolume(
+          value.settings?.audio?.sfxVolume,
+          defaults.settings.audio.sfxVolume
+        ),
+        musicEnabled: typeof value.settings?.audio?.musicEnabled === "boolean"
+          ? value.settings.audio.musicEnabled
+          : defaults.settings.audio.musicEnabled,
+        sfxEnabled: typeof value.settings?.audio?.sfxEnabled === "boolean"
+          ? value.settings.audio.sfxEnabled
+          : defaults.settings.audio.sfxEnabled
       }
     }
   };
@@ -160,6 +195,19 @@ export function createProfileStore(storage) {
     persist();
   }
 
+  function setAudioSetting(setting, value) {
+    if (setting === "masterVolume" || setting === "musicVolume" || setting === "sfxVolume") {
+      data.settings.audio[setting] = normalizeVolume(value, data.settings.audio[setting]);
+    } else if (setting === "musicEnabled" || setting === "sfxEnabled") {
+      if (typeof value !== "boolean") return false;
+      data.settings.audio[setting] = value;
+    } else {
+      return false;
+    }
+    persist();
+    return true;
+  }
+
   return {
     getSnapshot() {
       return cloneData(data);
@@ -171,6 +219,7 @@ export function createProfileStore(storage) {
     processGameEvents,
     setTheme,
     setKeybinding,
-    resetKeybindings
+    resetKeybindings,
+    setAudioSetting
   };
 }

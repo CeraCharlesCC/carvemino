@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ACHIEVEMENTS,
+  DEFAULT_AUDIO_SETTINGS,
   DEFAULT_KEYBINDINGS,
   createProfileStore
 } from "../src/app/profile.js";
@@ -86,4 +87,31 @@ test("rebinding swaps collisions and reset restores defaults", () => {
   profile.resetKeybindings();
   snapshot = profile.getSnapshot();
   assert.deepEqual(snapshot.settings.keybindings, DEFAULT_KEYBINDINGS);
+});
+
+test("audio settings persist, clamp volumes, and migrate old profiles", () => {
+  const storage = new MemoryStorage();
+  storage.setItem("carvemino-profile-v1", JSON.stringify({
+    version: 1,
+    highScores: { classic: 99 },
+    settings: { theme: "default", keybindings: {} }
+  }));
+
+  const profile = createProfileStore(storage);
+  let snapshot = profile.getSnapshot();
+  assert.deepEqual(snapshot.settings.audio, DEFAULT_AUDIO_SETTINGS);
+
+  assert.equal(profile.setAudioSetting("masterVolume", 2), true);
+  assert.equal(profile.setAudioSetting("musicVolume", -1), true);
+  assert.equal(profile.setAudioSetting("sfxVolume", 0.35), true);
+  assert.equal(profile.setAudioSetting("musicEnabled", false), true);
+  assert.equal(profile.setAudioSetting("sfxEnabled", false), true);
+  assert.equal(profile.setAudioSetting("unknown", 1), false);
+
+  snapshot = createProfileStore(storage).getSnapshot();
+  assert.equal(snapshot.settings.audio.masterVolume, 1);
+  assert.equal(snapshot.settings.audio.musicVolume, 0);
+  assert.equal(snapshot.settings.audio.sfxVolume, 0.35);
+  assert.equal(snapshot.settings.audio.musicEnabled, false);
+  assert.equal(snapshot.settings.audio.sfxEnabled, false);
 });
