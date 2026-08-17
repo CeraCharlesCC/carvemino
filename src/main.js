@@ -1,8 +1,8 @@
 import { createProfileStore } from "./app/profile.js";
+import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "./app/catalog.js";
 import { GameRuntime } from "./app/runtime.js";
 import { createAudioEngine } from "./audio/engine.js";
 import { createGame, createGameView } from "./domain/game.js";
-import { createRulesForMode } from "./domain/rules.js";
 import { createUi } from "./ui/ui.js";
 
 const profile = createProfileStore();
@@ -32,13 +32,14 @@ function stopGame() {
 function startGame(modeId = activeModeId) {
   if (!modeId) return;
   stopGame();
-  activeModeId = modeId;
-  rules = createRulesForMode(modeId);
+  const mode = getSingleplayerMode(modeId);
+  activeModeId = mode.id;
+  rules = mode.rules;
   seed = freshSeed();
   const game = createGame({ seed, rules });
-  audio.startGame({ modeId, level: game.level });
+  audio.startGame({ modeId: mode.id, level: game.level });
 
-  ui.setGameMode(rules);
+  ui.setGameMode(mode);
   runtime = new GameRuntime({
     game,
     rules,
@@ -58,6 +59,7 @@ function startGame(modeId = activeModeId) {
 }
 
 const ui = createUi({
+  modes: SINGLEPLAYER_CATALOG,
   sendCommand(command) {
     if (runtime) runtime.command(command);
   },

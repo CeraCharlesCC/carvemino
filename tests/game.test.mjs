@@ -13,7 +13,8 @@ import {
   stepGame
 } from "../src/domain/game.js";
 import { createMatch, getPlayerGame, stepMatch } from "../src/domain/match.js";
-import { createRules, getTemplateBounds, getTemplateCells } from "../src/domain/rules.js";
+import { getTemplateBounds, getTemplateCells } from "../src/domain/rules.js";
+import { makeTestRules } from "./helpers/rules.mjs";
 
 function spawnI(game, rules) {
   game.dropQueue[0].templateId = "I";
@@ -29,7 +30,7 @@ function boardIndex(board, x, y) {
 }
 
 test("same seed and command stream stays deterministic", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const a = createGame({ seed: 123456, rules });
   const b = createGame({ seed: 123456, rules });
 
@@ -42,7 +43,7 @@ test("same seed and command stream stays deterministic", () => {
 });
 
 test("carving may split a piece into disconnected regions", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 1, rules });
   const piece = spawnI(game, rules);
 
@@ -59,7 +60,7 @@ test("carving may split a piece into disconnected regions", () => {
 });
 
 test("sculpt fills only one empty orthogonal neighbor per command", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 2, rules });
   const piece = spawnI(game, rules);
 
@@ -82,7 +83,7 @@ test("sculpt fills only one empty orthogonal neighbor per command", () => {
 });
 
 test("successful sculpt pauses the whole playfield timeline for the grace window", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 20, rules });
   game.tick = 20;
   game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
@@ -139,7 +140,7 @@ test("successful sculpt pauses the whole playfield timeline for the grace window
 });
 
 test("global grace defers scheduled spawns and garbage", () => {
-  const rules = createRules({ simulation: { operationGraceTicks: 2 } });
+  const rules = makeTestRules({ simulation: { operationGraceTicks: 2 } });
   const game = createGame({ seed: 24, rules });
   game.tick = 20;
   game.dropQueue[0].spawnTick = 20;
@@ -186,7 +187,7 @@ test("global grace defers scheduled spawns and garbage", () => {
 });
 
 test("invalid sculpt does not suppress gravity", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 21, rules });
   game.tick = 20;
   game.dropQueue.forEach((plan, index) => { plan.spawnTick = 1000 + index * 100; });
@@ -229,7 +230,7 @@ test("invalid sculpt does not suppress gravity", () => {
 });
 
 test("natural lock becomes pending while the whole playfield pauses", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 22, rules });
   const bottom = game.board.height - 1;
   game.tick = 20;
@@ -288,7 +289,7 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
 });
 
 test("an ordinary gravity landing reaches pending lock without pulse alignment", () => {
-  const rules = createRules({
+  const rules = makeTestRules({
     simulation: { lockDelayTicks: 4, operationGraceTicks: 3 },
     progression: {
       gravityStartTicks: 2,
@@ -315,7 +316,7 @@ test("an ordinary gravity landing reaches pending lock without pulse alignment",
 });
 
 test("sculpt can edit a pending piece and refreshes the global grace", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 23, rules });
   const bottom = game.board.height - 1;
   game.tick = 20;
@@ -368,7 +369,7 @@ test("sculpt can edit a pending piece and refreshes the global grace", () => {
 });
 
 test("hard drop moves the focused piece to its lowest available position", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 22, rules });
   const piece = spawnI(game, rules);
   const startY = piece.y;
@@ -390,7 +391,7 @@ test("hard drop moves the focused piece to its lowest available position", () =>
 });
 
 test("commit focuses another useful active piece without spawning an extra one", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 23, rules });
   game.dropQueue.forEach((plan) => { plan.spawnTick = 1000; });
   game.nextScheduledSpawnTick = 1480;
@@ -434,7 +435,7 @@ test("commit focuses another useful active piece without spawning an extra one",
 });
 
 test("drop planning balances between two sampled positions over a 48-drop history", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 24, rules });
   game.dropQueue = [];
   game.dropCoverageHistory = Array.from({ length: 48 }, (_, index) => ({
@@ -474,7 +475,7 @@ test("drop planning balances between two sampled positions over a 48-drop histor
 });
 
 test("template rotation produces normalized unique orientations", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   assert.deepEqual(getTemplateCells(rules, "I", 1), [
     { x: 0, y: 0 },
     { x: 0, y: 1 },
@@ -486,7 +487,7 @@ test("template rotation produces normalized unique orientations", () => {
 });
 
 test("planned rotation is fixed before spawn and used by the spawned piece", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 25, rules });
   const plan = game.dropQueue[0];
   plan.templateId = "I";
@@ -504,7 +505,7 @@ test("planned rotation is fixed before spawn and used by the spawned piece", () 
 });
 
 test("garbage is queued, cancellable, and duplicate ids are rejected", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 3, rules });
 
   assert.equal(queueGarbage(game, {
@@ -528,7 +529,7 @@ test("garbage is queued, cancellable, and duplicate ids are rejected", () => {
 });
 
 test("snapshot round trip preserves deterministic hash", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 4, rules });
   for (let i = 0; i < 120; i += 1) stepGame(game, [], rules);
   const restored = restoreGame(snapshotGame(game));
@@ -537,7 +538,7 @@ test("snapshot round trip preserves deterministic hash", () => {
 });
 
 test("snapshot round trip preserves a pending lock and global grace", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const game = createGame({ seed: 25, rules });
   const bottom = game.board.height - 1;
   game.tick = 20;
@@ -573,7 +574,7 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
 });
 
 test("restore rejects snapshots from a non-current schema instead of migrating them", () => {
-  const rules = createRules();
+  const rules = makeTestRules();
   const snapshot = snapshotGame(createGame({ seed: 26, rules }));
   delete snapshot.simulationTick;
   snapshot.version = 1;
@@ -583,7 +584,7 @@ test("restore rejects snapshots from a non-current schema instead of migrating t
 });
 
 test("two-line clear in versus produces queued garbage for the opponent", () => {
-  const rules = createRules({
+  const rules = makeTestRules({
     simulation: { lockDelayTicks: 1, operationGraceTicks: 0 },
     garbage: { warningTicks: 20 }
   });
@@ -627,7 +628,7 @@ test("two-line clear in versus produces queued garbage for the opponent", () => 
 });
 
 test("survival mode queues deterministic hazard waves", () => {
-  const rules = createRules({
+  const rules = makeTestRules({
     garbage: { warningTicks: 30 },
     survival: {
       firstWaveTick: 0,

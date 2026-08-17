@@ -1,8 +1,7 @@
-export const CARVER_TEMPLATE = Object.freeze({
-  id: "carvemino-carver-v1",
-  modeId: "carver",
-  name: "Carver",
-  description: "Chunky polyominoes, a taller dig site, and twice the carving budget.",
+import { defineRules } from "../domain/rules.js";
+
+export const CARVER_RULESET = defineRules({
+  id: "carvemino-carver-rules-v1",
   board: Object.freeze({ width: 10, visibleHeight: 24, hiddenHeight: 6 }),
   simulation: Object.freeze({
     ticksPerSecond: 60,

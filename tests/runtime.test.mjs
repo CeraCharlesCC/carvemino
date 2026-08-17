@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { getSingleplayerMode } from "../src/app/catalog.js";
 import { GameRuntime } from "../src/app/runtime.js";
 import { createGame } from "../src/domain/game.js";
-import { createRulesForMode } from "../src/domain/rules.js";
 
 test("runtime stops scheduling frames after game over", () => {
   const previousRequest = globalThis.requestAnimationFrame;
@@ -16,7 +16,7 @@ test("runtime stops scheduling frames after game over", () => {
   globalThis.cancelAnimationFrame = () => {};
 
   try {
-    const rules = createRulesForMode("classic");
+    const rules = getSingleplayerMode("classic").rules;
     const game = createGame({ seed: 1, rules });
     const runtime = new GameRuntime({ game, rules });
 

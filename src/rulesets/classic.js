@@ -1,8 +1,7 @@
-export const CLASSIC_TEMPLATE = Object.freeze({
-  id: "carvemino-classic-v2",
-  modeId: "classic",
-  name: "Classic",
-  description: "The original Carvemino rules: familiar tetrominoes with precision carving.",
+import { defineRules } from "../domain/rules.js";
+
+export const CLASSIC_RULESET = defineRules({
+  id: "carvemino-classic-rules-v1",
   board: Object.freeze({ width: 10, visibleHeight: 20, hiddenHeight: 4 }),
   simulation: Object.freeze({
     ticksPerSecond: 60,

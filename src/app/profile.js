@@ -1,3 +1,5 @@
+import { SINGLEPLAYER_CATALOG, isSingleplayerModeId } from "./catalog.js";
+
 export const ACHIEVEMENTS = Object.freeze({
   firstCut: Object.freeze({
     id: "first-cut",
@@ -35,13 +37,18 @@ export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
   sfxEnabled: true
 });
 
-const STORAGE_KEY = "carvemino-profile-v1";
-const PROFILE_SCHEMA_VERSION = 1;
+const STORAGE_KEY = "carvemino-profile-v2";
+const PROFILE_SCHEMA_VERSION = 2;
+const SINGLEPLAYER_MODE_IDS = Object.freeze(SINGLEPLAYER_CATALOG.map((mode) => mode.id));
+
+function createDefaultHighScores() {
+  return Object.fromEntries(SINGLEPLAYER_MODE_IDS.map((modeId) => [modeId, 0]));
+}
 
 function createDefaultData() {
   return {
     schemaVersion: PROFILE_SCHEMA_VERSION,
-    highScores: { classic: 0, carver: 0 },
+    highScores: createDefaultHighScores(),
     achievements: {},
     settings: {
       theme: "default",
@@ -79,7 +86,7 @@ function isCurrentProfileData(value) {
   if (!hasExactKeys(value, ["schemaVersion", "highScores", "achievements", "settings"])) return false;
   if (value.schemaVersion !== PROFILE_SCHEMA_VERSION) return false;
 
-  if (!hasExactKeys(value.highScores, ["classic", "carver"])) return false;
+  if (!hasExactKeys(value.highScores, SINGLEPLAYER_MODE_IDS)) return false;
   if (!Object.values(value.highScores).every((score) => Number.isSafeInteger(score) && score >= 0)) return false;
 
   if (!isPlainObject(value.achievements)) return false;
@@ -150,6 +157,7 @@ export function createProfileStore(storage) {
   }
 
   function recordScore(modeId, score) {
+    if (!isSingleplayerModeId(modeId)) return false;
     const normalized = Math.max(0, Math.floor(Number(score) || 0));
     const previous = data.highScores[modeId] || 0;
     if (normalized <= previous) return false;

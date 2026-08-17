@@ -7,8 +7,9 @@ import {
   DEFAULT_KEYBINDINGS,
   createProfileStore
 } from "../src/app/profile.js";
+import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "../src/app/catalog.js";
 import { createGame, stepGame } from "../src/domain/game.js";
-import { createRulesForMode, getTemplateIds } from "../src/domain/rules.js";
+import { getTemplateIds } from "../src/domain/rules.js";
 
 class MemoryStorage {
   constructor() {
@@ -24,9 +25,9 @@ class MemoryStorage {
   }
 }
 
-test("classic and carver are independent data-driven rule templates", () => {
-  const classic = createRulesForMode("classic");
-  const carver = createRulesForMode("carver");
+test("classic and carver are independent catalog-backed rulesets", () => {
+  const classic = getSingleplayerMode("classic").rules;
+  const carver = getSingleplayerMode("carver").rules;
 
   assert.equal(classic.board.visibleHeight, 20);
   assert.equal(classic.sculpting.carveLimit, 2);
@@ -52,6 +53,17 @@ test("profile stores independent high scores and persists them", () => {
   const restored = createProfileStore(storage);
   assert.equal(restored.getHighScore("classic"), 1250);
   assert.equal(restored.getHighScore("carver"), 2100);
+});
+
+test("profile high scores are catalog-backed and reject unknown mode ids", () => {
+  const storage = new MemoryStorage();
+  const profile = createProfileStore(storage);
+  const expected = Object.fromEntries(SINGLEPLAYER_CATALOG.map((mode) => [mode.id, 0]));
+  assert.deepEqual(profile.getSnapshot().highScores, expected);
+
+  assert.equal(profile.recordScore("typo-mode", 9999), false);
+  assert.deepEqual(profile.getSnapshot().highScores, expected);
+  assert.deepEqual(createProfileStore(storage).getSnapshot().highScores, expected);
 });
 
 test("achievement events unlock once and persist", () => {
@@ -91,17 +103,19 @@ test("rebinding swaps collisions and reset restores defaults", () => {
 
 test("profiles with a non-current schema are reset instead of migrated", () => {
   const storage = new MemoryStorage();
-  storage.setItem("carvemino-profile-v1", JSON.stringify({
-    version: 1,
+  storage.setItem("carvemino-profile-v2", JSON.stringify({
+    schemaVersion: 1,
     highScores: { classic: 99 },
+    achievements: {},
     settings: {
       theme: "default",
-      keybindings: DEFAULT_KEYBINDINGS
+      keybindings: DEFAULT_KEYBINDINGS,
+      audio: DEFAULT_AUDIO_SETTINGS
     }
   }));
 
   const snapshot = createProfileStore(storage).getSnapshot();
-  assert.equal(snapshot.schemaVersion, 1);
+  assert.equal(snapshot.schemaVersion, 2);
   assert.deepEqual(snapshot.highScores, { classic: 0, carver: 0 });
   assert.deepEqual(snapshot.settings.audio, DEFAULT_AUDIO_SETTINGS);
 });
@@ -111,7 +125,7 @@ test("unknown fields invalidate the current profile schema instead of being norm
   const saved = createProfileStore(new MemoryStorage()).getSnapshot();
   saved.highScores.classic = 99;
   saved.settings.keybindings.restart = "KeyR";
-  storage.setItem("carvemino-profile-v1", JSON.stringify(saved));
+  storage.setItem("carvemino-profile-v2", JSON.stringify(saved));
 
   const snapshot = createProfileStore(storage).getSnapshot();
   assert.equal(snapshot.highScores.classic, 0);

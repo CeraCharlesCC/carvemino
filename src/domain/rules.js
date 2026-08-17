@@ -1,16 +1,5 @@
-import { CLASSIC_TEMPLATE } from "../templates/classic.js";
-import { CARVER_TEMPLATE } from "../templates/carver.js";
-
-export const GAME_TEMPLATES = Object.freeze({
-  classic: CLASSIC_TEMPLATE,
-  carver: CARVER_TEMPLATE
-});
-
 const RULE_KEYS = Object.freeze([
   "id",
-  "modeId",
-  "name",
-  "description",
   "board",
   "simulation",
   "sculpting",
@@ -81,36 +70,6 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-function mergeOverrideValue(base, override, path) {
-  if (Array.isArray(base)) {
-    if (!Array.isArray(override)) throw new Error(`${path} must be an array`);
-    return cloneValue(override);
-  }
-  if (isPlainObject(base)) {
-    if (!isPlainObject(override)) throw new Error(`${path} must be an object`);
-    return mergeOverrides(base, override, path);
-  }
-  if (typeof override !== typeof base || override === null) {
-    throw new Error(`${path} must be a ${typeof base}`);
-  }
-  return override;
-}
-
-function mergeOverrides(base, overrides, path = "rules") {
-  assertPlainObject(overrides, `${path} overrides`);
-  for (const key of Object.keys(overrides)) {
-    if (!Object.hasOwn(base, key)) throw new Error(`${path}.${key} is not a supported override`);
-  }
-
-  const result = {};
-  for (const [key, baseValue] of Object.entries(base)) {
-    result[key] = Object.hasOwn(overrides, key)
-      ? mergeOverrideValue(baseValue, overrides[key], `${path}.${key}`)
-      : cloneValue(baseValue);
-  }
-  return result;
-}
-
 function validatePieceTemplate(templateId, template) {
   const path = `rules.pieces.templates.${templateId}`;
   assertNonEmptyString(templateId, "piece template id");
@@ -147,9 +106,6 @@ function validatePieceTemplate(templateId, template) {
 function validateRules(rules) {
   assertExactKeys(rules, RULE_KEYS, "rules");
   assertNonEmptyString(rules.id, "rules.id");
-  assertNonEmptyString(rules.modeId, "rules.modeId");
-  assertNonEmptyString(rules.name, "rules.name");
-  if (typeof rules.description !== "string") throw new Error("rules.description must be a string");
 
   assertExactKeys(rules.board, ["width", "visibleHeight", "hiddenHeight"], "rules.board");
   assertInteger(rules.board.width, "rules.board.width", { minimum: 1 });
@@ -228,22 +184,11 @@ function validateRules(rules) {
   for (const [templateId, template] of templates) validatePieceTemplate(templateId, template);
 }
 
-export function compileRules(template, overrides = {}) {
-  if (!isPlainObject(template)) throw new Error("rules template must be an object");
-  validateRules(template);
-  const rules = mergeOverrides(template, overrides);
+export function defineRules(definition) {
+  if (!isPlainObject(definition)) throw new Error("rules definition must be an object");
+  const rules = cloneValue(definition);
   validateRules(rules);
   return deepFreeze(rules);
-}
-
-export function createRules(overrides = {}) {
-  return compileRules(CLASSIC_TEMPLATE, overrides);
-}
-
-export function createRulesForMode(modeId, overrides = {}) {
-  const template = GAME_TEMPLATES[modeId];
-  if (!template) throw new Error(`Unknown game mode: ${modeId}`);
-  return compileRules(template, overrides);
 }
 
 function normalizeRotation(rotation) {

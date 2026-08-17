@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { getSingleplayerMode } from "../src/app/catalog.js";
 import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
-import { createRules } from "../src/domain/rules.js";
 
 test("title screen keyboard actions are explicit and do not use selection keys", () => {
   assert.equal(getTitleScreenAction("Enter"), "start");
@@ -15,7 +15,7 @@ test("title screen keyboard actions are explicit and do not use selection keys",
 });
 
 test("sculpt action follows the cursor target and current resources", () => {
-  const rules = createRules();
+  const rules = getSingleplayerMode("classic").rules;
   const view = {
     scrap: rules.sculpting.fillCost,
     focusedPiece: {

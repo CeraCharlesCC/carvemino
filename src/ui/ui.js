@@ -132,9 +132,9 @@ function keyLabel(code) {
   return code.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase();
 }
 
-function emptyProfile() {
+function emptyProfile(modes) {
   return {
-    highScores: { classic: 0, carver: 0 },
+    highScores: Object.fromEntries(modes.map((mode) => [mode.id, 0])),
     achievements: {},
     settings: {
       theme: "default",
@@ -145,6 +145,7 @@ function emptyProfile() {
 }
 
 export function createUi({
+  modes,
   sendCommand,
   restart,
   startMode,
@@ -189,6 +190,9 @@ export function createUi({
   const sfxEnabled = document.querySelector("#audio-sfx-enabled");
   const achievementList = document.querySelector("#achievement-list");
   const achievementSummary = document.querySelector("#achievement-summary");
+  const modeMenu = document.querySelector("#mode-menu");
+  const recordScoreList = document.querySelector("#record-score-list");
+  const attractRanking = document.querySelector("#attract-ranking");
   const pauseOverlay = document.querySelector("#pause-overlay");
   const resumeGameButton = document.querySelector("#resume-game");
   const focusPrevKey = document.querySelector("#focus-prev-key");
@@ -202,8 +206,11 @@ export function createUi({
   const attractDemoAction = document.querySelector("#sculpt-demo-action");
   const attractDemoCaption = document.querySelector("#sculpt-demo-caption");
 
+  const modeScoreOutputs = new Map();
+  const recordScoreOutputs = new Map();
+  let activeMode = null;
   let rules = null;
-  let profile = emptyProfile();
+  let profile = emptyProfile(modes);
   let currentScreen = "menu";
   let lastView = null;
   let focusLayout = null;
@@ -216,6 +223,42 @@ export function createUi({
   let attractPanelTimer = null;
   let attractDemoTimer = null;
   let attractDemoStep = 0;
+
+  modeMenu.replaceChildren(...modes.map((mode) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "menu-button mode-button";
+    button.dataset.mode = mode.id;
+
+    const name = document.createElement("span");
+    name.textContent = mode.name;
+    const scoreLabel = document.createElement("b");
+    scoreLabel.append("HI ");
+    const output = document.createElement("output");
+    output.textContent = "0000000";
+    scoreLabel.append(output);
+    modeScoreOutputs.set(mode.id, output);
+    button.append(name, scoreLabel);
+    button.addEventListener("click", () => {
+      onAudioEvent("confirm");
+      clearPause();
+      startMode(mode.id);
+      showScreen("game");
+    });
+    return button;
+  }));
+
+  recordScoreList.replaceChildren(...modes.map((mode) => {
+    const row = document.createElement("div");
+    row.className = "record-score";
+    const name = document.createElement("span");
+    name.textContent = mode.name.toUpperCase();
+    const output = document.createElement("output");
+    output.textContent = "0000000";
+    recordScoreOutputs.set(mode.id, output);
+    row.append(name, output);
+    return row;
+  }));
 
   const attractDemoCells = Array.from({ length: 56 }, () => {
     const cell = document.createElement("span");
@@ -625,25 +668,33 @@ export function createUi({
   }
 
   function renderProfileNumbers() {
-    const classicValue = profile.highScores.classic || 0;
-    const carverValue = profile.highScores.carver || 0;
-    const classicScore = String(classicValue).padStart(7, "0");
-    const carverScore = String(carverValue).padStart(7, "0");
-    const ranking = [
-      ["CLASSIC", classicValue],
-      ["CARVER", carverValue]
-    ].sort((left, right) => right[1] - left[1]);
-    const bestScore = String(ranking[0][1]).padStart(7, "0");
-    document.querySelector("#classic-high-score").textContent = classicScore;
-    document.querySelector("#carver-high-score").textContent = carverScore;
-    document.querySelector("#records-classic-score").textContent = classicScore;
-    document.querySelector("#records-carver-score").textContent = carverScore;
+    const ranking = modes
+      .map((mode) => [mode, profile.highScores[mode.id] || 0])
+      .sort((left, right) => right[1] - left[1]);
+    const bestScore = String(ranking[0]?.[1] || 0).padStart(7, "0");
+    for (const [mode, value] of ranking) {
+      const formatted = String(value).padStart(7, "0");
+      modeScoreOutputs.get(mode.id).textContent = formatted;
+      recordScoreOutputs.get(mode.id).textContent = formatted;
+    }
     document.querySelector("#attract-high-score").textContent = bestScore;
-    ranking.forEach(([mode, value], index) => {
-      document.querySelector(`#attract-rank-${index + 1}-mode`).textContent = mode;
-      document.querySelector(`#attract-rank-${index + 1}-score`).textContent = String(value).padStart(7, "0");
-    });
-    if (rules) highScore.textContent = String(profile.highScores[rules.modeId] || 0).padStart(7, "0");
+    attractRanking.replaceChildren(...ranking.map(([mode, value], index) => {
+      const row = document.createElement("div");
+      const rank = document.createElement("b");
+      const position = index + 1;
+      const lastTwo = position % 100;
+      const suffix = lastTwo >= 11 && lastTwo <= 13
+        ? "TH"
+        : ({ 1: "ST", 2: "ND", 3: "RD" }[position % 10] || "TH");
+      rank.textContent = `${position}${suffix}`;
+      const name = document.createElement("span");
+      name.textContent = mode.name.toUpperCase();
+      const output = document.createElement("output");
+      output.textContent = String(value).padStart(7, "0");
+      row.append(rank, name, output);
+      return row;
+    }));
+    if (activeMode) highScore.textContent = String(profile.highScores[activeMode.id] || 0).padStart(7, "0");
   }
 
   function renderControlKeys() {
@@ -690,7 +741,7 @@ export function createUi({
   }
 
   function setProfile(nextProfile) {
-    profile = nextProfile || emptyProfile();
+    profile = nextProfile || emptyProfile(modes);
     document.documentElement.dataset.theme = profile.settings.theme || "default";
     renderProfileNumbers();
     renderAchievements();
@@ -698,9 +749,10 @@ export function createUi({
     if (currentScreen === "options") renderOptions();
   }
 
-  function setGameMode(nextRules) {
-    rules = nextRules;
-    modeName.textContent = rules.name.toUpperCase();
+  function setGameMode(nextMode) {
+    activeMode = nextMode;
+    rules = nextMode.rules;
+    modeName.textContent = nextMode.name.toUpperCase();
     fillCost.textContent = `${rules.sculpting.fillCost} scrap`;
     fieldCanvas.width = 320;
     fieldCanvas.height = Math.round((fieldCanvas.width / rules.board.width) * rules.board.visibleHeight);
@@ -906,15 +958,6 @@ export function createUi({
       showScreen(secondaryReturnScreen);
     });
   }
-  for (const button of document.querySelectorAll("[data-mode]")) {
-    button.addEventListener("click", () => {
-      onAudioEvent("confirm");
-      clearPause();
-      startMode(button.dataset.mode);
-      showScreen("game");
-    });
-  }
-
   pauseGameButton.addEventListener("click", () => {
     if (lastView?.status === "gameover") return;
     onAudioEvent("confirm");

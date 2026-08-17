@@ -53,10 +53,7 @@
                 <p class="eyebrow">TODAY'S BEST</p>
                 <h2>SCORE RANKING</h2>
               </header>
-              <div class="attract-ranking">
-                <div><b>1ST</b><span id="attract-rank-1-mode">CLASSIC</span><output id="attract-rank-1-score">0000000</output></div>
-                <div><b>2ND</b><span id="attract-rank-2-mode">CARVER</span><output id="attract-rank-2-score">0000000</output></div>
-              </div>
+              <div class="attract-ranking" id="attract-ranking"></div>
             </div>
           </div>
 
@@ -76,16 +73,7 @@
             <p class="eyebrow">PLAYER 1 // SELECT GAME</p>
             <h2>SELECT GAME</h2>
           </header>
-          <nav class="arcade-menu mode-menu" aria-label="Singleplayer modes">
-            <button class="menu-button mode-button" type="button" data-mode="classic">
-              <span>Classic</span>
-              <b>HI <output id="classic-high-score">0000000</output></b>
-            </button>
-            <button class="menu-button mode-button" type="button" data-mode="carver">
-              <span>Carver</span>
-              <b>HI <output id="carver-high-score">0000000</output></b>
-            </button>
-          </nav>
+          <nav class="arcade-menu mode-menu" id="mode-menu" aria-label="Singleplayer modes"></nav>
           <div class="menu-footer"><span>WASD / ARROWS SELECT</span><span>ENTER START</span></div>
         </section>
 
@@ -97,8 +85,7 @@
           <div class="records-panel">
             <section class="record-section">
               <h3>HIGH SCORES</h3>
-              <div class="record-score"><span>CLASSIC</span><output id="records-classic-score">0000000</output></div>
-              <div class="record-score"><span>CARVER</span><output id="records-carver-score">0000000</output></div>
+              <div id="record-score-list"></div>
             </section>
             <section class="record-section">
               <h3>ACHIEVEMENTS <span id="achievement-summary">0 / 3</span></h3>
