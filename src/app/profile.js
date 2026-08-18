@@ -135,12 +135,10 @@ export function createProfileStore(storage) {
 
   function persist() {
     try {
-      if (typeof storage?.setItem !== "function") return false;
+      if (typeof storage?.setItem !== "function") return;
       storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data));
-      return true;
     } catch {
       // Persistence is optional; the in-memory profile still works.
-      return false;
     }
   }
 

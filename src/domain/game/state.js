@@ -5,6 +5,7 @@ import {
   getBoardCell
 } from "./model.js";
 import { hashSeed } from "./random.js";
+import { parseGeneratedPieceNumber } from "./piece-id.js";
 import { getEditableFillCells } from "./sculpt.js";
 import { maintainDropQueue } from "./drop-planner.js";
 import {
@@ -280,11 +281,6 @@ function assertNonEmptyString(value, path) {
   }
 }
 
-function generatedPieceNumber(pieceId) {
-  const match = /^p([1-9]\d*)$/.exec(pieceId);
-  return match ? BigInt(match[1]) : null;
-}
-
 function assertArray(value, path, maximumLength = Number.MAX_SAFE_INTEGER) {
   if (!Array.isArray(value)) throw new Error(`${path} must be an array`);
   if (value.length > maximumLength) {
@@ -472,7 +468,7 @@ function assertCurrentSnapshot(snapshot, rules) {
     }
     pieceIds.add(piece.id);
     spawnIndexes.add(piece.spawnIndex);
-    const pieceNumber = generatedPieceNumber(piece.id);
+    const pieceNumber = parseGeneratedPieceNumber(piece.id);
     if (pieceNumber !== null && pieceNumber > highestReservedPieceNumber) {
       highestReservedPieceNumber = pieceNumber;
     }
@@ -493,7 +489,7 @@ function assertCurrentSnapshot(snapshot, rules) {
     assertDropPlan(plan, path, rules);
     if (pieceIds.has(plan.pieceId)) throw new Error(`${path}.pieceId duplicates piece id ${plan.pieceId}`);
     pieceIds.add(plan.pieceId);
-    const pieceNumber = generatedPieceNumber(plan.pieceId);
+    const pieceNumber = parseGeneratedPieceNumber(plan.pieceId);
     if (pieceNumber !== null && pieceNumber > highestReservedPieceNumber) {
       highestReservedPieceNumber = pieceNumber;
     }

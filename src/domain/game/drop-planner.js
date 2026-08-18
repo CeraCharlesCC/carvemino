@@ -7,6 +7,7 @@ import {
   spawnIntervalWorldTicksForLevel
 } from "../rules.js";
 import { allWorldCells, canOccupyWorldCells } from "./model.js";
+import { formatGeneratedPieceId } from "./piece-id.js";
 import { randomInt } from "./random.js";
 
 export function bringNextSpawnForward(state) {
@@ -69,7 +70,7 @@ function makeDropPlan(state, spawnAtWorldTick, rules) {
   const rotations = getTemplateRotations(rules, templateId);
   const rotation = rotations[randomInt(state.random.rotations, rotations.length)];
   const x = chooseCoverageBalancedX(state, rules, templateId, rotation);
-  const pieceId = `p${state.nextPieceId++}`;
+  const pieceId = formatGeneratedPieceId(state.nextPieceId++);
   rememberDropCoverage(state, templateId, rotation, x, rules);
 
   return {
