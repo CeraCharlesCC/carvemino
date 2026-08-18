@@ -50,6 +50,39 @@ function assertNumberTable(value, path) {
   value.forEach((entry, index) => assertInteger(entry, `${path}[${index}]`, { minimum: 0 }));
 }
 
+function validateGravityCurve(curve, progression) {
+  assertExactKeys(curve, ["points"], "rules.progression.gravityCurve");
+  if (!Array.isArray(curve.points) || curve.points.length < 2) {
+    throw new Error("rules.progression.gravityCurve.points must contain at least 2 points");
+  }
+
+  let previousLevel = 0;
+  let previousWorldTicks = Number.MAX_SAFE_INTEGER;
+  curve.points.forEach((point, index) => {
+    const path = `rules.progression.gravityCurve.points[${index}]`;
+    assertExactKeys(point, ["level", "worldTicks"], path);
+    assertInteger(point.level, `${path}.level`, { minimum: 1 });
+    assertInteger(point.worldTicks, `${path}.worldTicks`, { minimum: 1 });
+    if (point.level <= previousLevel) {
+      throw new Error(`${path}.level must be greater than the previous point's level`);
+    }
+    if (point.worldTicks > previousWorldTicks) {
+      throw new Error(`${path}.worldTicks must not exceed the previous point's worldTicks`);
+    }
+    previousLevel = point.level;
+    previousWorldTicks = point.worldTicks;
+  });
+
+  const first = curve.points[0];
+  const last = curve.points[curve.points.length - 1];
+  if (first.level !== 1 || first.worldTicks !== progression.gravityStartWorldTicks) {
+    throw new Error("rules.progression.gravityCurve must start at level 1 with gravityStartWorldTicks");
+  }
+  if (last.worldTicks !== progression.gravityMinimumWorldTicks) {
+    throw new Error("rules.progression.gravityCurve must end at gravityMinimumWorldTicks");
+  }
+}
+
 function assertCellStyle(style, path) {
   assertExactKeys(style, ["fill"], path);
   assertNonEmptyString(style.fill, `${path}.fill`);
@@ -161,7 +194,7 @@ function validateRules(rules) {
       "dropQueueDepth"
     ],
     "rules.progression",
-    ["spawnCurve"]
+    ["gravityCurve", "spawnCurve"]
   );
   assertInteger(rules.progression.linesPerLevel, "rules.progression.linesPerLevel", { minimum: 1 });
   assertInteger(rules.progression.gravityStartWorldTicks, "rules.progression.gravityStartWorldTicks", { minimum: 1 });
@@ -171,6 +204,9 @@ function validateRules(rules) {
   assertInteger(rules.progression.spawnStepWorldTicks, "rules.progression.spawnStepWorldTicks", { minimum: 0 });
   assertInteger(rules.progression.spawnMinimumWorldTicks, "rules.progression.spawnMinimumWorldTicks", { minimum: 1 });
   assertInteger(rules.progression.dropQueueDepth, "rules.progression.dropQueueDepth", { minimum: 1 });
+  if (rules.progression.gravityCurve !== undefined) {
+    validateGravityCurve(rules.progression.gravityCurve, rules.progression);
+  }
   if (rules.progression.spawnCurve !== undefined) {
     assertExactKeys(
       rules.progression.spawnCurve,
@@ -298,6 +334,18 @@ export function getTemplateBounds(rules, templateId, rotation) {
 
 export function gravityIntervalWorldTicksForLevel(rules, level) {
   const p = rules.progression;
+  if (p.gravityCurve) {
+    const points = p.gravityCurve.points;
+    const normalizedLevel = Math.max(1, level);
+    for (let index = 1; index < points.length; index += 1) {
+      const upper = points[index];
+      if (normalizedLevel > upper.level) continue;
+      const lower = points[index - 1];
+      const progress = (normalizedLevel - lower.level) / (upper.level - lower.level);
+      return Math.ceil(lower.worldTicks + (upper.worldTicks - lower.worldTicks) * progress);
+    }
+    return p.gravityMinimumWorldTicks;
+  }
   return Math.max(
     p.gravityMinimumWorldTicks,
     p.gravityStartWorldTicks - (level - 1) * p.gravityStepWorldTicks

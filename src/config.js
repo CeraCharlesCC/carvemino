@@ -31,3 +31,4 @@ export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
 
 export const PROFILE_STORAGE_KEY = "carvemino-profile";
 export const PROFILE_SCHEMA_VERSION = 2;
+export const STARTUP_MANUAL_STORAGE_KEY = "carvemino-startup-manual-seen";

@@ -1,3 +1,5 @@
+import { STARTUP_MANUAL_STORAGE_KEY } from "../config.js";
+
 const FIELD_WIDTH = 8;
 const FIELD_HEIGHT = 7;
 const FOCUS_SIZE = 4;
@@ -16,6 +18,25 @@ const KEY_ACTIONS = Object.freeze({
   Space: "hardDrop"
 });
 const MANUAL_GAME_ACTIONS = new Set(Object.values(KEY_ACTIONS));
+
+export function claimStartupManualVisit(storage) {
+  if (storage === undefined) {
+    try {
+      storage = globalThis.localStorage;
+    } catch {
+      return true;
+    }
+  }
+
+  try {
+    if (storage?.getItem?.(STARTUP_MANUAL_STORAGE_KEY) === "1") return false;
+    storage?.setItem?.(STARTUP_MANUAL_STORAGE_KEY, "1");
+    return true;
+  } catch {
+    // If persistence is unavailable, showing the guide is the safer fallback.
+    return true;
+  }
+}
 
 function copyCell(cell) {
   return { x: cell.x, y: cell.y };

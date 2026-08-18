@@ -3,7 +3,7 @@ import { createGameScreen } from "./game-screen.js";
 import { createOnScreenGameInput } from "./game-input.js";
 import { createNavigation } from "./navigation.js";
 import { createProfileUi } from "./profile-ui.js";
-import { createStartupManual } from "./startup-manual.js";
+import { claimStartupManualVisit, createStartupManual } from "./startup-manual.js";
 import { createI18n } from "../i18n.js";
 
 export { getSculptAction } from "./game-screen.js";
@@ -82,7 +82,7 @@ export function createUi({
   }
 
   navigation.showScreen("menu");
-  startupManual.open({ mode: "startup" });
+  if (claimStartupManualVisit()) startupManual.open({ mode: "startup" });
 
   return {
     render: gameScreen.render,

@@ -14,6 +14,7 @@ import {
 } from "../src/ui/game-input.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import {
+  claimStartupManualVisit,
   createManualDemoState,
   getManualDemoTarget,
   performManualDemoAction
@@ -283,11 +284,23 @@ test("startup manual locale follows browser language with an English fallback", 
   const japanese = createI18n({ languages: ["ja"] });
   const english = createI18n({ languages: ["en"] });
   assert.equal(japanese.locale, "ja");
+  assert.equal(japanese.t("menu.manual"), "MANUAL");
   assert.equal(japanese.t("manual.title"), "遊び方");
   assert.equal(english.t("manual.title"), "HOW TO PLAY");
   assert.equal(japanese.t("manual.step.drop.copy"), "選んだピースを一番下まで落とします。横一列をすべて埋めると、その列が消えます。");
   assert.equal(japanese.t("manual.page.controls.lead"), "ゲーム中に使うキーです。");
   assert.equal(english.t("manual.lab.cell", { x: 2, y: 3, action: "CUT" }), "Focus cell 2, 3: CUT");
+});
+
+test("startup manual is automatically claimed only once per local storage", () => {
+  const values = new Map();
+  const storage = {
+    getItem(key) { return values.get(key) ?? null; },
+    setItem(key, value) { values.set(key, String(value)); }
+  };
+
+  assert.equal(claimStartupManualVisit(storage), true);
+  assert.equal(claimStartupManualVisit(storage), false);
 });
 
 test("interactive focus lab teaches cut, fill, focus switching, and drop without game state", () => {
@@ -347,6 +360,7 @@ test("startup manual uses the cabinet display and physical Pad on touch devices"
   assert.match(manual, /paginationButtons[\s\S]*aria-current/);
   assert.match(ui, /startupManual\?\.handleGameAction\(actionId\)/);
   assert.match(ui, /startupManual\?\.open\(\{ returnFocus, mode: "reference" \}\)/);
+  assert.match(ui, /if \(claimStartupManualVisit\(\)\) startupManual\.open\(\{ mode: "startup" \}\)/);
   assert.match(navigation, /document\.querySelector\("#startup-manual"\)\?\.open/);
   assert.match(navigation, /KeyH[\s\S]*data-open-manual/);
 });

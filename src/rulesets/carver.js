@@ -1,7 +1,7 @@
 import { defineRules } from "../domain/rules.js";
 
 export const CARVER_RULESET = defineRules({
-  id: "carvemino-carver-rules-v3",
+  id: "carvemino-carver-rules-v4",
   board: { width: 10, visibleHeight: 24, hiddenHeight: 6 },
   simulation: {
     stepsPerSecond: 60,
@@ -16,7 +16,16 @@ export const CARVER_RULESET = defineRules({
     linesPerLevel: 4,
     gravityStartWorldTicks: 24,
     gravityStepWorldTicks: 2,
-    gravityMinimumWorldTicks: 4,
+    gravityMinimumWorldTicks: 6,
+    gravityCurve: {
+      points: [
+        { level: 1, worldTicks: 24 },
+        { level: 2, worldTicks: 22 },
+        { level: 3, worldTicks: 20 },
+        { level: 50, worldTicks: 9 },
+        { level: 99, worldTicks: 6 }
+      ]
+    },
     spawnStartWorldTicks: 540,
     spawnStepWorldTicks: 60,
     spawnMinimumWorldTicks: 90,

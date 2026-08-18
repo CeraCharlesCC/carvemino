@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "../src/app/catalog.js";
-import { defineRules, spawnIntervalWorldTicksForLevel } from "../src/domain/rules.js";
+import {
+  defineRules,
+  gravityIntervalWorldTicksForLevel,
+  spawnIntervalWorldTicksForLevel
+} from "../src/domain/rules.js";
+import { CARVER_RULESET } from "../src/rulesets/carver.js";
 import { CLASSIC_RULESET } from "../src/rulesets/classic.js";
 
 function mutableCopy(value) {
@@ -111,6 +116,31 @@ test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () =
   assert(tenLevelDrop(1) > tenLevelDrop(31));
   assert(tenLevelDrop(31) > tenLevelDrop(61));
   assert(tenLevelDrop(61) > tenLevelDrop(81));
+});
+
+test("gravity changes quickly through level 3, then eases toward a 6 tick floor", () => {
+  assert.deepEqual(
+    [1, 2, 3].map((level) => gravityIntervalWorldTicksForLevel(CLASSIC_RULESET, level)),
+    [20, 18, 16]
+  );
+  assert.deepEqual(
+    [1, 2, 3].map((level) => gravityIntervalWorldTicksForLevel(CARVER_RULESET, level)),
+    [24, 22, 20]
+  );
+
+  for (const rules of [CLASSIC_RULESET, CARVER_RULESET]) {
+    assert.equal(gravityIntervalWorldTicksForLevel(rules, 50), 9);
+    assert.equal(gravityIntervalWorldTicksForLevel(rules, 99), 6);
+    assert.equal(gravityIntervalWorldTicksForLevel(rules, 120), 6);
+
+    let previous = gravityIntervalWorldTicksForLevel(rules, 1);
+    for (let level = 2; level <= 120; level += 1) {
+      const current = gravityIntervalWorldTicksForLevel(rules, level);
+      assert(current <= previous, `gravity interval must not increase at level ${level}`);
+      assert(current >= 6, `gravity interval must respect its floor at level ${level}`);
+      previous = current;
+    }
+  }
 });
 
 test("rules definitions reject piece rotations that cannot fit the configured board", () => {

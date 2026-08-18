@@ -1,7 +1,7 @@
 import { defineRules } from "../domain/rules.js";
 
 export const CLASSIC_RULESET = defineRules({
-  id: "carvemino-classic-rules-v3",
+  id: "carvemino-classic-rules-v4",
   board: { width: 10, visibleHeight: 20, hiddenHeight: 4 },
   simulation: {
     stepsPerSecond: 60,
@@ -16,7 +16,16 @@ export const CLASSIC_RULESET = defineRules({
     linesPerLevel: 5,
     gravityStartWorldTicks: 20,
     gravityStepWorldTicks: 2,
-    gravityMinimumWorldTicks: 3,
+    gravityMinimumWorldTicks: 6,
+    gravityCurve: {
+      points: [
+        { level: 1, worldTicks: 20 },
+        { level: 2, worldTicks: 18 },
+        { level: 3, worldTicks: 16 },
+        { level: 50, worldTicks: 9 },
+        { level: 99, worldTicks: 6 }
+      ]
+    },
     spawnStartWorldTicks: 480,
     spawnStepWorldTicks: 0,
     spawnMinimumWorldTicks: 150,

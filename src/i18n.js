@@ -88,7 +88,7 @@ const MESSAGES = Object.freeze({
     "manual.nav.closeHint": "Return to where you opened the manual."
   }),
   ja: Object.freeze({
-    "menu.manual": "マニュアル",
+    "menu.manual": "MANUAL",
     "pause.howToPlay": "遊び方を見る",
     "focus.resource.cut": "CUT 残り",
     "focus.resource.scrap": "SCRAP 所持",

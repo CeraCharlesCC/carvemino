@@ -25,6 +25,13 @@ function merge(base, overrides) {
 
 export function makeTestRules(overrides = {}) {
   const definition = merge(CLASSIC_RULESET, overrides);
+  const progressionOverrides = overrides.progression;
+  const overridesGravityDefaults = isPlainObject(progressionOverrides)
+    && ["gravityStartWorldTicks", "gravityStepWorldTicks", "gravityMinimumWorldTicks"]
+      .some((key) => Object.hasOwn(progressionOverrides, key));
+  if (overridesGravityDefaults && !Object.hasOwn(progressionOverrides, "gravityCurve")) {
+    delete definition.progression.gravityCurve;
+  }
   definition.id = `test-rules:${JSON.stringify(overrides)}`;
   return defineRules(definition);
 }
