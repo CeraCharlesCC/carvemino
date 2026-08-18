@@ -126,7 +126,7 @@ function applyGravity(state, rules, events) {
 }
 
 function operationGraceSteps(rules) {
-  return Math.max(0, Math.floor(rules.simulation.operationGraceSteps || 0));
+  return rules.simulation.operationGraceSteps;
 }
 
 function refreshWorldHold(state, rules) {

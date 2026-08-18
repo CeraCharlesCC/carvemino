@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createAudioEngine } from "../src/audio/engine.js";
+import { DEFAULT_AUDIO_SETTINGS } from "../src/config.js";
 
 function createSilentMusicController() {
   let scene = "silent";
@@ -94,6 +95,11 @@ function playedPeaks(context) {
     return envelope?.gain.values.find(([kind]) => kind === "ramp")?.[1];
   });
 }
+
+test("audio engine starts from the shared application defaults", () => {
+  const engine = createAudioEngine({ contextFactory: () => null });
+  assert.deepEqual(engine.getState().settings, DEFAULT_AUDIO_SETTINGS);
+});
 
 test("audio engine owns menu interaction beeps", () => {
   const context = new FakeAudioContext();

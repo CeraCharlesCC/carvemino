@@ -3,11 +3,15 @@ import test from "node:test";
 
 import {
   ACHIEVEMENTS,
-  DEFAULT_AUDIO_SETTINGS,
-  DEFAULT_KEYBINDINGS,
   createProfileStore
 } from "../src/app/profile.js";
 import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "../src/app/catalog.js";
+import {
+  DEFAULT_AUDIO_SETTINGS,
+  DEFAULT_KEYBINDINGS,
+  PROFILE_SCHEMA_VERSION,
+  PROFILE_STORAGE_KEY
+} from "../src/config.js";
 import { createGameEngine } from "../src/domain/game.js";
 import { getTemplateIds } from "../src/domain/rules.js";
 
@@ -22,6 +26,10 @@ class MemoryStorage {
 
   setItem(key, value) {
     this.values.set(key, String(value));
+  }
+
+  removeItem(key) {
+    this.values.delete(key);
   }
 }
 
@@ -54,6 +62,8 @@ test("profile stores independent high scores and persists them", () => {
   const restored = createProfileStore(storage);
   assert.equal(restored.getHighScore("classic"), 1250);
   assert.equal(restored.getHighScore("carver"), 2100);
+  assert(storage.getItem(PROFILE_STORAGE_KEY));
+  assert.equal(storage.getItem("carvemino-profile-v2"), null);
 });
 
 test("profile high scores are catalog-backed and reject unknown mode ids", () => {
@@ -104,7 +114,7 @@ test("rebinding swaps collisions and reset restores defaults", () => {
 
 test("profiles with a non-current schema are reset instead of migrated", () => {
   const storage = new MemoryStorage();
-  storage.setItem("carvemino-profile-v2", JSON.stringify({
+  storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({
     schemaVersion: 1,
     highScores: { classic: 99 },
     achievements: {},
@@ -116,21 +126,46 @@ test("profiles with a non-current schema are reset instead of migrated", () => {
   }));
 
   const snapshot = createProfileStore(storage).getSnapshot();
-  assert.equal(snapshot.schemaVersion, 2);
+  assert.equal(snapshot.schemaVersion, PROFILE_SCHEMA_VERSION);
   assert.deepEqual(snapshot.highScores, { classic: 0, carver: 0 });
   assert.deepEqual(snapshot.settings.audio, DEFAULT_AUDIO_SETTINGS);
 });
 
-test("unknown fields invalidate the current profile schema instead of being normalized", () => {
+test("unknown settings fields invalidate the current profile schema instead of being normalized", () => {
   const storage = new MemoryStorage();
   const saved = createProfileStore(new MemoryStorage()).getSnapshot();
   saved.highScores.classic = 99;
   saved.settings.keybindings.restart = "KeyR";
-  storage.setItem("carvemino-profile-v2", JSON.stringify(saved));
+  storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(saved));
 
   const snapshot = createProfileStore(storage).getSnapshot();
   assert.equal(snapshot.highScores.classic, 0);
   assert.deepEqual(snapshot.settings.keybindings, DEFAULT_KEYBINDINGS);
+});
+
+test("profile records are additive across catalog changes", () => {
+  const storage = new MemoryStorage();
+  const saved = createProfileStore(new MemoryStorage()).getSnapshot();
+  delete saved.highScores.carver;
+  saved.highScores["retired-mode"] = 4321;
+  storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(saved));
+
+  const snapshot = createProfileStore(storage).getSnapshot();
+  assert.equal(snapshot.highScores.classic, 0);
+  assert.equal(snapshot.highScores.carver, 0);
+  assert.equal(snapshot.highScores["retired-mode"], 4321);
+});
+
+test("legacy versioned profile storage migrates to the stable key", () => {
+  const storage = new MemoryStorage();
+  const saved = createProfileStore(new MemoryStorage()).getSnapshot();
+  saved.highScores.classic = 777;
+  storage.setItem("carvemino-profile-v2", JSON.stringify(saved));
+
+  const snapshot = createProfileStore(storage).getSnapshot();
+  assert.equal(snapshot.highScores.classic, 777);
+  assert(storage.getItem(PROFILE_STORAGE_KEY));
+  assert.equal(storage.getItem("carvemino-profile-v2"), null);
 });
 
 test("audio settings persist and clamp volumes", () => {

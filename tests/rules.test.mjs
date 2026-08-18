@@ -63,11 +63,35 @@ test("rules definitions reject invalid semantic values", () => {
     /rules\.pieces\.templates\.I\.rotations\[1\] must be an integer between 0 and 3/
   );
 
+  const invalidDropSamples = mutableCopy(CLASSIC_RULESET);
+  invalidDropSamples.simulation.dropPositionSampleCount = 0;
+  assert.throws(
+    () => defineRules(invalidDropSamples),
+    /rules\.simulation\.dropPositionSampleCount must be an integer >= 1/
+  );
+
   const missingCellStyle = mutableCopy(CLASSIC_RULESET);
   delete missingCellStyle.presentation.cellStyles[1];
   assert.throws(
     () => defineRules(missingCellStyle),
     /rules\.presentation\.cellStyles\.1 is required for used cell value 1/
+  );
+});
+
+test("rules definitions reject piece rotations that cannot fit the configured board", () => {
+  const tooNarrow = mutableCopy(CLASSIC_RULESET);
+  tooNarrow.board.width = 3;
+  assert.throws(
+    () => defineRules(tooNarrow),
+    /templates\.I rotation 0 has bounds 4x1 that do not fit rules\.board 3x24/
+  );
+
+  const tooShort = mutableCopy(CLASSIC_RULESET);
+  tooShort.board.visibleHeight = 3;
+  tooShort.board.hiddenHeight = 0;
+  assert.throws(
+    () => defineRules(tooShort),
+    /templates\.I rotation 1 has bounds 1x4 that do not fit rules\.board 10x3/
   );
 });
 

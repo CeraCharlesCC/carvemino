@@ -620,11 +620,16 @@ test("commit focuses another useful active piece without spawning an extra one",
   assert(!events.some((event) => event.type === "PIECE_SPAWNED"));
 });
 
-test("drop planning balances between two sampled positions over a 48-drop history", () => {
-  const rules = makeTestRules();
+test("drop planning uses rules-configured sample count and coverage history length", () => {
+  const rules = makeTestRules({
+    simulation: {
+      dropCoverageHistoryLength: 5,
+      dropPositionSampleCount: 3
+    }
+  });
   const game = createGame({ seed: 24, rules });
   game.dropQueue = [];
-  game.dropCoverageHistory = Array.from({ length: 48 }, (_, index) => ({
+  game.dropCoverageHistory = Array.from({ length: rules.simulation.dropCoverageHistoryLength }, (_, index) => ({
     templateId: "O",
     rotation: 0,
     x: [2, 4, 6][index % 3]
@@ -638,7 +643,7 @@ test("drop planning balances between two sampled positions over a 48-drop histor
   const plan = game.dropQueue[0];
   const maxX = game.board.width - getTemplateBounds(rules, plan.templateId, plan.rotation).width;
   let randomState = 1;
-  const sampledXs = Array.from({ length: 2 }, () => {
+  const sampledXs = Array.from({ length: rules.simulation.dropPositionSampleCount }, () => {
     randomState ^= randomState << 13;
     randomState ^= randomState >>> 17;
     randomState ^= randomState << 5;
@@ -654,10 +659,13 @@ test("drop planning balances between two sampled positions over a 48-drop histor
   }
   const cells = getTemplateCells(rules, plan.templateId, plan.rotation);
   const score = (x) => cells.reduce((sum, cell) => sum + coverage[x + cell.x], 0);
-  const expectedX = score(sampledXs[1]) < score(sampledXs[0]) ? sampledXs[1] : sampledXs[0];
+  const expectedX = sampledXs.slice(1).reduce(
+    (chosen, x) => score(x) < score(chosen) ? x : chosen,
+    sampledXs[0]
+  );
 
   assert.equal(plan.x, expectedX);
-  assert.equal(game.dropCoverageHistory.length, 48);
+  assert.equal(game.dropCoverageHistory.length, rules.simulation.dropCoverageHistoryLength);
 });
 
 test("template rotation produces normalized unique orientations", () => {
@@ -721,6 +729,15 @@ test("snapshot round trip preserves deterministic hash", () => {
   const restored = restoreGame(snapshotGame(game));
   assert.equal(hashGameState(restored), hashGameState(game));
   assertGameState(restored);
+});
+
+test("snapshots contain only random streams consumed by simulation", () => {
+  const rules = makeTestRules();
+  const snapshot = snapshotGame(createGame({ seed: 27, rules }));
+  assert.deepEqual(Object.keys(snapshot.random).sort(), ["drops", "pieces", "rotations"]);
+
+  snapshot.random.garbage = { state: 1 };
+  assert.throws(() => restoreGame(snapshot), /snapshot\.random\.garbage is not supported/);
 });
 
 test("snapshot round trip preserves a pending lock and global grace", () => {

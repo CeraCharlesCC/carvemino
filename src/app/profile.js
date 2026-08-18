@@ -1,4 +1,10 @@
 import { SINGLEPLAYER_CATALOG, isSingleplayerModeId } from "./catalog.js";
+import {
+  DEFAULT_AUDIO_SETTINGS,
+  DEFAULT_KEYBINDINGS,
+  PROFILE_SCHEMA_VERSION,
+  PROFILE_STORAGE_KEY
+} from "../config.js";
 
 export const ACHIEVEMENTS = Object.freeze({
   firstCut: Object.freeze({
@@ -18,28 +24,8 @@ export const ACHIEVEMENTS = Object.freeze({
   })
 });
 
-export const DEFAULT_KEYBINDINGS = Object.freeze({
-  focusPrevious: "KeyQ",
-  focusNext: "KeyE",
-  cursorUp: "KeyW",
-  cursorLeft: "KeyA",
-  cursorDown: "KeyS",
-  cursorRight: "KeyD",
-  sculpt: "KeyZ",
-  hardDrop: "Space"
-});
-
-export const DEFAULT_AUDIO_SETTINGS = Object.freeze({
-  masterVolume: 0.8,
-  musicVolume: 0.55,
-  sfxVolume: 0.8,
-  musicEnabled: true,
-  sfxEnabled: true
-});
-
-const STORAGE_KEY = "carvemino-profile-v2";
-const PROFILE_SCHEMA_VERSION = 2;
 const SINGLEPLAYER_MODE_IDS = Object.freeze(SINGLEPLAYER_CATALOG.map((mode) => mode.id));
+const LEGACY_STORAGE_KEYS = Object.freeze(["carvemino-profile-v2"]);
 
 function createDefaultHighScores() {
   return Object.fromEntries(SINGLEPLAYER_MODE_IDS.map((modeId) => [modeId, 0]));
@@ -86,8 +72,10 @@ function isCurrentProfileData(value) {
   if (!hasExactKeys(value, ["schemaVersion", "highScores", "achievements", "settings"])) return false;
   if (value.schemaVersion !== PROFILE_SCHEMA_VERSION) return false;
 
-  if (!hasExactKeys(value.highScores, SINGLEPLAYER_MODE_IDS)) return false;
-  if (!Object.values(value.highScores).every((score) => Number.isSafeInteger(score) && score >= 0)) return false;
+  if (!isPlainObject(value.highScores)) return false;
+  for (const [modeId, score] of Object.entries(value.highScores)) {
+    if (modeId.trim() === "" || !Number.isSafeInteger(score) || score < 0) return false;
+  }
 
   if (!isPlainObject(value.achievements)) return false;
   const achievementIds = new Set(Object.values(ACHIEVEMENTS).map((achievement) => achievement.id));
@@ -121,6 +109,15 @@ function cloneData(data) {
   return JSON.parse(JSON.stringify(data));
 }
 
+function normalizeCurrentProfileData(value) {
+  if (!isCurrentProfileData(value)) return null;
+  const data = cloneData(value);
+  for (const modeId of SINGLEPLAYER_MODE_IDS) {
+    if (!Object.hasOwn(data.highScores, modeId)) data.highScores[modeId] = 0;
+  }
+  return data;
+}
+
 export function createProfileStore(storage) {
   if (storage === undefined) {
     try {
@@ -130,20 +127,44 @@ export function createProfileStore(storage) {
     }
   }
   let data = createDefaultData();
+  let migratedStorageKey = null;
 
   try {
-    const saved = storage?.getItem?.(STORAGE_KEY);
-    const parsed = saved ? safeParse(saved) : null;
-    if (isCurrentProfileData(parsed)) data = cloneData(parsed);
+    const saved = storage?.getItem?.(PROFILE_STORAGE_KEY);
+    if (saved != null) {
+      data = normalizeCurrentProfileData(safeParse(saved)) || createDefaultData();
+    } else {
+      for (const legacyKey of LEGACY_STORAGE_KEYS) {
+        const legacySaved = storage?.getItem?.(legacyKey);
+        if (legacySaved == null) continue;
+        const migrated = normalizeCurrentProfileData(safeParse(legacySaved));
+        if (migrated) {
+          data = migrated;
+          migratedStorageKey = legacyKey;
+        }
+        break;
+      }
+    }
   } catch {
     data = createDefaultData();
   }
 
   function persist() {
     try {
-      storage?.setItem?.(STORAGE_KEY, JSON.stringify(data));
+      if (typeof storage?.setItem !== "function") return false;
+      storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data));
+      return true;
     } catch {
       // Persistence is optional; the in-memory profile still works.
+      return false;
+    }
+  }
+
+  if (migratedStorageKey && persist()) {
+    try {
+      storage?.removeItem?.(migratedStorageKey);
+    } catch {
+      // The stable storage key is already populated; legacy cleanup is optional.
     }
   }
 
@@ -182,11 +203,6 @@ export function createProfileStore(storage) {
     const highScoreChanged = recordScore(modeId, score);
     if (unlocked.length > 0) persist();
     return { unlocked, highScoreChanged };
-  }
-
-  function setTheme(theme) {
-    data.settings.theme = theme || "default";
-    persist();
   }
 
   function setKeybinding(action, code) {
@@ -230,7 +246,6 @@ export function createProfileStore(storage) {
     },
     recordScore,
     processGameEvents,
-    setTheme,
     setKeybinding,
     resetKeybindings,
     setAudioSetting

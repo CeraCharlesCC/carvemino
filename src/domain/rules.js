@@ -113,12 +113,28 @@ function validateRules(rules) {
 
   assertExactKeys(
     rules.simulation,
-    ["stepsPerSecond", "lockDelayWorldTicks", "operationGraceSteps"],
+    [
+      "stepsPerSecond",
+      "lockDelayWorldTicks",
+      "operationGraceSteps",
+      "dropCoverageHistoryLength",
+      "dropPositionSampleCount"
+    ],
     "rules.simulation"
   );
   assertInteger(rules.simulation.stepsPerSecond, "rules.simulation.stepsPerSecond", { minimum: 1 });
   assertInteger(rules.simulation.lockDelayWorldTicks, "rules.simulation.lockDelayWorldTicks", { minimum: 0 });
   assertInteger(rules.simulation.operationGraceSteps, "rules.simulation.operationGraceSteps", { minimum: 0 });
+  assertInteger(
+    rules.simulation.dropCoverageHistoryLength,
+    "rules.simulation.dropCoverageHistoryLength",
+    { minimum: 1 }
+  );
+  assertInteger(
+    rules.simulation.dropPositionSampleCount,
+    "rules.simulation.dropPositionSampleCount",
+    { minimum: 1 }
+  );
 
   assertExactKeys(
     rules.sculpting,
@@ -164,6 +180,20 @@ function validateRules(rules) {
   const templates = Object.entries(rules.pieces.templates);
   if (templates.length === 0) throw new Error("rules.pieces.templates must contain at least one template");
   for (const [templateId, template] of templates) validatePieceTemplate(templateId, template);
+
+  const boardHeight = rules.board.visibleHeight + rules.board.hiddenHeight;
+  for (const [templateId, template] of templates) {
+    for (const rotation of template.rotations) {
+      const bounds = getTemplateBounds(rules, templateId, rotation);
+      if (bounds.width > rules.board.width || bounds.height > boardHeight) {
+        throw new Error(
+          `rules.pieces.templates.${templateId} rotation ${rotation} has bounds `
+          + `${bounds.width}x${bounds.height} that do not fit rules.board `
+          + `${rules.board.width}x${boardHeight}`
+        );
+      }
+    }
+  }
 
   assertExactKeys(rules.presentation, ["cellStyles"], "rules.presentation");
   assertPlainObject(rules.presentation.cellStyles, "rules.presentation.cellStyles");

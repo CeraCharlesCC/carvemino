@@ -1,5 +1,10 @@
-import { ACHIEVEMENTS, DEFAULT_AUDIO_SETTINGS } from "../app/profile.js";
-import { KEYBINDING_ACTIONS } from "./game-screen.js";
+import { ACHIEVEMENTS } from "../app/profile.js";
+import {
+  DEFAULT_AUDIO_SETTINGS,
+  DEFAULT_KEYBINDINGS,
+  GAMEPLAY_ACTIONS,
+  GAMEPLAY_ACTION_IDS
+} from "../config.js";
 
 function keyLabel(code) {
   if (!code) return "-";
@@ -18,7 +23,7 @@ function emptyProfile(modes) {
     achievements: {},
     settings: {
       theme: "default",
-      keybindings: {},
+      keybindings: { ...DEFAULT_KEYBINDINGS },
       audio: { ...DEFAULT_AUDIO_SETTINGS }
     }
   };
@@ -136,12 +141,12 @@ export function createProfileUi({
 
   function renderControlKeys() {
     const bindings = profile.settings.keybindings;
-    focusPrevKey.textContent = keyLabel(bindings.focusPrevious);
-    focusNextKey.textContent = keyLabel(bindings.focusNext);
+    focusPrevKey.textContent = keyLabel(bindings[GAMEPLAY_ACTION_IDS.focusPrevious]);
+    focusNextKey.textContent = keyLabel(bindings[GAMEPLAY_ACTION_IDS.focusNext]);
   }
 
   function renderKeybindings() {
-    keybindingList.replaceChildren(...KEYBINDING_ACTIONS.map(([action, label]) => {
+    keybindingList.replaceChildren(...GAMEPLAY_ACTIONS.map(({ id: action, label }) => {
       const row = document.createElement("div");
       row.className = "keybinding-row";
       const name = document.createElement("span");

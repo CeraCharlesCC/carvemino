@@ -1,18 +1,11 @@
 import { createMusicController } from "./music.js";
 import { getSoundCue, lineClearCueName } from "./sounds.js";
+import { DEFAULT_AUDIO_SETTINGS } from "../config.js";
 
 const MENU_AUDIO_EVENTS = Object.freeze({
   select: "menu-select",
   confirm: "menu-confirm",
   back: "menu-back"
-});
-
-const DEFAULT_SETTINGS = Object.freeze({
-  masterVolume: 0.8,
-  musicVolume: 0.55,
-  sfxVolume: 0.8,
-  musicEnabled: true,
-  sfxEnabled: true
 });
 
 function defaultContextFactory() {
@@ -28,15 +21,15 @@ function clampVolume(value, fallback) {
 
 function normalizeSettings(settings = {}) {
   return {
-    masterVolume: clampVolume(settings.masterVolume, DEFAULT_SETTINGS.masterVolume),
-    musicVolume: clampVolume(settings.musicVolume, DEFAULT_SETTINGS.musicVolume),
-    sfxVolume: clampVolume(settings.sfxVolume, DEFAULT_SETTINGS.sfxVolume),
+    masterVolume: clampVolume(settings.masterVolume, DEFAULT_AUDIO_SETTINGS.masterVolume),
+    musicVolume: clampVolume(settings.musicVolume, DEFAULT_AUDIO_SETTINGS.musicVolume),
+    sfxVolume: clampVolume(settings.sfxVolume, DEFAULT_AUDIO_SETTINGS.sfxVolume),
     musicEnabled: typeof settings.musicEnabled === "boolean"
       ? settings.musicEnabled
-      : DEFAULT_SETTINGS.musicEnabled,
+      : DEFAULT_AUDIO_SETTINGS.musicEnabled,
     sfxEnabled: typeof settings.sfxEnabled === "boolean"
       ? settings.sfxEnabled
-      : DEFAULT_SETTINGS.sfxEnabled
+      : DEFAULT_AUDIO_SETTINGS.sfxEnabled
   };
 }
 
@@ -59,7 +52,7 @@ export function createAudioEngine({
   let masterGain = null;
   let musicGain = null;
   let sfxGain = null;
-  let settings = { ...DEFAULT_SETTINGS };
+  let settings = { ...DEFAULT_AUDIO_SETTINGS };
   let screen = "menu";
   let lifecycle = "menu";
   let modeId = null;

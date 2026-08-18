@@ -9,7 +9,8 @@ import { getEditableFillCells } from "./sculpt.js";
 import { maintainDropQueue } from "./drop-planner.js";
 import { getTemplateCellValue, getTemplateCells } from "../rules.js";
 
-const GAME_SCHEMA_VERSION = 2;
+const GAME_SCHEMA_VERSION = 3;
+const RANDOM_STREAM_KEYS = Object.freeze(["pieces", "rotations", "drops"]);
 
 export function createGameState({ seed = 1, rules }) {
   if (!rules) throw new Error("rules are required");
@@ -45,19 +46,13 @@ export function createGameState({ seed = 1, rules }) {
     random: {
       pieces: { state: hashSeed(seed >>> 0, 0x243f6a88) },
       rotations: { state: hashSeed(seed >>> 0, 0xa4093822) },
-      drops: { state: hashSeed(seed >>> 0, 0x85a308d3) },
-      garbage: { state: hashSeed(seed >>> 0, 0x13198a2e) }
+      drops: { state: hashSeed(seed >>> 0, 0x85a308d3) }
     }
   };
 
   const events = [];
   maintainDropQueue(state, rules, events);
   return state;
-}
-
-export function getFocusedPiece(state) {
-  const piece = currentFocusedPiece(state);
-  return piece ? clonePiece(piece) : null;
 }
 
 function projectCell(cell) {
@@ -178,8 +173,7 @@ export function snapshotGameState(state) {
     random: {
       pieces: { ...state.random.pieces },
       rotations: { ...state.random.rotations },
-      drops: { ...state.random.drops },
-      garbage: { ...state.random.garbage }
+      drops: { ...state.random.drops }
     }
   };
 }
@@ -226,7 +220,13 @@ function assertCurrentSnapshot(snapshot) {
   if (!snapshot.random || typeof snapshot.random !== "object") {
     throw new Error("snapshot.random is required");
   }
-  for (const stream of ["pieces", "rotations", "drops", "garbage"]) {
+  const randomKeys = Object.keys(snapshot.random);
+  for (const stream of randomKeys) {
+    if (!RANDOM_STREAM_KEYS.includes(stream)) {
+      throw new Error(`snapshot.random.${stream} is not supported`);
+    }
+  }
+  for (const stream of RANDOM_STREAM_KEYS) {
     if (!Object.hasOwn(snapshot.random, stream)) {
       throw new Error(`snapshot.random.${stream} is required`);
     }
@@ -264,8 +264,7 @@ export function restoreGameState(snapshot) {
     random: {
       pieces: { ...snapshot.random.pieces },
       rotations: { ...snapshot.random.rotations },
-      drops: { ...snapshot.random.drops },
-      garbage: { ...snapshot.random.garbage }
+      drops: { ...snapshot.random.drops }
     }
   };
   assertGameState(state);

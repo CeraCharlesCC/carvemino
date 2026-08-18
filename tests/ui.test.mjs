@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS } from "../src/config.js";
 import { getGameInputAction } from "../src/ui/game-screen.js";
 import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
 
@@ -53,4 +54,12 @@ test("game input translation uses configured bindings with Enter as sculpt fallb
   assert.equal(getGameInputAction("Space", bindings), "sculpt");
   assert.equal(getGameInputAction("Enter", bindings), "sculpt");
   assert.equal(getGameInputAction("KeyR", bindings), null);
+});
+
+test("gameplay action metadata owns labels and default keybindings", () => {
+  assert.deepEqual(
+    Object.fromEntries(GAMEPLAY_ACTIONS.map(({ id, defaultKeybinding }) => [id, defaultKeybinding])),
+    DEFAULT_KEYBINDINGS
+  );
+  assert(GAMEPLAY_ACTIONS.every(({ id, label }) => id && label));
 });

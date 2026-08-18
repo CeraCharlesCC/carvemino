@@ -5,7 +5,6 @@ import {
   assertGameState,
   createGameState,
   createGameViewState,
-  getFocusedPiece,
   hashGameState,
   restoreGameState,
   snapshotGameState
@@ -83,10 +82,6 @@ export function createGameEngine(rules) {
     assert(state) {
       assertGameState(bind(state));
       return true;
-    },
-
-    getFocusedPiece(state) {
-      return getFocusedPiece(bind(state));
     },
 
     getEditableFillCells(state, pieceId) {

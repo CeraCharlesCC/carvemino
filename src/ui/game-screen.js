@@ -1,19 +1,10 @@
+import { GAMEPLAY_ACTIONS, GAMEPLAY_ACTION_IDS } from "../config.js";
+
 const SCULPT_CURSOR_COLORS = Object.freeze({
   CARVE: "#d98b43",
   FILL: "#6fb879",
   NONE: "#f1f5e6"
 });
-
-export const KEYBINDING_ACTIONS = Object.freeze([
-  ["focusPrevious", "Focus previous"],
-  ["focusNext", "Focus next"],
-  ["cursorUp", "Cursor up"],
-  ["cursorLeft", "Cursor left"],
-  ["cursorDown", "Cursor down"],
-  ["cursorRight", "Cursor right"],
-  ["sculpt", "Sculpt"],
-  ["hardDrop", "Hard drop"]
-]);
 
 export function getSculptAction(view, cursor) {
   const piece = view?.focusedPiece;
@@ -28,9 +19,9 @@ export function getSculptAction(view, cursor) {
 }
 
 export function getGameInputAction(code, bindings = {}) {
-  const action = KEYBINDING_ACTIONS.find(([actionId]) => bindings[actionId] === code)?.[0];
+  const action = GAMEPLAY_ACTIONS.find(({ id }) => bindings[id] === code)?.id;
   if (action) return action;
-  return code === "Enter" ? "sculpt" : null;
+  return code === "Enter" ? GAMEPLAY_ACTION_IDS.sculpt : null;
 }
 
 function clearCanvas(canvas, context) {
@@ -398,14 +389,14 @@ export function createGameScreen({ sendCommand }) {
     if (!action) return false;
 
     switch (action) {
-      case "focusPrevious": sendCommand({ type: "FOCUS_PREVIOUS" }); break;
-      case "focusNext": sendCommand({ type: "FOCUS_NEXT" }); break;
-      case "cursorUp": moveFocusCursor(0, -1); break;
-      case "cursorLeft": moveFocusCursor(-1, 0); break;
-      case "cursorDown": moveFocusCursor(0, 1); break;
-      case "cursorRight": moveFocusCursor(1, 0); break;
-      case "sculpt": sculptAtCursor(); break;
-      case "hardDrop": sendCommand({ type: "HARD_DROP_FOCUSED" }); break;
+      case GAMEPLAY_ACTION_IDS.focusPrevious: sendCommand({ type: "FOCUS_PREVIOUS" }); break;
+      case GAMEPLAY_ACTION_IDS.focusNext: sendCommand({ type: "FOCUS_NEXT" }); break;
+      case GAMEPLAY_ACTION_IDS.cursorUp: moveFocusCursor(0, -1); break;
+      case GAMEPLAY_ACTION_IDS.cursorLeft: moveFocusCursor(-1, 0); break;
+      case GAMEPLAY_ACTION_IDS.cursorDown: moveFocusCursor(0, 1); break;
+      case GAMEPLAY_ACTION_IDS.cursorRight: moveFocusCursor(1, 0); break;
+      case GAMEPLAY_ACTION_IDS.sculpt: sculptAtCursor(); break;
+      case GAMEPLAY_ACTION_IDS.hardDrop: sendCommand({ type: "HARD_DROP_FOCUSED" }); break;
       default: return false;
     }
     event.preventDefault();

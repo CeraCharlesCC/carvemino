@@ -9,9 +9,6 @@ import {
 import { allWorldCells, canOccupyWorldCells } from "./model.js";
 import { randomInt } from "./random.js";
 
-const DROP_COVERAGE_HISTORY_LIMIT = 48;
-const DROP_POSITION_CHOICES = 2;
-
 export function bringNextSpawnForward(state) {
   if (state.dropQueue.length === 0) return;
   const delta = state.worldTick - state.dropQueue[0].spawnAtWorldTick;
@@ -40,10 +37,10 @@ function chooseCoverageBalancedX(state, rules, templateId, rotation) {
   let chosenX = randomInt(state.random.drops, maxX + 1);
   let chosenScore = cells.reduce((sum, cell) => sum + coverage[chosenX + cell.x], 0);
 
-  // Sample only a small number of legal positions instead of globally
+  // Sample the configured number of legal positions instead of globally
   // optimizing every drop. This nudges the long-run distribution toward
   // under-covered columns while still allowing local streaks and droughts.
-  for (let choice = 1; choice < DROP_POSITION_CHOICES; choice += 1) {
+  for (let choice = 1; choice < rules.simulation.dropPositionSampleCount; choice += 1) {
     const x = randomInt(state.random.drops, maxX + 1);
     const score = cells.reduce((sum, cell) => sum + coverage[x + cell.x], 0);
     if (score < chosenScore) {
@@ -55,12 +52,13 @@ function chooseCoverageBalancedX(state, rules, templateId, rotation) {
   return chosenX;
 }
 
-function rememberDropCoverage(state, templateId, rotation, x) {
+function rememberDropCoverage(state, templateId, rotation, x, rules) {
   state.dropCoverageHistory.push({ templateId, rotation, x });
-  if (state.dropCoverageHistory.length > DROP_COVERAGE_HISTORY_LIMIT) {
+  const historyLength = rules.simulation.dropCoverageHistoryLength;
+  if (state.dropCoverageHistory.length > historyLength) {
     state.dropCoverageHistory.splice(
       0,
-      state.dropCoverageHistory.length - DROP_COVERAGE_HISTORY_LIMIT
+      state.dropCoverageHistory.length - historyLength
     );
   }
 }
@@ -72,7 +70,7 @@ function makeDropPlan(state, spawnAtWorldTick, rules) {
   const rotation = rotations[randomInt(state.random.rotations, rotations.length)];
   const x = chooseCoverageBalancedX(state, rules, templateId, rotation);
   const pieceId = `p${state.nextPieceId++}`;
-  rememberDropCoverage(state, templateId, rotation, x);
+  rememberDropCoverage(state, templateId, rotation, x, rules);
 
   return {
     pieceId,
@@ -84,7 +82,7 @@ function makeDropPlan(state, spawnAtWorldTick, rules) {
 }
 
 export function maintainDropQueue(state, rules, events) {
-  const desired = Math.max(1, rules.progression.dropQueueDepth);
+  const desired = rules.progression.dropQueueDepth;
   while (state.dropQueue.length < desired) {
     let spawnAtWorldTick;
     if (state.dropQueue.length === 0 && state.nextScheduledSpawnWorldTick == null) {
