@@ -70,7 +70,7 @@ export function createGameEngine(rules) {
           `Game snapshot ruleset mismatch: expected ${rulesetId}, received ${String(snapshot.rulesetId)}`
         );
       }
-      const state = restoreGameState(snapshot);
+      const state = restoreGameState(snapshot, rules);
       boundStates.add(state);
       return bind(state);
     },

@@ -720,6 +720,9 @@ test("garbage is queued, cancellable, and duplicate ids are rejected", () => {
   const result = cancelIncomingGarbage(game, 2);
   assert.deepEqual(result, { cancelled: 2, remaining: 0 });
   assert.equal(game.incomingGarbage[0].rows, 2);
+  assert.equal(queueGarbage(game, { id: "bad-rows", rows: 0, applyAtWorldTick: 1, seed: 1 }), false);
+  assert.equal(queueGarbage(game, { id: "bad-tick", rows: 1, applyAtWorldTick: -1, seed: 1 }), false);
+  assert.equal(queueGarbage(game, { id: "bad-seed", rows: 1, applyAtWorldTick: 1, seed: -1 }), false);
 });
 
 test("snapshot round trip preserves deterministic hash", () => {
@@ -776,6 +779,29 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
   }
 });
 
+test("snapshot round trip preserves terminal garbage-push state", () => {
+  const rules = makeTestRules();
+  const engine = engineForRules(rules);
+  const game = engine.create({ seed: 31 });
+  engine.step(game, []);
+  assert.equal(engine.queueGarbage(game, {
+    id: "push-out",
+    sourcePlayerId: "remote",
+    rows: 2,
+    applyAtWorldTick: game.worldTick,
+    seed: 17
+  }), true);
+
+  engine.step(game, []);
+  assert.equal(game.status, "gameover");
+  assert.equal(game.gameOverReason, "garbage-pushed-piece-out");
+  assert(game.activePieces.some((piece) => piece.cells.some((cell) => piece.y + cell.y < 0)));
+
+  const restored = engine.restore(engine.snapshot(game));
+  assert.equal(engine.hash(restored), engine.hash(game));
+  assert.equal(restored.gameOverReason, "garbage-pushed-piece-out");
+});
+
 test("restore rejects snapshots from a non-current schema instead of migrating them", () => {
   const rules = makeTestRules();
   const snapshot = snapshotGame(createGame({ seed: 26, rules }));
@@ -784,6 +810,100 @@ test("restore rejects snapshots from a non-current schema instead of migrating t
   delete snapshot.schemaVersion;
 
   assert.throws(() => restoreGame(snapshot), /snapshot\.version is not supported|schemaVersion is required/);
+});
+
+test("restore rejects malformed or hostile snapshot state before constructing a live game", () => {
+  const rules = makeTestRules();
+  const engine = engineForRules(rules);
+  const game = engine.create({ seed: 28 });
+  engine.step(game, []);
+  engine.queueGarbage(game, {
+    id: "snapshot-garbage",
+    sourcePlayerId: "remote",
+    rows: 2,
+    applyAtWorldTick: 100,
+    seed: 44
+  });
+  const base = engine.snapshot(game);
+  const clone = () => JSON.parse(JSON.stringify(base));
+
+  const cases = [
+    ["unknown top-level field", (snapshot) => { snapshot.hostile = true; }, /snapshot\.hostile is not supported/],
+    ["rules-bound board width", (snapshot) => { snapshot.board.width += 1; }, /must match ruleset width/],
+    ["board cell count", (snapshot) => { snapshot.board.cells.pop(); }, /must contain exactly/],
+    ["board cell range", (snapshot) => { snapshot.board.cells[0] = 256; }, /snapshot\.board\.cells\[0\]/],
+    ["board cell values", (snapshot) => { snapshot.board.cells[0] = 99; }, /unsupported cell value/],
+    ["world clock", (snapshot) => { snapshot.worldTick = -1; }, /snapshot\.worldTick/],
+    ["score counter", (snapshot) => { snapshot.score = 1.5; }, /snapshot\.score/],
+    ["drop queue shape", (snapshot) => { delete snapshot.dropQueue[0].rotation; }, /dropQueue\[0\]\.rotation is required/],
+    ["drop queue placement", (snapshot) => { snapshot.dropQueue[0].x = snapshot.board.width; }, /dropQueue\[0\]\.x/],
+    ["piece template", (snapshot) => { snapshot.activePieces[0].templateId = "NOPE"; }, /templateId is unknown/],
+    ["piece boolean", (snapshot) => { snapshot.activePieces[0].pendingLock = 0; }, /pendingLock must be a boolean/],
+    ["random stream range", (snapshot) => { snapshot.random.pieces.state = 0; }, /random\.pieces\.state/],
+    ["garbage packet range", (snapshot) => { snapshot.incomingGarbage[0].rows = 0; }, /incomingGarbage\[0\]\.rows/],
+    ["duplicate applied garbage ids", (snapshot) => { snapshot.appliedGarbageIds = ["g", "g"]; }, /duplicate id/],
+    ["status enum", (snapshot) => { snapshot.status = "paused"; }, /snapshot\.status/],
+    ["status reason consistency", (snapshot) => { snapshot.gameOverReason = "spawn-blocked"; }, /must be null while playing/],
+    ["level consistency", (snapshot) => { snapshot.level += 1; }, /snapshot\.level must be/]
+  ];
+
+  for (const [name, mutate, expected] of cases) {
+    const snapshot = clone();
+    mutate(snapshot);
+    assert.throws(() => engine.restore(snapshot), expected, name);
+  }
+});
+
+test("restore rejects a ruleset mismatch before inspecting nested snapshot state", () => {
+  const rules = makeTestRules();
+  const engine = engineForRules(rules);
+  const snapshot = engine.snapshot(engine.create({ seed: 29 }));
+  snapshot.rulesetId = "hostile-other-rules";
+  snapshot.board = null;
+
+  assert.throws(
+    () => engine.restore(snapshot),
+    /Game snapshot ruleset mismatch: expected .* received hostile-other-rules/
+  );
+});
+
+test("match policies receive a capability surface instead of mutable match internals", () => {
+  const rules = makeTestRules();
+  let seen = null;
+  const policy = {
+    id: "capability-test-policy",
+    validatePlayerIds() {},
+    createState() {
+      return { calls: 0 };
+    },
+    beforeStep(context) {
+      seen = context;
+      context.state.calls += 1;
+      context.emit({ type: "POLICY_BEFORE_STEP" });
+    },
+    onGameEvent() {},
+    afterStep() {}
+  };
+  const match = createMatch({
+    id: "capability-test",
+    playerIds: ["solo"],
+    seed: 30,
+    rules,
+    policy
+  });
+
+  const events = stepMatch(match, {});
+
+  assert(seen);
+  assert.equal(Object.isFrozen(seen), true);
+  assert.equal(Object.isFrozen(seen.playerIds), true);
+  assert.equal(Object.hasOwn(seen, "players"), false);
+  assert.equal(Object.hasOwn(seen, "engine"), false);
+  assert.equal(Object.hasOwn(seen, "policy"), false);
+  assert.equal(seen.state, match.policyState);
+  assert.equal(seen.state.calls, 1);
+  assert.deepEqual(seen.getPlayer("solo"), { id: "solo", status: "playing", worldTick: 1 });
+  assert(events.some((event) => event.type === "POLICY_BEFORE_STEP"));
 });
 
 test("two-line clear in versus produces queued garbage for the opponent", () => {

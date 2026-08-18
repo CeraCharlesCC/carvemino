@@ -95,17 +95,22 @@ export function cancelIncomingGarbage(state, rows) {
 }
 
 export function queueGarbage(state, packet) {
-  if (!packet || !packet.id || !Number.isInteger(packet.rows) || packet.rows <= 0) return false;
-  if (!Number.isInteger(packet.applyAtWorldTick) || !Number.isInteger(packet.seed)) return false;
-  if (state.appliedGarbageIds.includes(packet.id)) return false;
-  if (state.incomingGarbage.some((existing) => existing.id === packet.id)) return false;
+  if (!packet || packet.id == null) return false;
+  const id = String(packet.id);
+  const sourcePlayerId = packet.sourcePlayerId == null ? null : String(packet.sourcePlayerId);
+  if (id.trim() === "" || sourcePlayerId?.trim() === "") return false;
+  if (!Number.isSafeInteger(packet.rows) || packet.rows <= 0) return false;
+  if (!Number.isSafeInteger(packet.applyAtWorldTick) || packet.applyAtWorldTick < 0) return false;
+  if (!Number.isSafeInteger(packet.seed) || packet.seed < 0 || packet.seed > 0xffffffff) return false;
+  if (state.appliedGarbageIds.includes(id)) return false;
+  if (state.incomingGarbage.some((existing) => existing.id === id)) return false;
 
   state.incomingGarbage.push({
-    id: String(packet.id),
-    sourcePlayerId: packet.sourcePlayerId == null ? null : String(packet.sourcePlayerId),
+    id,
+    sourcePlayerId,
     rows: packet.rows,
     applyAtWorldTick: packet.applyAtWorldTick,
-    seed: packet.seed >>> 0
+    seed: packet.seed
   });
   return true;
 }

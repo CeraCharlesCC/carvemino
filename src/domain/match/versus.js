@@ -1,4 +1,4 @@
-import { alivePlayers, finishMatch, mix32, playerById } from "./policy-utils.js";
+import { mix32 } from "./policy-utils.js";
 
 function assertNonEmptyString(value, name) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -27,24 +27,26 @@ function attackRowsForLineClear(table, count) {
   return table[Math.min(count, table.length - 1)] || 0;
 }
 
-function makeGarbagePacket(match, policy, sourcePlayerId, target, rows) {
-  const sequence = match.policyState.nextGarbageSequence++;
+function makeGarbagePacket(context, policy, sourcePlayerId, targetPlayerId, rows) {
+  const target = context.getPlayer(targetPlayerId);
+  if (!target) return null;
+  const sequence = context.state.nextGarbageSequence++;
   return {
-    id: `${match.id}:g${sequence}`,
+    id: `${context.matchId}:g${sequence}`,
     sourcePlayerId,
     rows,
-    applyAtWorldTick: target.game.worldTick + policy.garbageWarningWorldTicks,
-    seed: mix32(match.seed ^ sequence)
+    applyAtWorldTick: target.worldTick + policy.garbageWarningWorldTicks,
+    seed: mix32(context.seed ^ sequence)
   };
 }
 
-function queueAttack(match, policy, sourcePlayerId, targetPlayerId, rows, events) {
-  const target = playerById(match, targetPlayerId);
-  if (!target || target.game.status !== "playing" || rows <= 0) return;
-  const packet = makeGarbagePacket(match, policy, sourcePlayerId, target, rows);
-  if (!match.engine.queueGarbage(target.game, packet)) return;
+function queueAttack(context, policy, sourcePlayerId, targetPlayerId, rows) {
+  const target = context.getPlayer(targetPlayerId);
+  if (!target || target.status !== "playing" || rows <= 0) return;
+  const packet = makeGarbagePacket(context, policy, sourcePlayerId, targetPlayerId, rows);
+  if (!packet || !context.queueGarbage(targetPlayerId, packet)) return;
 
-  events.push({
+  context.emit({
     type: "GARBAGE_SENT",
     sourcePlayerId,
     targetPlayerId,
@@ -52,14 +54,13 @@ function queueAttack(match, policy, sourcePlayerId, targetPlayerId, rows, events
   });
 }
 
-function cancelOutgoingAgainstExistingGarbage(match, policy, attack, events) {
+function cancelOutgoingAgainstExistingGarbage(context, policy, attack) {
   if (!policy.cancellation) return attack.rows;
-  const source = playerById(match, attack.sourcePlayerId);
-  if (!source) return 0;
+  if (!context.getPlayer(attack.sourcePlayerId)) return 0;
 
-  const result = match.engine.cancelIncomingGarbage(source.game, attack.rows);
+  const result = context.cancelIncomingGarbage(attack.sourcePlayerId, attack.rows);
   if (result.cancelled > 0) {
-    events.push({
+    context.emit({
       type: "GARBAGE_CANCELLED",
       playerId: attack.sourcePlayerId,
       rows: result.cancelled
@@ -68,19 +69,20 @@ function cancelOutgoingAgainstExistingGarbage(match, policy, attack, events) {
   return result.remaining;
 }
 
-function routeRoundRobinAttack(match, policy, sourcePlayerId, rows, events) {
-  const sourceIndex = match.players.findIndex((player) => player.id === sourcePlayerId);
-  for (let offset = 1; offset < match.players.length; offset += 1) {
-    const target = match.players[(sourceIndex + offset) % match.players.length];
-    if (target.game.status === "playing") {
-      queueAttack(match, policy, sourcePlayerId, target.id, rows, events);
+function routeRoundRobinAttack(context, policy, sourcePlayerId, rows) {
+  const sourceIndex = context.playerIds.indexOf(sourcePlayerId);
+  for (let offset = 1; offset < context.playerIds.length; offset += 1) {
+    const targetPlayerId = context.playerIds[(sourceIndex + offset) % context.playerIds.length];
+    const target = context.getPlayer(targetPlayerId);
+    if (target?.status === "playing") {
+      queueAttack(context, policy, sourcePlayerId, targetPlayerId, rows);
       return;
     }
   }
 }
 
-function resolvePendingAttacks(match, policy, events) {
-  const pending = match.policyState.pendingAttacks;
+function resolvePendingAttacks(context, policy) {
+  const pending = context.state.pendingAttacks;
   if (pending.length === 0) return;
 
   // Cancellation is resolved for every source before any same-step attack is
@@ -88,13 +90,13 @@ function resolvePendingAttacks(match, policy, events) {
   // player iteration order.
   const outgoing = pending.map((attack) => ({
     ...attack,
-    rows: cancelOutgoingAgainstExistingGarbage(match, policy, attack, events)
+    rows: cancelOutgoingAgainstExistingGarbage(context, policy, attack)
   }));
   pending.length = 0;
 
   for (const attack of outgoing) {
     if (attack.rows > 0) {
-      routeRoundRobinAttack(match, policy, attack.sourcePlayerId, attack.rows, events);
+      routeRoundRobinAttack(context, policy, attack.sourcePlayerId, attack.rows);
     }
   }
 }
@@ -127,24 +129,22 @@ export function defineVersusPolicy({
 
     beforeStep() {},
 
-    onGameEvent(match, playerId, event, events) {
+    onGameEvent(context, playerId, event) {
       if (event.type !== "LINES_CLEARED") return;
       const rows = attackRowsForLineClear(attackTable, event.count);
       if (rows <= 0) return;
-      events.push({ type: "ATTACK_GENERATED", playerId, rows });
-      match.policyState.pendingAttacks.push({ sourcePlayerId: playerId, rows });
+      context.emit({ type: "ATTACK_GENERATED", playerId, rows });
+      context.state.pendingAttacks.push({ sourcePlayerId: playerId, rows });
     },
 
-    afterStep(match, events) {
-      resolvePendingAttacks(match, policy, events);
-      const alive = alivePlayers(match);
-      if (alive.length > 1) return;
-      finishMatch(
-        match,
-        alive.length === 1
-          ? { type: "winner", winnerId: alive[0].id, atMatchTick: match.matchTick }
-          : { type: "draw", atMatchTick: match.matchTick },
-        events
+    afterStep(context) {
+      resolvePendingAttacks(context, policy);
+      const alivePlayerIds = context.getAlivePlayerIds();
+      if (alivePlayerIds.length > 1) return;
+      context.finish(
+        alivePlayerIds.length === 1
+          ? { type: "winner", winnerId: alivePlayerIds[0], atMatchTick: context.matchTick }
+          : { type: "draw", atMatchTick: context.matchTick }
       );
     }
   };

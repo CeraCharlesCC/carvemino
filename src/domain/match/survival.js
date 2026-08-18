@@ -1,4 +1,4 @@
-import { alivePlayers, finishMatch, mix32 } from "./policy-utils.js";
+import { mix32 } from "./policy-utils.js";
 
 function assertNonEmptyString(value, name) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -20,26 +20,27 @@ function rowsForWave(policy, matchTick) {
   );
 }
 
-function queueWave(match, policy, events) {
-  if (match.matchTick < policy.firstWaveMatchTick) return;
-  if ((match.matchTick - policy.firstWaveMatchTick) % policy.waveIntervalMatchTicks !== 0) return;
+function queueWave(context, policy) {
+  if (context.matchTick < policy.firstWaveMatchTick) return;
+  if ((context.matchTick - policy.firstWaveMatchTick) % policy.waveIntervalMatchTicks !== 0) return;
 
-  const rows = rowsForWave(policy, match.matchTick);
-  const wave = match.policyState.nextWave++;
-  for (const player of alivePlayers(match)) {
+  const rows = rowsForWave(policy, context.matchTick);
+  const wave = context.state.nextWave++;
+  for (const playerId of context.getAlivePlayerIds()) {
+    const player = context.getPlayer(playerId);
     const packet = {
-      id: `${match.id}:wave${wave}:${player.id}`,
+      id: `${context.matchId}:wave${wave}:${playerId}`,
       sourcePlayerId: "survival",
       rows,
-      applyAtWorldTick: player.game.worldTick + policy.garbageWarningWorldTicks,
-      seed: mix32(match.seed ^ 0xa5a5a5a5 ^ wave)
+      applyAtWorldTick: player.worldTick + policy.garbageWarningWorldTicks,
+      seed: mix32(context.seed ^ 0xa5a5a5a5 ^ wave)
     };
-    if (match.engine.queueGarbage(player.game, packet)) {
-      events.push({
+    if (context.queueGarbage(playerId, packet)) {
+      context.emit({
         type: "SURVIVAL_WAVE_QUEUED",
-        playerId: player.id,
+        playerId,
         wave,
-        atMatchTick: match.matchTick,
+        atMatchTick: context.matchTick,
         packet: { ...packet }
       });
     }
@@ -76,23 +77,21 @@ export function defineSurvivalPolicy({
       return { nextWave: 1 };
     },
 
-    beforeStep(match, events) {
-      queueWave(match, policy, events);
+    beforeStep(context) {
+      queueWave(context, policy);
     },
 
     onGameEvent() {},
 
-    afterStep(match, events) {
-      const alive = alivePlayers(match);
-      if (match.players.length === 1 && alive.length === 0) {
-        finishMatch(match, { type: "eliminated", atMatchTick: match.matchTick }, events);
-      } else if (match.players.length > 1 && alive.length <= 1) {
-        finishMatch(
-          match,
-          alive.length === 1
-            ? { type: "winner", winnerId: alive[0].id, atMatchTick: match.matchTick }
-            : { type: "draw", atMatchTick: match.matchTick },
-          events
+    afterStep(context) {
+      const alivePlayerIds = context.getAlivePlayerIds();
+      if (context.playerIds.length === 1 && alivePlayerIds.length === 0) {
+        context.finish({ type: "eliminated", atMatchTick: context.matchTick });
+      } else if (context.playerIds.length > 1 && alivePlayerIds.length <= 1) {
+        context.finish(
+          alivePlayerIds.length === 1
+            ? { type: "winner", winnerId: alivePlayerIds[0], atMatchTick: context.matchTick }
+            : { type: "draw", atMatchTick: context.matchTick }
         );
       }
     }
