@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Carvemino</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./styles.css">
@@ -146,47 +146,51 @@
             <button class="utility-button" type="button" id="pause-game">PAUSE</button>
           </header>
 
-          <div class="game-shell" id="game-shell">
-            <section class="playfield-panel">
-              <div class="drop-guide" aria-hidden="true">
-                <div class="cursor-label" id="drop-cursor">
-                  <span>DROP CURSOR</span>
-                  <b>v</b>
-                </div>
+          <div class="game-stage" id="game-stage">
+            <div class="game-shell-frame" id="game-shell-frame">
+              <div class="game-shell" id="game-shell">
+                <section class="playfield-panel">
+                  <div class="drop-guide" aria-hidden="true">
+                    <div class="cursor-label" id="drop-cursor">
+                      <span>DROP CURSOR</span>
+                      <b>v</b>
+                    </div>
+                  </div>
+                  <canvas id="field" width="320" height="640" aria-label="playfield"></canvas>
+                </section>
+
+                <aside class="hud">
+                  <section class="hud-section next-section">
+                    <h2>NEXT</h2>
+                    <canvas id="next" width="180" height="105" aria-label="next piece"></canvas>
+                  </section>
+
+                  <section class="hud-section score-section">
+                    <h2>SCORE</h2>
+                    <output id="score">0000000</output>
+                    <div class="minor-stats">
+                      <span>LV <b id="level">1</b></span>
+                      <span>LINES <b id="lines">0</b></span>
+                    </div>
+                  </section>
+
+                  <section class="hud-section focus-section">
+                    <h2>FOCUS</h2>
+                    <canvas id="focus" width="220" height="220" aria-label="focused piece sculpting grid"></canvas>
+                    <div class="resource-row"><span>CUT</span><b id="cut">-</b></div>
+                    <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
+                    <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
+                    <div class="focus-nav"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
+                  </section>
+                </aside>
+
+                <svg class="focus-connector" id="focus-connector" aria-hidden="true">
+                  <path id="focus-connector-path"></path>
+                </svg>
+
+                <div class="vertical-logo" aria-hidden="true">CARVEMINO</div>
               </div>
-              <canvas id="field" width="320" height="640" aria-label="playfield"></canvas>
-            </section>
-
-            <aside class="hud">
-              <section class="hud-section next-section">
-                <h2>NEXT</h2>
-                <canvas id="next" width="180" height="105" aria-label="next piece"></canvas>
-              </section>
-
-              <section class="hud-section score-section">
-                <h2>SCORE</h2>
-                <output id="score">0000000</output>
-                <div class="minor-stats">
-                  <span>LV <b id="level">1</b></span>
-                  <span>LINES <b id="lines">0</b></span>
-                </div>
-              </section>
-
-              <section class="hud-section focus-section">
-                <h2>FOCUS</h2>
-                <canvas id="focus" width="220" height="220" aria-label="focused piece sculpting grid"></canvas>
-                <div class="resource-row"><span>CUT</span><b id="cut">-</b></div>
-                <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
-                <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
-                <div class="focus-nav"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
-              </section>
-            </aside>
-
-            <svg class="focus-connector" id="focus-connector" aria-hidden="true">
-              <path id="focus-connector-path"></path>
-            </svg>
-
-            <div class="vertical-logo" aria-hidden="true">CARVEMINO</div>
+            </div>
           </div>
 
           <div class="game-over" id="game-over" role="dialog" aria-modal="true" aria-labelledby="game-over-title" hidden>

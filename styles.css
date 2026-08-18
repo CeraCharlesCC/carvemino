@@ -65,7 +65,13 @@
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   margin: 0;
+  padding:
+    env(safe-area-inset-top, 0)
+    env(safe-area-inset-right, 0)
+    env(safe-area-inset-bottom, 0)
+    env(safe-area-inset-left, 0);
   display: grid;
   place-items: center;
   overflow-x: hidden;
@@ -107,7 +113,16 @@ button { color: inherit; font: inherit; }
 .arcade-cabinet::after { bottom: 26px; }
 
 .arcade-cabinet:has(.game-screen:not([hidden])) {
-  width: min(96vw, 638px);
+  width: min(96vw, 716px);
+  margin-block: clamp(6px, 1.5dvh, 18px);
+}
+
+body:has(.game-screen:not([hidden])) {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  place-items: start center;
+  overflow: hidden;
 }
 
 .crt-frame {
@@ -717,10 +732,15 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
    GAME SCREEN
    ========================================================================== */
 
-.game-screen { position: relative; min-height: 0; }
+.game-screen {
+  --game-header-height: 44px;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
 
 .game-header {
-  min-height: 44px;
+  min-height: var(--game-header-height);
   display: grid;
   grid-template-columns: 1fr auto auto;
   align-items: center;
@@ -740,12 +760,31 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
    GAME SHELL — PLAYFIELD + HUD + VERTICAL LOGO
    ========================================================================== */
 
+.game-stage {
+  --game-stage-reserved-height: 0px;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  overflow: hidden;
+}
+
+.game-shell-frame {
+  position: relative;
+  width: 576px;
+  height: calc(var(--field-height) + var(--drop-guide-height));
+  max-width: 100%;
+}
+
 .game-shell {
   position: relative;
   width: 576px;
   display: grid;
   grid-template-columns: 320px 230px 26px;
   background: var(--panel);
+  transform: scale(var(--game-shell-scale, 1));
+  transform-origin: top left;
+  will-change: transform;
 }
 
 .playfield-panel { position: relative; border-right: 1px solid var(--arrow); }
@@ -911,7 +950,7 @@ kbd {
 .game-over {
   position: absolute;
   z-index: 11;
-  inset: 44px 0 0;
+  inset: var(--game-header-height) 0 0;
   display: grid;
   place-items: center;
   background: #080a07f2;
@@ -964,7 +1003,7 @@ kbd {
 .pause-overlay {
   position: absolute;
   z-index: 10;
-  inset: 44px 0 0;
+  inset: var(--game-header-height) 0 0;
   display: grid;
   place-items: center;
   background: #080a07f0;
@@ -993,22 +1032,60 @@ kbd {
    RESPONSIVE
    ========================================================================== */
 
-@media (max-width: 660px) {
-  body { place-items: start center; }
-  .arcade-cabinet { width: 100%; border-left: 0; border-right: 0; }
+@media (max-height: 820px) {
+  .arcade-cabinet:has(.game-screen:not([hidden])) {
+    padding: 8px 8px 6px;
+    margin-block: 4px;
+  }
+  .arcade-cabinet:has(.game-screen:not([hidden])) .crt-frame {
+    padding: 4px;
+    border-width: 3px;
+  }
+  .arcade-cabinet:has(.game-screen:not([hidden])) .cabinet-hardware { display: none; }
+  .game-screen { --game-header-height: 38px; }
+  .game-header { padding-block: 5px; }
+}
+
+@media (max-width: 700px) {
+  .arcade-cabinet {
+    width: 100%;
+    border-left: 0;
+    border-right: 0;
+  }
+  .arcade-cabinet:has(.game-screen:not([hidden])) {
+    width: 100%;
+    margin-block: 0;
+  }
   .menu-screen { padding: 40px 24px 30px; }
   .audio-settings { grid-template-columns: 1fr; }
   .audio-setting-row { border-right: 0; border-bottom: 1px solid var(--line); }
   .audio-setting-row:last-child { border-bottom: 0; }
   .keybinding-list { grid-template-columns: 1fr; }
-  .game-screen { overflow: auto; }
-  .game-shell { transform-origin: top left; }
+  .game-screen { overflow: visible; }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 620px), (pointer: coarse) and (orientation: portrait) {
   .game-header { position: sticky; top: 0; z-index: 12; }
-  .game-shell {
-    transform: scale(.72);
-    margin-bottom: calc((var(--field-height) + var(--drop-guide-height)) * -.28);
+}
+
+@media (pointer: coarse) {
+  .game-control-surface {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
+  [data-game-action] { -webkit-tap-highlight-color: transparent; }
+}
+
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 700px) {
+  .arcade-cabinet:has(.game-screen:not([hidden])) {
+    padding: 4px;
+    border-left: 0;
+    border-right: 0;
+  }
+  .arcade-cabinet:has(.game-screen:not([hidden])) .crt-frame {
+    padding: 2px;
+    border-width: 2px;
+  }
+  .game-screen { --game-header-height: 34px; }
 }

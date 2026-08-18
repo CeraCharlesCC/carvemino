@@ -1,5 +1,6 @@
 import { createAttract } from "./attract.js";
 import { createGameScreen } from "./game-screen.js";
+import { createOnScreenGameInput } from "./game-input.js";
 import { createNavigation } from "./navigation.js";
 import { createProfileUi } from "./profile-ui.js";
 
@@ -46,6 +47,11 @@ export function createUi({
     resumeGame,
     onAudioEvent,
     onScreenChange
+  });
+
+  createOnScreenGameInput({
+    root: document.querySelector("#game-screen"),
+    performAction: (actionId) => navigation.performGameAction(actionId)
   });
 
   function setGameMode(modeId) {

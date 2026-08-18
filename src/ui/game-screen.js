@@ -1,4 +1,8 @@
-import { GAMEPLAY_ACTIONS, GAMEPLAY_ACTION_IDS } from "../config.js";
+import { GAMEPLAY_ACTION_IDS } from "../config.js";
+import { getGameInputAction } from "./game-input.js";
+import { createResponsiveShell } from "./responsive-shell.js";
+
+export { getGameInputAction } from "./game-input.js";
 
 const SCULPT_CURSOR_COLORS = Object.freeze({
   CARVE: "#d98b43",
@@ -16,12 +20,6 @@ export function getSculptAction(view, cursor) {
     return "FILL";
   }
   return null;
-}
-
-export function getGameInputAction(code, bindings = {}) {
-  const action = GAMEPLAY_ACTIONS.find(({ id }) => bindings[id] === code)?.id;
-  if (action) return action;
-  return code === "Enter" ? GAMEPLAY_ACTION_IDS.sculpt : null;
 }
 
 function clearCanvas(canvas, context) {
@@ -68,6 +66,8 @@ export function createGameScreen({ sendCommand }) {
   const field = fieldCanvas.getContext("2d");
   const next = nextCanvas.getContext("2d");
   const focus = focusCanvas.getContext("2d");
+  const gameStage = document.querySelector("#game-stage");
+  const gameShellFrame = document.querySelector("#game-shell-frame");
   const gameShell = document.querySelector("#game-shell");
   const score = document.querySelector("#score");
   const level = document.querySelector("#level");
@@ -83,6 +83,11 @@ export function createGameScreen({ sendCommand }) {
   const modeName = document.querySelector("#mode-name");
   const focusConnector = document.querySelector("#focus-connector");
   const focusConnectorPath = document.querySelector("#focus-connector-path");
+  const responsiveShell = createResponsiveShell({
+    stage: gameStage,
+    frame: gameShellFrame,
+    shell: gameShell
+  });
 
   let lastView = null;
   let focusLayout = null;
@@ -359,6 +364,7 @@ export function createGameScreen({ sendCommand }) {
   function render(view) {
     lastView = view;
     configureFieldCanvas(view.board);
+    responsiveShell.refresh();
     renderField(view);
     renderNext(view);
     renderFocus(view);
@@ -384,10 +390,7 @@ export function createGameScreen({ sendCommand }) {
     sendCommand({ type: "SCULPT", pieceId: piece.id, x: focusCursor.x, y: focusCursor.y });
   }
 
-  function handleKey(event, bindings) {
-    const action = getGameInputAction(event.code, bindings);
-    if (!action) return false;
-
+  function performAction(action) {
     switch (action) {
       case GAMEPLAY_ACTION_IDS.focusPrevious: sendCommand({ type: "FOCUS_PREVIOUS" }); break;
       case GAMEPLAY_ACTION_IDS.focusNext: sendCommand({ type: "FOCUS_NEXT" }); break;
@@ -399,6 +402,12 @@ export function createGameScreen({ sendCommand }) {
       case GAMEPLAY_ACTION_IDS.hardDrop: sendCommand({ type: "HARD_DROP_FOCUSED" }); break;
       default: return false;
     }
+    return true;
+  }
+
+  function handleKey(event, bindings) {
+    const action = getGameInputAction(event.code, bindings);
+    if (!action || !performAction(action)) return false;
     event.preventDefault();
     return true;
   }
@@ -413,6 +422,8 @@ export function createGameScreen({ sendCommand }) {
   return {
     getStatus: () => lastView?.status || null,
     handleKey,
+    performAction,
+    refreshLayout: responsiveShell.scheduleRefresh,
     render,
     setGameMode
   };

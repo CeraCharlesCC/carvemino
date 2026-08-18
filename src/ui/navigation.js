@@ -52,8 +52,14 @@ export function createNavigation({
     for (const [name, screen] of screens) screen.hidden = name !== screenName;
     if (screenName === "options") profileUi.renderOptions();
     if (screenName === "menu") attract.start();
+    if (screenName === "game") gameScreen.refreshLayout();
     if (screenName !== "game") focusFirstMenuButton(screenName);
     onScreenChange(screenName);
+  }
+
+  function performGameAction(actionId) {
+    if (currentScreen !== "game" || gamePaused || gameScreen.getStatus() !== "playing") return false;
+    return gameScreen.performAction(actionId);
   }
 
   function navigateTo(screenName) {
@@ -254,6 +260,7 @@ export function createNavigation({
 
   return {
     clearPause,
+    performGameAction,
     showScreen
   };
 }

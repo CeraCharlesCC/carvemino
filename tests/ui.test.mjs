@@ -3,6 +3,12 @@ import test from "node:test";
 
 import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS } from "../src/config.js";
 import { getGameInputAction } from "../src/ui/game-screen.js";
+import {
+  getOnScreenGameAction,
+  isGameplayActionId,
+  isRepeatingGameAction
+} from "../src/ui/game-input.js";
+import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
 
 test("title screen keyboard actions are explicit and do not use selection keys", () => {
@@ -62,4 +68,52 @@ test("gameplay action metadata owns labels and default keybindings", () => {
     DEFAULT_KEYBINDINGS
   );
   assert(GAMEPLAY_ACTIONS.every(({ id, label }) => id && label));
+});
+
+test("responsive shell scales up when roomy and always fits within both viewport axes", () => {
+  assert.equal(getResponsiveShellScale({
+    availableWidth: 700,
+    availableHeight: 900,
+    shellWidth: 576,
+    shellHeight: 680
+  }), 1.12);
+
+  assert.equal(getResponsiveShellScale({
+    availableWidth: 700,
+    availableHeight: 500,
+    shellWidth: 576,
+    shellHeight: 680
+  }), 500 / 680);
+
+  assert.equal(getResponsiveShellScale({
+    availableWidth: 288,
+    availableHeight: 900,
+    shellWidth: 576,
+    shellHeight: 680
+  }), 0.5);
+
+  assert.equal(getResponsiveShellScale({
+    availableWidth: 288,
+    availableHeight: 272,
+    shellWidth: 576,
+    shellHeight: 680
+  }), 0.4);
+});
+
+test("on-screen gameplay actions validate data attributes and only repeat cursor movement", () => {
+  const control = {
+    disabled: false,
+    dataset: { gameAction: "cursorLeft" }
+  };
+  const target = { closest: () => control };
+  const root = { contains: (candidate) => candidate === control };
+
+  assert.equal(getOnScreenGameAction(target, root), "cursorLeft");
+  assert.equal(isGameplayActionId("hardDrop"), true);
+  assert.equal(isGameplayActionId("pause"), false);
+  assert.equal(isRepeatingGameAction("cursorLeft"), true);
+  assert.equal(isRepeatingGameAction("hardDrop"), false);
+
+  control.dataset.gameAction = "pause";
+  assert.equal(getOnScreenGameAction(target, root), null);
 });
