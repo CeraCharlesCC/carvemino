@@ -215,6 +215,7 @@ export function createNavigation({
   }
 
   window.addEventListener("keydown", (event) => {
+    if (document.querySelector("#startup-manual")?.open) return;
     if (profileUi.handleBindingKey(event)) return;
 
     if (event.repeat && NON_REPEATING_UI_KEYS.has(event.code)) {

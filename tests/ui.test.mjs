@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS } from "../src/config.js";
+import { createI18n, resolveLocale } from "../src/i18n.js";
 import { getGameInputAction } from "../src/ui/game-screen.js";
 import {
   createOnScreenGameInput,
@@ -12,6 +13,11 @@ import {
   triggerHapticFeedback
 } from "../src/ui/game-input.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
+import {
+  createManualDemoState,
+  getManualDemoTarget,
+  performManualDemoAction
+} from "../src/ui/startup-manual.js";
 import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
 
 test("title screen keyboard actions are explicit and do not use selection keys", () => {
@@ -266,4 +272,65 @@ test("input hints follow the visible keyboard, handheld, and tablet-rail control
   assert.match(styles, /@media\s*\(hover:\s*none\)\s*and\s*\(pointer:\s*coarse\)\s*\{[\s\S]*?\[data-input-hint="keyboard"\]\s*\{\s*display:\s*none[\s\S]*?\.menu-footer \[data-input-hint="touch"\]\s*\{\s*display:\s*inline/);
   assert.match(styles, /orientation:\s*portrait[\s\S]*?\.focus-nav\[data-input-hint="handheld"\]\s*\{\s*display:\s*flex/);
   assert.match(styles, /orientation:\s*landscape[\s\S]*?min-width:\s*900px[\s\S]*?min-height:\s*600px[\s\S]*?\.focus-nav\[data-input-hint="tablet-rail"\]\s*\{\s*display:\s*flex/);
+});
+
+test("startup manual locale follows browser language with an English fallback", () => {
+  assert.equal(resolveLocale(["ja-JP", "en-US"]), "ja");
+  assert.equal(resolveLocale(["fr-FR", "en-GB"]), "en");
+  assert.equal(resolveLocale(["fr-FR"]), "en");
+
+  const japanese = createI18n({ languages: ["ja"] });
+  const english = createI18n({ languages: ["en"] });
+  assert.equal(japanese.locale, "ja");
+  assert.equal(japanese.t("manual.title"), "操作マニュアル");
+  assert.equal(english.t("manual.title"), "OPERATOR'S MANUAL");
+  assert.equal(english.t("manual.lab.cell", { x: 2, y: 3, action: "CUT" }), "Focus cell 2, 3: CUT");
+});
+
+test("interactive focus lab teaches cut, fill, focus switching, and drop without game state", () => {
+  const initial = createManualDemoState();
+  assert.equal(initial.focusedIndex, 0);
+  assert.equal(getManualDemoTarget(initial), "cut");
+
+  const cut = performManualDemoAction(initial, "sculpt");
+  assert.equal(cut.lastAction, "cut");
+  assert.equal(cut.scrap, 3);
+  assert.equal(cut.pieces[0].cells.length, 3);
+  assert.equal(getManualDemoTarget(cut), "fill");
+
+  const filled = performManualDemoAction(cut, "sculpt");
+  assert.equal(filled.lastAction, "fill");
+  assert.equal(filled.scrap, 1);
+  assert.equal(filled.pieces[0].cells.length, 4);
+
+  const switched = performManualDemoAction(filled, "focusNext");
+  assert.equal(switched.focusedIndex, 1);
+  assert.equal(switched.lastAction, "focus");
+
+  const dropped = performManualDemoAction(switched, "hardDrop");
+  assert.equal(dropped.pieces[1].locked, true);
+  assert.equal(dropped.pieces[1].origin.y, 4);
+  assert.equal(dropped.focusedIndex, 0);
+  assert.equal(dropped.lastAction, "drop");
+});
+
+test("startup manual uses the cabinet display and physical Pad on touch devices", () => {
+  const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const navigation = readFileSync(new URL("../src/ui/navigation.js", import.meta.url), "utf8");
+  const manual = readFileSync(new URL("../src/ui/startup-manual.js", import.meta.url), "utf8");
+  const ui = readFileSync(new URL("../src/ui/ui.js", import.meta.url), "utf8");
+
+  assert.match(markup, /<dialog class="startup-manual" id="startup-manual"/);
+  assert.match(markup, /data-manual-page="1"[\s\S]*id="manual-field-grid"[\s\S]*id="manual-focus-grid"/);
+  assert.match(markup, /data-input-hint="keyboard"[\s\S]*data-manual-action="focusPrevious"/);
+  assert.match(markup, /class="manual-physical-pad-hint" data-input-hint="touch"/);
+  assert.doesNotMatch(markup, /manual-touch-pad/);
+  assert.match(styles, /\.manual-book\s*\{[\s\S]*repeating-linear-gradient[\s\S]*linear-gradient/);
+  assert.match(styles, /\.startup-manual \.manual-physical-pad-hint\[data-input-hint="touch"\][\s\S]*display:\s*block/);
+  assert.match(styles, /--manual-screen-top[\s\S]*--manual-screen-height/);
+  assert.match(manual, /usesPhysicalPad\(\)[\s\S]*dialog\.show\(\)/);
+  assert.match(manual, /function handleGameAction\(actionId\)[\s\S]*perform\(actionId\)/);
+  assert.match(ui, /startupManual\?\.handleGameAction\(actionId\)/);
+  assert.match(navigation, /document\.querySelector\("#startup-manual"\)\?\.open/);
 });

@@ -3,6 +3,8 @@ import { createGameScreen } from "./game-screen.js";
 import { createOnScreenGameInput } from "./game-input.js";
 import { createNavigation } from "./navigation.js";
 import { createProfileUi } from "./profile-ui.js";
+import { createStartupManual } from "./startup-manual.js";
+import { createI18n } from "../i18n.js";
 
 export { getSculptAction } from "./game-screen.js";
 export { getTitleScreenAction } from "./navigation.js";
@@ -22,6 +24,8 @@ export function createUi({
   changeAudioSetting
 }) {
   let navigation = null;
+  const i18n = createI18n();
+  i18n.apply();
   const attract = createAttract();
   const gameScreen = createGameScreen({ sendCommand });
   const profileUi = createProfileUi({
@@ -49,9 +53,21 @@ export function createUi({
     onScreenChange
   });
 
+  let startupManual = null;
   createOnScreenGameInput({
     root: document.querySelector(".console-layout"),
-    performAction: (actionId) => navigation.performControllerAction(actionId)
+    performAction: (actionId) => {
+      const manualResult = startupManual?.handleGameAction(actionId);
+      return manualResult === null || manualResult === undefined
+        ? navigation.performControllerAction(actionId)
+        : manualResult;
+    }
+  });
+
+  startupManual = createStartupManual({
+    i18n,
+    returnFocus: document.querySelector("#press-start"),
+    screen: document.querySelector(".crt-glass")
   });
 
   function setGameMode(modeId) {
@@ -62,6 +78,7 @@ export function createUi({
   }
 
   navigation.showScreen("menu");
+  startupManual.open();
 
   return {
     render: gameScreen.render,
