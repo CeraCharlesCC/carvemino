@@ -24,6 +24,7 @@ export function createUi({
   createHostInvite = async () => "",
   acceptHostAnswer = async () => {},
   createJoinAnswer = async () => "",
+  startHostMatch = async () => {},
   cancelLanSession = () => {},
   quitGame,
   pauseGame,
@@ -44,7 +45,8 @@ export function createUi({
     modes: lanModes,
     createHostInvite,
     acceptHostAnswer,
-    createJoinAnswer
+    createJoinAnswer,
+    startHostMatch
   });
   const profileUi = createProfileUi({
     modes,

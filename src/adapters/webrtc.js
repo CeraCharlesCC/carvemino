@@ -1,5 +1,60 @@
 import { decodeMessage, encodeMessage } from "../app/protocol.js";
 
+const SIGNALING_CODE_VERSION = "cm1";
+const SIGNALING_TYPE_CODE = Object.freeze({ offer: "o", answer: "a" });
+const SIGNALING_CODE_TYPE = Object.freeze({ o: "offer", a: "answer" });
+
+function bytesToBase64Url(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function base64UrlToBytes(text) {
+  if (!/^[A-Za-z0-9_-]+$/u.test(text)) throw new Error("Invalid LAN signaling code");
+  const base64 = text.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  let binary;
+  try {
+    binary = atob(padded);
+  } catch {
+    throw new Error("Invalid LAN signaling code");
+  }
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+async function transformBytes(bytes, StreamConstructor, format) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new StreamConstructor(format));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function compressSdp(sdp) {
+  const bytes = new TextEncoder().encode(sdp);
+  if (typeof CompressionStream !== "function") return { codec: "u", bytes };
+  try {
+    return { codec: "d", bytes: await transformBytes(bytes, CompressionStream, "deflate") };
+  } catch {
+    return { codec: "u", bytes };
+  }
+}
+
+async function decompressSdp(codec, bytes) {
+  if (codec === "u") return new TextDecoder().decode(bytes);
+  if (codec !== "d") throw new Error("Unsupported LAN signaling code compression");
+  if (typeof DecompressionStream !== "function") {
+    throw new Error("This browser cannot read compressed LAN signaling codes");
+  }
+  try {
+    const decoded = await transformBytes(bytes, DecompressionStream, "deflate");
+    return new TextDecoder().decode(decoded);
+  } catch {
+    throw new Error("Invalid compressed LAN signaling code");
+  }
+}
+
 function waitForIceGatheringComplete(connection, signal) {
   if (connection.iceGatheringState === "complete") return Promise.resolve();
   if (signal?.aborted) return Promise.reject(new Error("WebRTC transport closed during ICE gathering"));
@@ -30,14 +85,43 @@ function waitForIceGatheringComplete(connection, signal) {
   });
 }
 
-function encodeDescription(description) {
-  return JSON.stringify({ type: description.type, sdp: description.sdp });
+export async function encodeSessionDescription(description) {
+  if (!description || typeof description.type !== "string" || typeof description.sdp !== "string") {
+    throw new Error("Invalid WebRTC session description");
+  }
+  const typeCode = SIGNALING_TYPE_CODE[description.type];
+  if (!typeCode) throw new Error(`Unsupported WebRTC session description type: ${String(description.type)}`);
+  const compressed = await compressSdp(description.sdp);
+  return `${SIGNALING_CODE_VERSION}${typeCode}.${compressed.codec}.${bytesToBase64Url(compressed.bytes)}`;
 }
 
-function decodeDescription(text) {
-  const parsed = JSON.parse(text);
-  if (!parsed || typeof parsed.type !== "string" || typeof parsed.sdp !== "string") {
+export async function decodeSessionDescription(text, expectedType = null) {
+  const normalized = String(text || "").trim();
+  let parsed;
+  if (normalized.startsWith("{")) {
+    try {
+      parsed = JSON.parse(normalized);
+    } catch {
+      throw new Error("Invalid WebRTC session description");
+    }
+  } else {
+    const match = /^cm1([oa])\.([a-z])\.([A-Za-z0-9_-]+)$/u.exec(normalized);
+    if (!match) throw new Error("Invalid LAN signaling code");
+    const [, typeCode, codec, payload] = match;
+    parsed = {
+      type: SIGNALING_CODE_TYPE[typeCode],
+      sdp: await decompressSdp(codec, base64UrlToBytes(payload))
+    };
+  }
+
+  if (!parsed || typeof parsed.type !== "string" || typeof parsed.sdp !== "string" || parsed.sdp.length === 0) {
     throw new Error("Invalid WebRTC session description");
+  }
+  if (!SIGNALING_TYPE_CODE[parsed.type]) {
+    throw new Error(`Unsupported WebRTC session description type: ${String(parsed.type)}`);
+  }
+  if (expectedType && parsed.type !== expectedType) {
+    throw new Error(`Expected WebRTC ${expectedType}, received ${parsed.type}`);
   }
   return parsed;
 }
@@ -156,19 +240,19 @@ export class WebRtcPeerTransport {
     const offer = await this.connection.createOffer();
     await this.connection.setLocalDescription(offer);
     await waitForIceGatheringComplete(this.connection, this.closeController.signal);
-    return encodeDescription(this.connection.localDescription);
+    return encodeSessionDescription(this.connection.localDescription);
   }
 
   async acceptOfferTextAndCreateAnswerText(offerText) {
-    await this.connection.setRemoteDescription(decodeDescription(offerText));
+    await this.connection.setRemoteDescription(await decodeSessionDescription(offerText, "offer"));
     const answer = await this.connection.createAnswer();
     await this.connection.setLocalDescription(answer);
     await waitForIceGatheringComplete(this.connection, this.closeController.signal);
-    return encodeDescription(this.connection.localDescription);
+    return encodeSessionDescription(this.connection.localDescription);
   }
 
   async acceptAnswerText(answerText) {
-    await this.connection.setRemoteDescription(decodeDescription(answerText));
+    await this.connection.setRemoteDescription(await decodeSessionDescription(answerText, "answer"));
   }
 
   close() {

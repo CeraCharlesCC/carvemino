@@ -185,21 +185,48 @@
             <h2>HOST</h2>
           </header>
           <div class="lan-lobby-panel">
-            <label class="lan-field" for="lan-host-mode">
-              <span>VS RULESET</span>
-              <select id="lan-host-mode"></select>
-            </label>
-            <button class="menu-button lan-action" id="lan-create-invite" type="button"><span>Create Invite</span></button>
-            <label class="lan-field" for="lan-host-offer">
-              <span>1 // SEND THIS INVITE TO PLAYER 2</span>
-              <textarea id="lan-host-offer" rows="4" readonly spellcheck="false"></textarea>
-            </label>
-            <button class="utility-button lan-copy" id="lan-copy-offer" type="button" disabled>COPY INVITE</button>
-            <label class="lan-field" for="lan-host-answer">
-              <span>2 // PASTE PLAYER 2 ANSWER</span>
-              <textarea id="lan-host-answer" rows="4" spellcheck="false"></textarea>
-            </label>
-            <button class="menu-button lan-action" id="lan-accept-answer" type="button" disabled><span>Connect &amp; Start</span></button>
+            <section class="lan-step" id="lan-host-setup-step">
+              <p class="lan-step-label">1 // CREATE INVITE</p>
+              <label class="lan-field lan-ruleset-field" for="lan-host-mode">
+                <span>VS RULESET</span>
+                <select id="lan-host-mode"></select>
+              </label>
+              <button class="menu-button lan-action" id="lan-create-invite" type="button"><span>Create Invite</span></button>
+            </section>
+
+            <section class="lan-step" id="lan-host-invite-step" hidden>
+              <p class="lan-step-label">2 // SHARE INVITE</p>
+              <div class="lan-share-card">
+                <canvas class="lan-qr" id="lan-host-offer-qr" role="img" aria-label="Host invite QR code"></canvas>
+                <div class="lan-share-actions">
+                  <p>PLAYER 2 CAN SCAN THIS QR OR RECEIVE THE COPIED INVITE CODE.</p>
+                  <button class="menu-button lan-action lan-secondary-action" id="lan-copy-offer" type="button"><span>Copy Invite</span></button>
+                  <button class="menu-button lan-action" id="lan-host-next" type="button"><span>Next</span></button>
+                </div>
+              </div>
+            </section>
+
+            <section class="lan-step" id="lan-host-answer-step" hidden>
+              <p class="lan-step-label">3 // RECEIVE ANSWER</p>
+              <label class="lan-field" for="lan-host-answer">
+                <span>PASTE PLAYER 2 ANSWER</span>
+                <input id="lan-host-answer" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="cm1a...">
+              </label>
+              <div class="lan-action-row">
+                <button class="menu-button lan-action lan-secondary-action" id="lan-scan-answer" type="button"><span>Scan Answer QR</span></button>
+                <button class="menu-button lan-action" id="lan-accept-answer" type="button" disabled><span>Connect</span></button>
+              </div>
+              <div class="lan-scanner" id="lan-host-scanner" hidden>
+                <video id="lan-host-scan-video" aria-label="Camera preview for answer QR code"></video>
+                <button class="menu-button lan-action lan-secondary-action" id="lan-cancel-answer-scan" type="button"><span>Cancel Scan</span></button>
+              </div>
+            </section>
+
+            <section class="lan-step lan-ready-step" id="lan-host-start-step" hidden>
+              <p class="lan-step-label">4 // BOTH PLAYERS READY</p>
+              <p>THE LINK IS LIVE. START THE MATCH WHEN YOU ARE READY.</p>
+              <button class="menu-button lan-action lan-start-action" id="lan-start-match" type="button"><span>Start Match</span></button>
+            </section>
             <p class="lan-status" id="lan-host-status" role="status"></p>
           </div>
           <nav class="arcade-menu compact-menu lan-back-menu">
@@ -213,16 +240,33 @@
             <h2>JOIN</h2>
           </header>
           <div class="lan-lobby-panel">
-            <label class="lan-field" for="lan-join-offer">
-              <span>1 // PASTE HOST INVITE</span>
-              <textarea id="lan-join-offer" rows="5" spellcheck="false"></textarea>
-            </label>
-            <button class="menu-button lan-action" id="lan-create-answer" type="button"><span>Create Answer</span></button>
-            <label class="lan-field" for="lan-join-answer">
-              <span>2 // SEND THIS ANSWER TO HOST</span>
-              <textarea id="lan-join-answer" rows="5" readonly spellcheck="false"></textarea>
-            </label>
-            <button class="utility-button lan-copy" id="lan-copy-answer" type="button" disabled>COPY ANSWER</button>
+            <section class="lan-step" id="lan-join-invite-step">
+              <p class="lan-step-label">1 // RECEIVE INVITE</p>
+              <label class="lan-field" for="lan-join-offer">
+                <span>PASTE HOST INVITE</span>
+                <input id="lan-join-offer" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="cm1o...">
+              </label>
+              <div class="lan-action-row">
+                <button class="menu-button lan-action lan-secondary-action" id="lan-scan-offer" type="button"><span>Scan Invite QR</span></button>
+                <button class="menu-button lan-action" id="lan-create-answer" type="button" disabled><span>Create Answer</span></button>
+              </div>
+              <div class="lan-scanner" id="lan-join-scanner" hidden>
+                <video id="lan-join-scan-video" aria-label="Camera preview for invite QR code"></video>
+                <button class="menu-button lan-action lan-secondary-action" id="lan-cancel-offer-scan" type="button"><span>Cancel Scan</span></button>
+              </div>
+            </section>
+
+            <section class="lan-step" id="lan-join-answer-step" hidden>
+              <p class="lan-step-label">2 // SHARE ANSWER</p>
+              <div class="lan-share-card">
+                <canvas class="lan-qr" id="lan-join-answer-qr" role="img" aria-label="Join answer QR code"></canvas>
+                <div class="lan-share-actions">
+                  <p>LET THE HOST SCAN THIS QR OR SEND THE COPIED ANSWER CODE.</p>
+                  <button class="menu-button lan-action lan-secondary-action" id="lan-copy-answer" type="button"><span>Copy Answer</span></button>
+                  <p class="lan-wait-copy">AFTER THE HOST CONNECTS, WAIT FOR THEM TO START THE MATCH.</p>
+                </div>
+              </div>
+            </section>
             <p class="lan-status" id="lan-join-status" role="status"></p>
           </div>
           <nav class="arcade-menu compact-menu lan-back-menu">

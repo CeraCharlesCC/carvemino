@@ -178,12 +178,18 @@ test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled
   for (const id of [
     "lan-host-mode",
     "lan-create-invite",
-    "lan-host-offer",
+    "lan-host-offer-qr",
+    "lan-copy-offer",
+    "lan-host-next",
     "lan-host-answer",
+    "lan-scan-answer",
     "lan-accept-answer",
+    "lan-start-match",
     "lan-join-offer",
+    "lan-scan-offer",
     "lan-create-answer",
-    "lan-join-answer",
+    "lan-join-answer-qr",
+    "lan-copy-answer",
     "opponent-field",
     "peer-state",
     "versus-feed"
@@ -192,6 +198,9 @@ test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled
   }
   assert.match(html, /<button[^>]+disabled[^>]+aria-disabled="true"[^>]+tabindex="-1"[^>]*>\s*<span>Online<\/span><b>WIP<\/b>/i);
   assert.doesNotMatch(html, /<button[^>]+disabled[^>]+data-nav="lan(?:-host|-join)?"/i);
+  assert.doesNotMatch(html, /id="lan-host-offer"/);
+  assert.doesNotMatch(html, /id="lan-join-answer"/);
+  assert.doesNotMatch(html, /<textarea[^>]+id="lan-(?:host|join)-/i);
 });
 
 test("multiplayer menus never pause one peer and exit back to LAN", () => {
@@ -279,6 +288,7 @@ test("VS result and battle event copy is local-player aware", () => {
 
 test("LAN lobby status exposes failures without stranding the signaling screen", () => {
   assert.match(getLanStatusText({ phase: "offer-ready", error: null }), /INVITE READY/);
+  assert.match(getLanStatusText({ phase: "ready-to-start", error: null }), /START WHEN YOU'RE READY/);
   assert.match(getLanStatusText({ phase: "failed", error: "bad answer" }), /CONNECTION FAILED.*bad answer/i);
 });
 

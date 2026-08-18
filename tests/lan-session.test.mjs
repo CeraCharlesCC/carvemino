@@ -115,6 +115,15 @@ test("LAN host/join signaling completes hello/ready/match-start with identical m
   const answer = await client.startJoin(offer);
   await host.acceptHostAnswer(answer);
 
+  assert.equal(host.getSnapshot().state, "lobby");
+  assert.equal(host.getSnapshot().phase, "ready-to-start");
+  assert.equal(client.getSnapshot().state, "lobby");
+  assert.equal(client.getSnapshot().phase, "ready");
+  assert.equal(hostMatches.length, 0);
+  assert.equal(clientMatches.length, 0);
+
+  host.startHostMatch();
+
   assert.equal(host.getSnapshot().state, "playing");
   assert.equal(client.getSnapshot().state, "playing");
   assert.equal(hostMatches.length, 1);
@@ -147,6 +156,8 @@ test("Carver VS uses the same LAN hello/ready/match-start path as Classic VS", a
   const offer = await host.startHost("carver");
   const answer = await client.startJoin(offer);
   await host.acceptHostAnswer(answer);
+  assert.equal(host.getSnapshot().phase, "ready-to-start");
+  host.startHostMatch();
 
   assert.equal(hostMatches[0].mode.id, "carver");
   assert.equal(clientMatches[0].mode.id, "carver");
@@ -229,6 +240,7 @@ test("finished LAN sessions ignore late peer messages", async () => {
   const offer = await host.startHost("classic");
   const answer = await client.startJoin(offer);
   await host.acceptHostAnswer(answer);
+  host.startHostMatch();
   host.markFinished();
 
   host.handleMessage({ definitely: "not a protocol message" });

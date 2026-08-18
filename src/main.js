@@ -199,6 +199,9 @@ ui = createUi({
     ui.setLanNotice("");
     return lanSession.startJoin(offerText);
   },
+  async startHostMatch() {
+    return lanSession.startHostMatch();
+  },
   cancelLanSession() {
     if (runtimeKind !== "network") lanSession.cancel();
   },

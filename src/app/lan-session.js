@@ -272,24 +272,36 @@ export class LanSession {
   }
 
   handleHostMessage(message) {
-    if (message.type !== "ready" || this.state !== "lobby") {
+    if (message.type !== "ready" || this.state !== "lobby" || this.phase !== "waiting-for-ready") {
       throw new Error(`Unexpected LAN host message: ${String(message.type)}`);
     }
     if (message.payload.playerId === this.localPlayerId) throw new Error("LAN peer player id collides with host id");
     this.remotePlayerId = message.payload.playerId;
+    this.publish("lobby", "ready-to-start");
+  }
+
+  startHostMatch() {
+    if (this.role !== "host" || this.state !== "lobby" || this.phase !== "ready-to-start" || !this.remotePlayerId) {
+      throw new Error("LAN match is not ready to start");
+    }
     const matchId = makeId("lan", this.randomUint32);
     const seed = this.randomUint32() >>> 0;
     const playerIds = [this.localPlayerId, this.remotePlayerId];
 
-    this.publish("starting", "sending-match-start");
-    this.send(createMessage("match-start", {
-      matchId,
-      seed,
-      rulesetId: this.mode.rules.id,
-      policyId: this.mode.policy.id,
-      playerIds
-    }));
-    this.startMatch({ matchId, seed, playerIds });
+    try {
+      this.publish("starting", "sending-match-start");
+      this.send(createMessage("match-start", {
+        matchId,
+        seed,
+        rulesetId: this.mode.rules.id,
+        policyId: this.mode.policy.id,
+        playerIds
+      }));
+      this.startMatch({ matchId, seed, playerIds });
+    } catch (error) {
+      this.handleFailure(error);
+      throw normalizeError(error);
+    }
   }
 
   handleClientMessage(message) {
