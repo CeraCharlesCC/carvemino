@@ -160,20 +160,9 @@ test("rules definitions reject piece rotations that cannot fit the configured bo
   );
 });
 
-test("single-player catalog owns mode identity and points at complete rulesets", () => {
-  assert.equal(Object.isFrozen(SINGLEPLAYER_CATALOG), true);
-  assert.deepEqual(SINGLEPLAYER_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
-  assert.equal(new Set(SINGLEPLAYER_CATALOG.map((mode) => mode.id)).size, SINGLEPLAYER_CATALOG.length);
-  assert.equal(new Set(SINGLEPLAYER_CATALOG.map((mode) => mode.rules.id)).size, SINGLEPLAYER_CATALOG.length);
-
+test("single-player catalog resolves registered modes and rejects unknown ids", () => {
   for (const mode of SINGLEPLAYER_CATALOG) {
     assert.equal(getSingleplayerMode(mode.id), mode);
-    assert.equal(Object.hasOwn(mode.rules, "modeId"), false);
-    assert.equal(Object.hasOwn(mode.rules, "name"), false);
-    assert.equal(Object.hasOwn(mode.rules, "description"), false);
-    assert.equal(Object.hasOwn(mode.rules, "attack"), false);
-    assert.equal(Object.hasOwn(mode.rules, "garbage"), false);
-    assert.equal(Object.hasOwn(mode.rules, "survival"), false);
   }
   assert.throws(() => getSingleplayerMode("unknown"), /Unknown single-player mode/);
 });

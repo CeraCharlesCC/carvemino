@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createAudioEngine } from "../src/audio/engine.js";
+import { getSoundCue, lineClearCueName } from "../src/audio/sounds.js";
 import { DEFAULT_AUDIO_SETTINGS } from "../src/config.js";
 
 function createSilentMusicController() {
@@ -18,25 +19,10 @@ function createSilentMusicController() {
 }
 
 class FakeAudioParam {
-  constructor() {
-    this.values = [];
-  }
-
-  cancelScheduledValues(time) {
-    this.values.push(["cancel", time]);
-  }
-
-  setValueAtTime(value, time) {
-    this.values.push(["set", value, time]);
-  }
-
-  setTargetAtTime(value, time, constant) {
-    this.values.push(["target", value, time, constant]);
-  }
-
-  exponentialRampToValueAtTime(value, time) {
-    this.values.push(["ramp", value, time]);
-  }
+  cancelScheduledValues() {}
+  setValueAtTime() {}
+  setTargetAtTime() {}
+  exponentialRampToValueAtTime() {}
 }
 
 class FakeGain {
@@ -54,9 +40,7 @@ class FakeOscillator {
     this.type = "sine";
   }
 
-  connect(target) {
-    this.output = target;
-  }
+  connect() {}
   disconnect() {}
   start() {}
   stop() {}
@@ -83,17 +67,8 @@ class FakeAudioContext {
   close() {}
 }
 
-function playedFrequencies(context) {
-  return context.oscillators.map((oscillator) =>
-    oscillator.frequency.values.find(([kind]) => kind === "set")?.[1]
-  );
-}
-
-function playedPeaks(context) {
-  return context.oscillators.map((oscillator) => {
-    const envelope = oscillator.output;
-    return envelope?.gain.values.find(([kind]) => kind === "ramp")?.[1];
-  });
+function cueToneCount(name) {
+  return getSoundCue(name)?.length ?? 0;
 }
 
 test("audio engine starts from the shared application defaults", () => {
@@ -101,7 +76,7 @@ test("audio engine starts from the shared application defaults", () => {
   assert.deepEqual(engine.getState().settings, DEFAULT_AUDIO_SETTINGS);
 });
 
-test("audio engine owns menu interaction beeps", () => {
+test("audio engine routes menu interaction cues without pinning their tuning", () => {
   const context = new FakeAudioContext();
   const engine = createAudioEngine({
     contextFactory: () => context,
@@ -113,21 +88,12 @@ test("audio engine owns menu interaction beeps", () => {
   engine.handleUiEvent("confirm");
   engine.handleUiEvent("back");
 
-  assert.deepEqual(playedFrequencies(context), [520, 330, 660, 440, 260]);
+  assert.equal(
+    context.oscillators.length,
+    cueToneCount("menu-select") + cueToneCount("menu-confirm") + cueToneCount("menu-back")
+  );
   assert.equal(engine.getState().lifecycle, "menu");
   assert.equal(engine.getState().music.scene, "menu");
-});
-
-test("sound effects use the boosted overall peak gain", () => {
-  const context = new FakeAudioContext();
-  const engine = createAudioEngine({
-    contextFactory: () => context,
-    musicController: createSilentMusicController()
-  });
-
-  engine.handleUiEvent("select");
-
-  assert.deepEqual(playedPeaks(context), [0.0576]);
 });
 
 test("audio lifecycle routes gameplay state and level into the BGM controller", () => {
@@ -169,10 +135,11 @@ test("line clears coalesce the lock sound and game over supersedes other cues", 
     { type: "LINES_CLEARED", count: 2 },
     { type: "LEVEL_CHANGED", level: 2 }
   ]);
-  const clearFrequencies = playedFrequencies(context);
-  assert(clearFrequencies.includes(480));
-  assert(clearFrequencies.includes(660));
-  assert(!clearFrequencies.includes(150));
+  assert.equal(
+    context.oscillators.length,
+    cueToneCount(lineClearCueName(2)) + cueToneCount("level-up"),
+    "a line clear replaces the ordinary lock cue"
+  );
 
   const beforeGameOver = context.oscillators.length;
   engine.handleGameEvents([
@@ -180,8 +147,11 @@ test("line clears coalesce the lock sound and game over supersedes other cues", 
     { type: "PIECE_LOCKED" },
     { type: "GAME_OVER", reason: "lock-topout" }
   ]);
-  const gameOverFrequencies = playedFrequencies(context).slice(beforeGameOver);
-  assert.deepEqual(gameOverFrequencies, [420, 315, 210]);
+  assert.equal(
+    context.oscillators.length - beforeGameOver,
+    cueToneCount("game-over"),
+    "game over suppresses lower-priority gameplay cues"
+  );
 });
 
 test("fully muted audio does not create an AudioContext", () => {

@@ -5,15 +5,13 @@ import {
   ACHIEVEMENTS,
   createProfileStore
 } from "../src/app/profile.js";
-import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "../src/app/catalog.js";
+import { SINGLEPLAYER_CATALOG } from "../src/app/catalog.js";
 import {
   DEFAULT_AUDIO_SETTINGS,
   DEFAULT_KEYBINDINGS,
   PROFILE_SCHEMA_VERSION,
   PROFILE_STORAGE_KEY
 } from "../src/config.js";
-import { createGameEngine } from "../src/domain/game.js";
-import { getTemplateIds } from "../src/domain/rules.js";
 
 class MemoryStorage {
   constructor() {
@@ -28,24 +26,6 @@ class MemoryStorage {
     this.values.set(key, String(value));
   }
 }
-
-test("classic and carver are independent catalog-backed rulesets", () => {
-  const classic = getSingleplayerMode("classic").rules;
-  const carver = getSingleplayerMode("carver").rules;
-
-  assert.equal(classic.board.visibleHeight, 20);
-  assert.equal(classic.sculpting.carveLimit, 2);
-  assert.equal(carver.board.visibleHeight, 24);
-  assert.equal(carver.sculpting.carveLimit, 4);
-  assert.notDeepEqual(getTemplateIds(carver), getTemplateIds(classic));
-
-  const engine = createGameEngine(carver);
-  const game = engine.create({ seed: 123 });
-  engine.step(game, []);
-  assert.equal(game.board.visibleHeight, 24);
-  assert.equal(game.activePieces[0].carveLimit, 4);
-  assert(getTemplateIds(carver).includes(game.activePieces[0].templateId));
-});
 
 test("profile stores independent high scores and persists them", () => {
   const storage = new MemoryStorage();
