@@ -118,26 +118,48 @@ test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () =
   assert(tenLevelDrop(61) > tenLevelDrop(81));
 });
 
-test("gravity changes quickly through level 3, then eases toward a 6 tick floor", () => {
-  assert.deepEqual(
-    [1, 2, 3].map((level) => gravityIntervalWorldTicksForLevel(CLASSIC_RULESET, level)),
-    [20, 18, 16]
-  );
-  assert.deepEqual(
-    [1, 2, 3].map((level) => gravityIntervalWorldTicksForLevel(CARVER_RULESET, level)),
-    [24, 22, 20]
-  );
-
+test("gravity follows each ruleset's configured curve and floor", () => {
   for (const rules of [CLASSIC_RULESET, CARVER_RULESET]) {
-    assert.equal(gravityIntervalWorldTicksForLevel(rules, 50), 9);
-    assert.equal(gravityIntervalWorldTicksForLevel(rules, 99), 6);
-    assert.equal(gravityIntervalWorldTicksForLevel(rules, 120), 6);
+    const points = rules.progression.gravityCurve.points;
+
+    for (const point of points) {
+      assert.equal(
+        gravityIntervalWorldTicksForLevel(rules, point.level),
+        point.worldTicks,
+        `gravity must pass through the configured point at level ${point.level}`
+      );
+    }
+
+    for (let index = 1; index < points.length; index += 1) {
+      const lower = points[index - 1];
+      const upper = points[index];
+      const midpointLevel = Math.floor((lower.level + upper.level) / 2);
+      const progress = (midpointLevel - lower.level) / (upper.level - lower.level);
+      const expected = Math.ceil(
+        lower.worldTicks + (upper.worldTicks - lower.worldTicks) * progress
+      );
+      assert.equal(
+        gravityIntervalWorldTicksForLevel(rules, midpointLevel),
+        expected,
+        `gravity must interpolate the configured curve at level ${midpointLevel}`
+      );
+    }
+
+    const lastPoint = points.at(-1);
+    assert.equal(
+      gravityIntervalWorldTicksForLevel(rules, lastPoint.level + 21),
+      rules.progression.gravityMinimumWorldTicks,
+      "levels beyond the curve endpoint must stay at the configured floor"
+    );
 
     let previous = gravityIntervalWorldTicksForLevel(rules, 1);
-    for (let level = 2; level <= 120; level += 1) {
+    for (let level = 2; level <= lastPoint.level + 21; level += 1) {
       const current = gravityIntervalWorldTicksForLevel(rules, level);
       assert(current <= previous, `gravity interval must not increase at level ${level}`);
-      assert(current >= 6, `gravity interval must respect its floor at level ${level}`);
+      assert(
+        current >= rules.progression.gravityMinimumWorldTicks,
+        `gravity interval must respect its floor at level ${level}`
+      );
       previous = current;
     }
   }

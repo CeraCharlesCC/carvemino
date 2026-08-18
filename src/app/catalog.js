@@ -23,16 +23,16 @@ function defineCatalog(definitions) {
 
 export const SINGLEPLAYER_CATALOG = defineCatalog([
   {
-    id: "classic",
-    name: "Classic",
-    description: "The original Carvemino rules: familiar minoes with precision carving.",
-    rules: CLASSIC_RULESET
-  },
-  {
     id: "carver",
     name: "Carver",
     description: "Chunky polyominoes, a taller dig site, and twice the carving budget.",
     rules: CARVER_RULESET
+  },
+  {
+    id: "classic",
+    name: "Classic",
+    description: "The old-school way: familiar minoes with precision carving.",
+    rules: CLASSIC_RULESET
   }
 ]);
 

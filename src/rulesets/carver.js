@@ -1,4 +1,5 @@
 import { defineRules } from "../domain/rules.js";
+import { CARVEMINO_CELL_STYLES } from "../palette.js";
 
 export const CARVER_RULESET = defineRules({
   id: "carvemino-carver-rules-v4",
@@ -11,7 +12,7 @@ export const CARVER_RULESET = defineRules({
     dropCoverageHistoryLength: 48,
     dropPositionSampleCount: 2
   },
-  sculpting: { carveLimit: 4, minimumCells: 2, scrapPerCarve: 1, fillCost: 2 },
+  sculpting: { carveLimit: 3, minimumCells: 3, scrapPerCarve: 1, fillCost: 2 },
   progression: {
     linesPerLevel: 4,
     gravityStartWorldTicks: 24,
@@ -22,6 +23,16 @@ export const CARVER_RULESET = defineRules({
         { level: 1, worldTicks: 24 },
         { level: 2, worldTicks: 22 },
         { level: 3, worldTicks: 20 },
+        { level: 8, worldTicks: 19 },
+        { level: 12, worldTicks: 18 },
+        { level: 16, worldTicks: 17 },
+        { level: 20, worldTicks: 16 },
+        { level: 24, worldTicks: 15 },
+        { level: 28, worldTicks: 14 },
+        { level: 32, worldTicks: 13 },
+        { level: 36, worldTicks: 12 },
+        { level: 40, worldTicks: 11 },
+        { level: 44, worldTicks: 10 },
         { level: 50, worldTicks: 9 },
         { level: 99, worldTicks: 6 }
       ]
@@ -45,15 +56,6 @@ export const CARVER_RULESET = defineRules({
     }
   },
   presentation: {
-    cellStyles: {
-      1: { fill: "#6b9e8f" },
-      2: { fill: "#b5a66a" },
-      3: { fill: "#8a7b96" },
-      4: { fill: "#7a9a6d" },
-      5: { fill: "#a6645c" },
-      6: { fill: "#6882a3" },
-      7: { fill: "#b0864e" },
-      8: { fill: "#5a5d55" }
-    }
+    cellStyles: CARVEMINO_CELL_STYLES
   }
 });
