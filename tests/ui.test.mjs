@@ -237,6 +237,8 @@ test("startup manual locale follows browser language with an English fallback", 
   const english = createI18n({ languages: ["en"] });
   assert.equal(japanese.locale, "ja");
   assert.notEqual(japanese.t("manual.title"), english.t("manual.title"));
+  assert.match(japanese.t("orientation.title"), /スマホ.*横持ち.*非対応/);
+  assert.match(english.t("orientation.copy"), /portrait/i);
   assert.match(english.t("manual.lab.cell", { x: 2, y: 3, action: "CUT" }), /2.*3.*CUT/);
 });
 
