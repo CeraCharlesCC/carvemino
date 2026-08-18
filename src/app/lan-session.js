@@ -15,6 +15,7 @@ const TERMINAL_TRANSPORT_STATES = new Set([
   "failed",
   "disconnected"
 ]);
+const TERMINAL_SESSION_STATES = new Set(["idle", "finished", "failed", "disconnected"]);
 
 function defaultRandomUint32() {
   if (globalThis.crypto?.getRandomValues) {
@@ -260,7 +261,7 @@ export class LanSession {
   }
 
   handleMessage(message) {
-    if (["idle", "failed", "disconnected"].includes(this.state)) return;
+    if (TERMINAL_SESSION_STATES.has(this.state)) return;
     try {
       validateMessage(message);
       if (this.role === "host") this.handleHostMessage(message);

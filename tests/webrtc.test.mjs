@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { WebRtcPeerTransport } from "../src/adapters/webrtc.js";
+import { createMessage, encodeMessage } from "../src/app/protocol.js";
 
 class FakeEventTarget {
   constructor() {
@@ -128,6 +129,28 @@ test("WebRTC join transport accepts raw SDP text and reports rejected wire data"
   channel.emit("message", { data: "not-json" });
   assert.equal(errors.length, 1);
   assert.match(errors[0].message, /JSON|Unexpected token|not valid/i);
+});
+
+test("WebRTC message dispatch does not replay one packet into handlers added during handoff", () => {
+  const connection = new FakePeerConnection();
+  const transport = new WebRtcPeerTransport({
+    initiator: true,
+    peerConnectionFactory: () => connection
+  });
+  const received = [];
+  let removeLobbyHandler = () => {};
+  removeLobbyHandler = transport.onMessage(() => {
+    received.push("lobby");
+    removeLobbyHandler();
+    transport.onMessage(() => received.push("runtime"));
+  });
+  const wire = encodeMessage(createMessage("ready", { playerId: "joiner" }));
+
+  connection.channel.emit("message", { data: wire });
+  assert.deepEqual(received, ["lobby"]);
+
+  connection.channel.emit("message", { data: wire });
+  assert.deepEqual(received, ["lobby", "runtime"]);
 });
 
 test("closing WebRTC transport aborts pending ICE gathering", async () => {

@@ -138,7 +138,7 @@ export function createLanLobby({
       hostAnswer.value = "";
       hostCopy.disabled = true;
       hostConnect.disabled = true;
-      setLocalStatus("host", "CHOOSE CLASSIC VS, THEN CREATE AN INVITE.");
+      setLocalStatus("host", "CHOOSE A VS MODE, THEN CREATE AN INVITE.");
     } else {
       joinOffer.value = "";
       joinAnswer.value = "";

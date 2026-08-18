@@ -13,6 +13,7 @@ import {
 } from "../src/ui/game-input.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getLanStatusText } from "../src/ui/lan-lobby.js";
+import { createNavigation } from "../src/ui/navigation.js";
 import {
   claimStartupManualVisit,
   createManualDemoState,
@@ -66,6 +67,78 @@ function touchPointerEvent(pointerId, control, overrides = {}) {
     preventDefault() {},
     ...overrides
   };
+}
+
+function createNavigationElement(dataset = {}) {
+  const handlers = new Map();
+  return {
+    dataset: { ...dataset },
+    hidden: false,
+    handlers,
+    addEventListener(type, handler) {
+      handlers.set(type, handler);
+    },
+    querySelector() {
+      return null;
+    },
+    querySelectorAll() {
+      return [];
+    },
+    setAttribute() {},
+    focus() {
+      globalThis.document.activeElement = this;
+    },
+    click() {
+      handlers.get("click")?.();
+    },
+    matches() {
+      return false;
+    }
+  };
+}
+
+function createNavigationDom() {
+  const screens = [
+    createNavigationElement({ screen: "menu" }),
+    createNavigationElement({ screen: "game" }),
+    createNavigationElement({ screen: "lan" })
+  ];
+  const elements = new Map([
+    ["#game-over", createNavigationElement()],
+    ["#play-again", createNavigationElement()],
+    ["#game-over-back", createNavigationElement()],
+    ["#pause-game", createNavigationElement()],
+    [".console-layout", createNavigationElement()],
+    ["#pause-overlay", createNavigationElement()],
+    ["#resume-game", createNavigationElement()],
+    ["#press-start", createNavigationElement()],
+    ["#title-manual", createNavigationElement()],
+    ["#restart-game", createNavigationElement()],
+    ["#quit-game", createNavigationElement()]
+  ]);
+  elements.get("#pause-overlay").hidden = true;
+  const documentHandlers = new Map();
+  const windowHandlers = new Map();
+  const document = {
+    activeElement: null,
+    visibilityState: "visible",
+    querySelector(selector) {
+      return elements.get(selector) || null;
+    },
+    querySelectorAll(selector) {
+      if (selector === "[data-screen]") return screens;
+      return [];
+    },
+    addEventListener(type, handler) {
+      documentHandlers.set(type, handler);
+    }
+  };
+  const window = {
+    addEventListener(type, handler) {
+      windowHandlers.set(type, handler);
+    }
+  };
+  return { document, documentHandlers, elements, window, windowHandlers };
 }
 
 test("title screen keyboard actions are explicit and do not use selection keys", () => {
@@ -126,6 +199,72 @@ test("multiplayer menus never pause one peer and exit back to LAN", () => {
   assert.equal(shouldPauseGameSimulation({ kind: "multiplayer" }), false);
   assert.equal(getGameExitScreen({ kind: "singleplayer" }), "singleplayer");
   assert.equal(getGameExitScreen({ kind: "multiplayer" }), "lan");
+});
+
+test("leaving the game screen clears a multiplayer match menu before the next match", () => {
+  const previousDocument = globalThis.document;
+  const previousWindow = globalThis.window;
+  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
+  const dom = createNavigationDom();
+  const performedActions = [];
+  globalThis.document = dom.document;
+  globalThis.window = dom.window;
+  globalThis.requestAnimationFrame = (callback) => {
+    callback();
+    return 1;
+  };
+
+  try {
+    const navigation = createNavigation({
+      attract: { start() {}, stop() {} },
+      gameScreen: {
+        getContext: () => ({ kind: "multiplayer" }),
+        getStatus: () => "playing",
+        handleKey() {},
+        performAction(actionId) {
+          performedActions.push(actionId);
+          return true;
+        },
+        refreshLayout() {}
+      },
+      profileUi: {
+        getKeybindings: () => ({}),
+        handleBindingKey: () => false,
+        renderOptions() {}
+      },
+      restart() {},
+      quitGame() {},
+      pauseGame() {},
+      resumeGame() {},
+      onAudioEvent() {},
+      onScreenChange() {}
+    });
+
+    navigation.showScreen("game");
+    dom.windowHandlers.get("keydown")({
+      code: "Escape",
+      repeat: false,
+      target: { matches: () => false },
+      preventDefault() {}
+    });
+    assert.equal(dom.elements.get("#pause-overlay").hidden, false);
+    assert.equal(dom.elements.get(".console-layout").dataset.gameState, "paused");
+
+    navigation.showScreen("lan");
+    assert.equal(dom.elements.get("#pause-overlay").hidden, true);
+    assert.equal(dom.elements.get(".console-layout").dataset.gameState, "playing");
+
+    navigation.showScreen("game");
+    assert.equal(navigation.performControllerAction("focusNext"), true);
+    assert.deepEqual(performedActions, ["focusNext"]);
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+    if (previousWindow === undefined) delete globalThis.window;
+    else globalThis.window = previousWindow;
+    if (previousRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
+    else globalThis.requestAnimationFrame = previousRequestAnimationFrame;
+  }
 });
 
 test("VS result and battle event copy is local-player aware", () => {

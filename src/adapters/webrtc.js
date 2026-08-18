@@ -87,7 +87,7 @@ export class WebRtcPeerTransport {
     channel.addEventListener("message", (event) => {
       try {
         const message = decodeMessage(event.data);
-        for (const handler of this.messageHandlers) handler(message);
+        for (const handler of [...this.messageHandlers]) handler(message);
       } catch (error) {
         this.reportError(error);
       }

@@ -3,12 +3,15 @@ import test from "node:test";
 
 import { NetworkMatchRuntime } from "../src/app/network-match-runtime.js";
 import { createMessage } from "../src/app/protocol.js";
+import { CARVER_VERSUS_POLICY } from "../src/match-policies/carver.js";
+import { CARVER_RULESET } from "../src/rulesets/carver.js";
 import {
   createMatch,
   getPlayerGame,
   hashMatch,
   restoreMatch,
-  snapshotMatch
+  snapshotMatch,
+  stepMatch
 } from "../src/domain/match.js";
 import { defineVersusPolicy } from "../src/domain/match/versus.js";
 import { makeTestRules } from "./helpers/rules.mjs";
@@ -75,6 +78,7 @@ function createRuntimePair({
   policy,
   inputDelayTicks = 2,
   hashIntervalTicks = 10,
+  maxBufferedFutureTicks = 600,
   hostEvents = [],
   clientEvents = []
 }) {
@@ -89,6 +93,7 @@ function createRuntimePair({
     transport: transports.host,
     inputDelayTicks,
     hashIntervalTicks,
+    maxBufferedFutureTicks,
     onEvents(events) {
       hostEvents.push(...events);
     }
@@ -103,11 +108,24 @@ function createRuntimePair({
     transport: transports.client,
     inputDelayTicks,
     hashIntervalTicks,
+    maxBufferedFutureTicks,
     onEvents(events) {
       clientEvents.push(...events);
     }
   });
   return { host, client, transports };
+}
+
+function createBasicRuntimePair(id, options = {}) {
+  const rules = makeTestRules();
+  const policy = createVersusPolicy(`${id}-vs`);
+  const hostMatch = createMatch({ id, playerIds: ["a", "b"], seed: 17, rules, policy });
+  const clientMatch = createMatch({ id, playerIds: ["a", "b"], seed: 17, rules, policy });
+  return {
+    rules,
+    policy,
+    ...createRuntimePair({ hostMatch, clientMatch, rules, policy, ...options })
+  };
 }
 
 function boardIndex(board, x, y) {
@@ -202,6 +220,40 @@ test("network runtimes apply only host frames and converge after commands from b
   assert(host.connectionStats.inputsReceived > 0);
 });
 
+test("Carver VS uses the same authoritative network runtime path", () => {
+  const hostMatch = createMatch({
+    id: "carver-network-match",
+    playerIds: ["a", "b"],
+    seed: 314,
+    rules: CARVER_RULESET,
+    policy: CARVER_VERSUS_POLICY
+  });
+  const clientMatch = createMatch({
+    id: "carver-network-match",
+    playerIds: ["a", "b"],
+    seed: 314,
+    rules: CARVER_RULESET,
+    policy: CARVER_VERSUS_POLICY
+  });
+  const { host, client } = createRuntimePair({
+    hostMatch,
+    clientMatch,
+    rules: CARVER_RULESET,
+    policy: CARVER_VERSUS_POLICY
+  });
+
+  host.command({ type: "FOCUS_NEXT" });
+  client.command({ type: "FOCUS_PREVIOUS" });
+  for (let tick = 0; tick < 30; tick += 1) {
+    host.runOneTick();
+    client.runOneTick();
+  }
+
+  assert.equal(host.match.rulesetId, CARVER_RULESET.id);
+  assert.equal(host.match.policyId, CARVER_VERSUS_POLICY.id);
+  assert.equal(hashMatch(client.match), hashMatch(host.match));
+});
+
 test("client holds additional commands while the same authoritative tick is stalled", () => {
   const rules = makeTestRules();
   const policy = createVersusPolicy("network-runtime-stalled-input");
@@ -247,7 +299,7 @@ test("client holds additional commands while the same authoritative tick is stal
   assert.equal(hashMatch(client.match), hashMatch(host.match));
 });
 
-test("client render timing catches up buffered authoritative frames after a stall", () => {
+test("client render timing catches up a backgrounded authoritative-frame backlog", () => {
   const rules = makeTestRules();
   const policy = createVersusPolicy("network-runtime-catch-up");
   const hostMatch = createMatch({
@@ -300,22 +352,71 @@ test("client render timing catches up buffered authoritative frames after a stal
 
   try {
     client.start();
-    for (let tick = 0; tick < 12; tick += 1) host.runOneTick();
+    for (let tick = 0; tick < 80; tick += 1) host.runOneTick();
     assert.equal(client.match.matchTick, 0);
-    assert.equal(client.connectionStats.bufferedFrames, 12);
+    assert.equal(client.connectionStats.bufferedFrames, 80);
 
     callbacks.shift()(0);
-    callbacks.shift()(250);
+    callbacks.shift()(16);
+    callbacks.shift()(32);
+    callbacks.shift()(48);
 
-    assert.equal(client.match.matchTick, 12);
+    assert.equal(client.match.matchTick, 80);
     assert.equal(hashMatch(client.match), hashMatch(host.match));
     assert(interpolations.every((value) => value >= 0 && value <= 1));
   } finally {
     client.stop();
     host.stop();
-    globalThis.requestAnimationFrame = previousRequest;
-    globalThis.cancelAnimationFrame = previousCancel;
+    if (previousRequest === undefined) delete globalThis.requestAnimationFrame;
+    else globalThis.requestAnimationFrame = previousRequest;
+    if (previousCancel === undefined) delete globalThis.cancelAnimationFrame;
+    else globalThis.cancelAnimationFrame = previousCancel;
   }
+});
+
+test("a lagging client schedules input from the newest authoritative frame without killing the host", () => {
+  const { host, client, transports } = createBasicRuntimePair("lagging-client-input-match", {
+    inputDelayTicks: 2
+  });
+
+  for (let tick = 0; tick < 10; tick += 1) host.runOneTick();
+  assert.equal(host.match.matchTick, 10);
+  assert.equal(client.match.matchTick, 0);
+  assert.equal(client.connectionStats.bufferedFrames, 10);
+
+  client.command({ type: "FOCUS_NEXT" });
+  client.runOneTick();
+
+  const submitted = transports.client.sent.find((message) => message.type === "input");
+  assert.equal(submitted.matchTick, 11);
+  assert.equal(host.disposed, false);
+  assert.equal(host.connectionStats.inputsReceived, 1);
+
+  host.runOneTick();
+  host.runOneTick();
+  const authoritative = transports.host.sent.find(
+    (message) => message.type === "input-frame" && message.matchTick === 11
+  );
+  assert.deepEqual(authoritative.payload.commandsByPlayer.b, [{ type: "FOCUS_NEXT" }]);
+});
+
+test("the host drops a stale client input without terminating the match", () => {
+  const { host, transports } = createBasicRuntimePair("stale-client-input-match", {
+    inputDelayTicks: 2
+  });
+
+  host.runOneTick();
+  host.runOneTick();
+  transports.client.send(createMessage(
+    "input",
+    { playerId: "b", commands: [{ type: "FOCUS_NEXT" }] },
+    { seq: 0, matchTick: 0 }
+  ));
+
+  assert.equal(host.disposed, false);
+  assert.equal(host.connectionStats.protocolErrors, 0);
+  assert.equal(host.connectionStats.staleInputsDropped, 1);
+  assert.equal(host.connectionStats.inputsReceived, 0);
 });
 
 test("two-line clears produce the existing versus garbage attack on both peers", () => {
@@ -444,6 +545,89 @@ test("a hash divergence requests one host snapshot and resumes from the recovere
   assert.equal(client.connectionStats.resyncRequestsSent, 1, "recovery must not loop");
 });
 
+test("a final hash received after local finish can still trigger terminal resync", () => {
+  const { host, client } = createBasicRuntimePair("terminal-final-hash-match", {
+    hashIntervalTicks: 10
+  });
+
+  stepMatch(host.match, { a: [], b: [] });
+  stepMatch(client.match, { a: [], b: [] });
+  for (const match of [host.match, client.match]) {
+    const eliminated = getPlayerGame(match, "b");
+    eliminated.status = "gameover";
+    eliminated.gameOverReason = "lock-topout";
+  }
+  host.match.status = "finished";
+  client.match.status = "finished";
+  host.match.result = { type: "winner", winnerId: "a", atMatchTick: 0 };
+  client.match.result = { type: "winner", winnerId: "a", atMatchTick: 0 };
+  getPlayerGame(client.match, "b").score += 99;
+  host.markFinishedIfNeeded();
+  client.markFinishedIfNeeded();
+  assert.notEqual(hashMatch(client.match), hashMatch(host.match));
+
+  host.sendHashCheckpointIfNeeded();
+
+  assert.equal(client.disposed, false);
+  assert.equal(host.disposed, false);
+  assert.equal(client.connectionStats.hashesReceived, 1);
+  assert.equal(client.connectionStats.hashMismatches, 1);
+  assert.equal(client.connectionStats.resyncRequestsSent, 1);
+  assert.equal(host.connectionStats.resyncRequestsReceived, 1);
+  assert.equal(host.connectionStats.snapshotsSent, 1);
+  assert.equal(client.connectionStats.snapshotsApplied, 1);
+  assert.equal(client.connectionStats.resyncPending, false);
+  assert.equal(hashMatch(client.match), hashMatch(host.match));
+  assert.equal(client.stopReason, "finished");
+});
+
+test("terminal resync resumes a running client when the host snapshot is still playing", () => {
+  const { host, client } = createBasicRuntimePair("terminal-resume-match", {
+    hashIntervalTicks: 1
+  });
+  stepMatch(host.match, { a: [], b: [] });
+  stepMatch(client.match, { a: [], b: [] });
+
+  const previousRequest = globalThis.requestAnimationFrame;
+  const previousCancel = globalThis.cancelAnimationFrame;
+  const scheduledFrames = [];
+  const cancelledFrames = [];
+  globalThis.requestAnimationFrame = (callback) => {
+    scheduledFrames.push(callback);
+    return scheduledFrames.length;
+  };
+  globalThis.cancelAnimationFrame = (handle) => cancelledFrames.push(handle);
+
+  try {
+    assert.equal(client.start(), true);
+    const eliminated = getPlayerGame(client.match, "b");
+    eliminated.status = "gameover";
+    eliminated.gameOverReason = "lock-topout";
+    client.match.status = "finished";
+    client.match.result = { type: "winner", winnerId: "a", atMatchTick: 0 };
+    client.markFinishedIfNeeded();
+    assert.equal(client.running, false);
+    assert.equal(client.stopReason, "finished");
+
+    host.sendHashCheckpointIfNeeded();
+
+    assert.equal(client.disposed, false);
+    assert.equal(client.connectionStats.hashMismatches, 1);
+    assert.equal(client.connectionStats.snapshotsApplied, 1);
+    assert.equal(client.match.status, "playing");
+    assert.equal(client.stopReason, null);
+    assert.equal(client.running, true);
+    assert.equal(cancelledFrames.length, 1);
+    assert.equal(scheduledFrames.length, 2);
+    assert.equal(hashMatch(client.match), hashMatch(host.match));
+  } finally {
+    client.stop();
+    host.stop();
+    globalThis.requestAnimationFrame = previousRequest;
+    globalThis.cancelAnimationFrame = previousCancel;
+  }
+});
+
 test("legacy remote attack messages are rejected instead of mutating the shared match", () => {
   const rules = makeTestRules();
   const policy = createVersusPolicy("network-runtime-reject-attack");
@@ -524,6 +708,10 @@ test("leaving a live network match notifies the peer and closes both transports"
   assert.equal(client.stopReason, "peer-left");
   assert.equal(transports.host.closeCount, 1);
   assert.equal(transports.client.closeCount, 1);
+  assert.equal(transports.host.messageHandlers.size, 0);
+  assert.equal(transports.host.stateHandlers.size, 0);
+  assert.equal(transports.client.messageHandlers.size, 0);
+  assert.equal(transports.client.stateHandlers.size, 0);
 });
 
 test("direct ICE failure terminates a live network runtime and closes its transport", () => {
@@ -550,4 +738,186 @@ test("direct ICE failure terminates a live network runtime and closes its transp
   assert.equal(host.disposed, true);
   assert.equal(host.stopReason, "transport-ice-failed");
   assert.equal(transports.host.closeCount, 1);
+});
+
+test("future client inputs and host frames are bounded before they can grow runtime queues", () => {
+  {
+    const { host, transports } = createBasicRuntimePair("future-input-match", {
+      inputDelayTicks: 2,
+      maxBufferedFutureTicks: 4
+    });
+    transports.client.send(createMessage(
+      "input",
+      { playerId: "b", commands: [] },
+      { seq: 0, matchTick: 3 }
+    ));
+    assert.equal(host.disposed, true);
+    assert.equal(host.stopReason, "protocol-error");
+    assert.equal(host.connectionStats.bufferedRemoteInputs, 0);
+  }
+
+  {
+    const { client, transports } = createBasicRuntimePair("future-frame-match", {
+      maxBufferedFutureTicks: 3
+    });
+    transports.host.send(createMessage(
+      "input-frame",
+      { commandsByPlayer: { a: [], b: [] } },
+      { seq: 0, matchTick: 4 }
+    ));
+    assert.equal(client.disposed, true);
+    assert.equal(client.stopReason, "protocol-error");
+    assert.equal(client.connectionStats.bufferedFrames, 0);
+  }
+
+  {
+    const { client, transports } = createBasicRuntimePair("future-hash-match", {
+      maxBufferedFutureTicks: 3
+    });
+    transports.host.send(createMessage(
+      "match-hash",
+      { hash: "01234567" },
+      { seq: 0, matchTick: 4 }
+    ));
+    assert.equal(client.disposed, true);
+    assert.equal(client.stopReason, "protocol-error");
+  }
+});
+
+test("network runtime rejects wrong-role and peer-spoofed player messages", () => {
+  {
+    const { host, transports } = createBasicRuntimePair("wrong-player-match");
+    transports.client.send(createMessage(
+      "input",
+      { playerId: "a", commands: [] },
+      { seq: 0, matchTick: 0 }
+    ));
+    assert.equal(host.disposed, true);
+    assert.equal(host.stopReason, "protocol-error");
+    assert.equal(host.connectionStats.inputsReceived, 0);
+  }
+
+  {
+    const { client, transports } = createBasicRuntimePair("wrong-role-match");
+    transports.host.send(createMessage(
+      "input",
+      { playerId: "b", commands: [] },
+      { seq: 0, matchTick: 0 }
+    ));
+    assert.equal(client.disposed, true);
+    assert.equal(client.stopReason, "protocol-error");
+  }
+});
+
+test("network runtime rejects stale, duplicate, and post-handshake match messages", () => {
+  {
+    const { client, transports } = createBasicRuntimePair("stale-frame-match");
+    stepMatch(client.match, { a: [], b: [] });
+    transports.host.send(createMessage(
+      "input-frame",
+      { commandsByPlayer: { a: [], b: [] } },
+      { seq: 0, matchTick: 0 }
+    ));
+    assert.equal(client.disposed, true);
+    assert.equal(client.stopReason, "protocol-error");
+  }
+
+  {
+    const { client, transports } = createBasicRuntimePair("duplicate-frame-match");
+    const frame = { commandsByPlayer: { a: [], b: [] } };
+    transports.host.send(createMessage("input-frame", frame, { seq: 0, matchTick: 0 }));
+    transports.host.send(createMessage("input-frame", frame, { seq: 1, matchTick: 0 }));
+    assert.equal(client.disposed, true);
+    assert.equal(client.stopReason, "protocol-error");
+  }
+
+  {
+    const { client, transports } = createBasicRuntimePair("late-handshake-match");
+    transports.host.send(createMessage("hello", {
+      playerId: "a",
+      rulesetId: client.match.rulesetId,
+      policyId: client.match.policyId
+    }));
+    assert.equal(client.disposed, true);
+    assert.equal(client.stopReason, "protocol-error");
+  }
+});
+
+test("network runtime rejects recovery snapshots from another match", () => {
+  const { client, transports } = createBasicRuntimePair("snapshot-context-match");
+  const snapshot = snapshotMatch(client.match);
+  snapshot.matchId = "other-match";
+
+  transports.host.send(createMessage(
+    "match-snapshot",
+    { snapshot },
+    { seq: 0, matchTick: snapshot.matchTick }
+  ));
+
+  assert.equal(client.disposed, true);
+  assert.equal(client.stopReason, "protocol-error");
+});
+
+test("a locally terminal client can still accept its pending recovery snapshot", () => {
+  const { host, client, transports } = createBasicRuntimePair("terminal-resync-match");
+  const snapshot = snapshotMatch(host.match);
+  client.match.status = "finished";
+  client.resyncPending = true;
+
+  transports.host.send(createMessage(
+    "match-snapshot",
+    { snapshot },
+    { seq: 0, matchTick: snapshot.matchTick }
+  ));
+
+  assert.equal(client.match.status, "playing");
+  assert.equal(client.resyncPending, false);
+  assert.equal(client.connectionStats.snapshotsApplied, 1);
+  assert.equal(client.stopReason, null);
+});
+
+test("network runtime ignores messages after the deterministic match is terminal", () => {
+  const { client, transports } = createBasicRuntimePair("terminal-ignore-match");
+  client.match.status = "finished";
+  client.markFinishedIfNeeded();
+
+  transports.host.send(createMessage("attack", {
+    targetPlayerId: "b",
+    packet: {
+      id: "late-garbage",
+      sourcePlayerId: "a",
+      rows: 1,
+      applyAtWorldTick: 1,
+      seed: 3
+    }
+  }));
+
+  assert.equal(client.disposed, false);
+  assert.equal(client.connectionStats.protocolErrors, 0);
+  client.stop();
+});
+
+test("network runtime buffer settings cannot permit an unbounded input-delay queue", () => {
+  const rules = makeTestRules();
+  const policy = createVersusPolicy("buffer-constructor-vs");
+  const transports = createTransportPair();
+  const match = createMatch({
+    id: "buffer-constructor-match",
+    playerIds: ["a", "b"],
+    seed: 4,
+    rules,
+    policy
+  });
+
+  assert.throws(() => new NetworkMatchRuntime({
+    match,
+    rules,
+    policy,
+    role: "host",
+    localPlayerId: "a",
+    remotePlayerId: "b",
+    transport: transports.host,
+    inputDelayTicks: 5,
+    maxBufferedFutureTicks: 4
+  }), /inputDelayTicks cannot exceed maxBufferedFutureTicks/);
 });

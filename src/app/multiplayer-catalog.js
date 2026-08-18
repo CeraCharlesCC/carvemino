@@ -44,11 +44,7 @@ export const MULTIPLAYER_CATALOG = defineCatalog([
   }
 ]);
 
-// V1 LAN deliberately wires Classic first. Milestone 7 promotes Carver through
-// the exact same session/runtime path once the shared flow is hardened.
-export const LAN_MULTIPLAYER_CATALOG = Object.freeze(
-  MULTIPLAYER_CATALOG.filter((mode) => mode.id === "classic")
-);
+export const LAN_MULTIPLAYER_CATALOG = Object.freeze([...MULTIPLAYER_CATALOG]);
 
 const MULTIPLAYER_MODES_BY_ID = new Map(MULTIPLAYER_CATALOG.map((mode) => [mode.id, mode]));
 

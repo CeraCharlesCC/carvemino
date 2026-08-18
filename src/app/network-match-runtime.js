@@ -28,8 +28,10 @@ const TERMINAL_TRANSPORT_STATES = new Set([
 ]);
 const DEFAULT_INPUT_DELAY_TICKS = 3;
 const DEFAULT_HASH_INTERVAL_TICKS = 60;
+const DEFAULT_MAX_BUFFERED_FUTURE_TICKS = 600;
 const MAX_CHECKPOINT_HISTORY = 8;
 const MAX_STEPS_PER_FRAME = 30;
+const MAX_FRAME_ELAPSED_SECONDS = 0.25;
 
 function assertFunction(value, name) {
   if (typeof value !== "function") throw new Error(`${name} must be a function`);
@@ -72,6 +74,7 @@ export class NetworkMatchRuntime {
     transport,
     inputDelayTicks = DEFAULT_INPUT_DELAY_TICKS,
     hashIntervalTicks = DEFAULT_HASH_INTERVAL_TICKS,
+    maxBufferedFutureTicks = DEFAULT_MAX_BUFFERED_FUTURE_TICKS,
     onFrame = () => {},
     onEvents = () => {},
     onConnectionStateChange = () => {},
@@ -88,6 +91,10 @@ export class NetworkMatchRuntime {
     assertFunction(transport.onStateChange, "network match transport.onStateChange");
     assertPositiveInteger(inputDelayTicks, "inputDelayTicks");
     assertPositiveInteger(hashIntervalTicks, "hashIntervalTicks");
+    assertPositiveInteger(maxBufferedFutureTicks, "maxBufferedFutureTicks");
+    if (inputDelayTicks > maxBufferedFutureTicks) {
+      throw new Error("inputDelayTicks cannot exceed maxBufferedFutureTicks");
+    }
     assertFunction(onFrame, "onFrame");
     assertFunction(onEvents, "onEvents");
     assertFunction(onConnectionStateChange, "onConnectionStateChange");
@@ -121,6 +128,7 @@ export class NetworkMatchRuntime {
     this.transport = transport;
     this.inputDelayTicks = inputDelayTicks;
     this.hashIntervalTicks = hashIntervalTicks;
+    this.maxBufferedFutureTicks = maxBufferedFutureTicks;
     this.onFrame = onFrame;
     this.onEvents = onEvents;
     this.onConnectionStateChange = onConnectionStateChange;
@@ -132,12 +140,15 @@ export class NetworkMatchRuntime {
     this.lastTime = null;
     this.pendingCommands = [];
     this.lastLocalSubmissionSourceTick = -1;
+    this.lastLocalRequestedTick = -1;
     this.localInputsByTick = new Map();
     this.remoteInputsByTick = new Map();
     this.authoritativeFrames = new Map();
+    this.latestAuthoritativeFrameTick = -1;
     this.expectedHashes = new Map();
     this.localCheckpointHashes = new Map();
     this.resyncPending = false;
+    this.resumeAfterTerminalResync = false;
 
     this.nextSequence = 0;
     this.running = false;
@@ -195,6 +206,7 @@ export class NetworkMatchRuntime {
       inputDelayTicks: this.inputDelayTicks,
       bufferedFrames: this.authoritativeFrames.size,
       bufferedRemoteInputs: this.remoteInputsByTick.size,
+      maxBufferedFutureTicks: this.maxBufferedFutureTicks,
       resyncPending: this.resyncPending,
       ...this.counters
     });
@@ -246,10 +258,16 @@ export class NetworkMatchRuntime {
     if (this.role === "client" && this.lastLocalSubmissionSourceTick === this.match.matchTick) {
       return true;
     }
-    const requestedTick = this.match.matchTick + this.inputDelayTicks;
+    const schedulingTick = this.role === "client"
+      ? Math.max(this.match.matchTick, this.latestAuthoritativeFrameTick)
+      : this.match.matchTick;
+    const requestedTick = schedulingTick + this.inputDelayTicks;
     if (requestedTick > PROTOCOL_LIMITS.maxMatchTick) {
       this.fail(new Error("network match input tick exceeds the protocol limit"), "protocol-limit");
       return false;
+    }
+    if (this.role === "client" && requestedTick <= this.lastLocalRequestedTick) {
+      return true;
     }
 
     const commands = cloneCommands(this.pendingCommands);
@@ -267,6 +285,7 @@ export class NetworkMatchRuntime {
         { playerId: this.localPlayerId, commands },
         requestedTick
       )) return false;
+      this.lastLocalRequestedTick = requestedTick;
       this.counters.inputsSent += 1;
     }
 
@@ -365,6 +384,7 @@ export class NetworkMatchRuntime {
 
   receive(message) {
     if (this.disposed) return;
+    if (this.match.status !== "playing" && !this.canReceiveAfterMatchEnd(message)) return;
     try {
       const validated = this.incomingValidator.validate(message);
       this.counters.messagesReceived += 1;
@@ -373,6 +393,14 @@ export class NetworkMatchRuntime {
       this.counters.protocolErrors += 1;
       this.fail(error, "protocol-error");
     }
+  }
+
+  canReceiveAfterMatchEnd(message) {
+    if (this.role === "client") {
+      if (this.resyncPending && message?.type === "match-snapshot") return true;
+      return message?.type === "match-hash" && message.matchTick === this.match.matchTick;
+    }
+    return message?.type === "resync-request";
   }
 
   handleValidatedMessage(message) {
@@ -399,10 +427,11 @@ export class NetworkMatchRuntime {
         this.sendMessage(createMessage("pong", { nonce: message.payload.nonce }));
         break;
       case "pong":
+        break;
       case "hello":
       case "ready":
       case "match-start":
-        break;
+        throw new Error(`Protocol ${message.type} is not valid after a network match has started`);
       case "attack":
       case "game-over":
       case "snapshot":
@@ -440,7 +469,12 @@ export class NetworkMatchRuntime {
 
   handleInputFrame(message) {
     this.requireRole("client", "input-frame");
-    if (message.matchTick < this.match.matchTick) return;
+    if (message.matchTick < this.match.matchTick) {
+      throw new Error("Protocol input-frame matchTick is stale for the current match");
+    }
+    if (message.matchTick > this.match.matchTick + this.maxBufferedFutureTicks) {
+      throw new Error("Protocol input-frame exceeds the buffered future-tick limit");
+    }
     if (this.authoritativeFrames.has(message.matchTick)) {
       throw new Error(`Protocol input-frame already exists for match tick ${message.matchTick}`);
     }
@@ -449,17 +483,21 @@ export class NetworkMatchRuntime {
       (playerId) => message.payload.commandsByPlayer[playerId]
     );
     this.authoritativeFrames.set(message.matchTick, commandsByPlayer);
+    this.latestAuthoritativeFrameTick = Math.max(this.latestAuthoritativeFrameTick, message.matchTick);
     this.counters.framesReceived += 1;
   }
 
   handleMatchHash(message) {
     this.requireRole("client", "match-hash");
+    if (message.matchTick < this.match.matchTick) {
+      throw new Error("Protocol match-hash matchTick is stale for the current match");
+    }
+    if (message.matchTick > this.match.matchTick + this.maxBufferedFutureTicks) {
+      throw new Error("Protocol match-hash exceeds the buffered future-tick limit");
+    }
     this.counters.hashesReceived += 1;
     this.expectedHashes.set(message.matchTick, message.payload.hash);
     this.compareExpectedHash(message.matchTick);
-    if (message.matchTick < this.match.matchTick && this.expectedHashes.has(message.matchTick)) {
-      this.requestResync();
-    }
   }
 
   handleResyncRequest(message) {
@@ -484,7 +522,10 @@ export class NetworkMatchRuntime {
     }
 
     const restored = restoreMatch(snapshot, { rules: this.rules, policy: this.policy });
+    const shouldResume = this.resumeAfterTerminalResync && restored.status === "playing";
+    this.resumeAfterTerminalResync = false;
     this.match = restored;
+    if (restored.status === "playing") this.stopReason = null;
     for (const matchTick of this.authoritativeFrames.keys()) {
       if (matchTick < restored.matchTick) this.authoritativeFrames.delete(matchTick);
     }
@@ -496,6 +537,15 @@ export class NetworkMatchRuntime {
     this.counters.snapshotsApplied += 1;
     this.emitFrame(0);
     this.markFinishedIfNeeded();
+    if (shouldResume) {
+      this.running = true;
+      this.lastTime = null;
+    }
+    if (this.running && this.match.status === "playing" && this.frameHandle == null
+        && typeof requestAnimationFrame === "function") {
+      this.lastTime = null;
+      this.frameHandle = requestAnimationFrame(this.boundFrame);
+    }
   }
 
   handleLeave(message) {
@@ -530,6 +580,8 @@ export class NetworkMatchRuntime {
 
   markFinishedIfNeeded() {
     if (this.match.status === "playing") return;
+    if (this.resyncPending) return;
+    if (this.running) this.resumeAfterTerminalResync = true;
     this.stopReason = "finished";
     this.running = false;
     if (this.frameHandle != null && typeof cancelAnimationFrame === "function") {
@@ -541,20 +593,22 @@ export class NetworkMatchRuntime {
   frame(timeMs) {
     if (!this.running || this.disposed) return;
     if (this.lastTime == null) this.lastTime = timeMs;
-    const elapsed = Math.min(0.25, Math.max(0, (timeMs - this.lastTime) / 1000));
+    const elapsed = Math.min(MAX_FRAME_ELAPSED_SECONDS, Math.max(0, (timeMs - this.lastTime) / 1000));
     this.lastTime = timeMs;
     this.accumulator += elapsed;
 
     let steps = 0;
-    while (
-      this.accumulator >= this.stepSeconds
-      && this.match.status === "playing"
-      && steps < MAX_STEPS_PER_FRAME
-    ) {
+    while (this.match.status === "playing" && steps < MAX_STEPS_PER_FRAME) {
+      const hasElapsedStep = this.accumulator >= this.stepSeconds;
+      const canCatchUpBufferedFrame = this.role === "client"
+        && this.authoritativeFrames.size > 1
+        && this.authoritativeFrames.has(this.match.matchTick);
+      if (!hasElapsedStep && !canCatchUpBufferedFrame) break;
+
       const beforeTick = this.match.matchTick;
       this.runOneTick();
       if (this.match.matchTick === beforeTick) break;
-      this.accumulator -= this.stepSeconds;
+      if (hasElapsedStep) this.accumulator -= this.stepSeconds;
       steps += 1;
     }
 

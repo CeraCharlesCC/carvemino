@@ -127,6 +127,34 @@ test("LAN host/join signaling completes hello/ready/match-start with identical m
   assert.equal(hashMatch(hostMatches[0].match), hashMatch(clientMatches[0].match));
 });
 
+test("Carver VS uses the same LAN hello/ready/match-start path as Classic VS", async () => {
+  const network = new FakeLanNetwork();
+  const hostMatches = [];
+  const clientMatches = [];
+  const host = new LanSession({
+    modes: LAN_MULTIPLAYER_CATALOG,
+    transportFactory: network.create,
+    randomUint32: sequence([11, 12, 99]),
+    onMatchReady: (context) => hostMatches.push(context)
+  });
+  const client = new LanSession({
+    modes: LAN_MULTIPLAYER_CATALOG,
+    transportFactory: network.create,
+    randomUint32: sequence([19]),
+    onMatchReady: (context) => clientMatches.push(context)
+  });
+
+  const offer = await host.startHost("carver");
+  const answer = await client.startJoin(offer);
+  await host.acceptHostAnswer(answer);
+
+  assert.equal(hostMatches[0].mode.id, "carver");
+  assert.equal(clientMatches[0].mode.id, "carver");
+  assert.match(hostMatches[0].match.rulesetId, /carver/);
+  assert.match(hostMatches[0].match.policyId, /carver/);
+  assert.equal(hashMatch(hostMatches[0].match), hashMatch(clientMatches[0].match));
+});
+
 test("LAN signaling failure releases the peer and leaves the host flow reusable", async () => {
   const network = new FakeLanNetwork();
   const errors = [];
@@ -183,4 +211,48 @@ test("LAN lobby treats direct ICE failure as terminal and releases the peer", as
 
   assert.equal(session.getSnapshot().state, "failed");
   assert.equal(network.transports[0].closeCount, 1);
+});
+
+test("finished LAN sessions ignore late peer messages", async () => {
+  const network = new FakeLanNetwork();
+  const host = new LanSession({
+    modes: LAN_MULTIPLAYER_CATALOG,
+    transportFactory: network.create,
+    randomUint32: sequence([1, 2, 77])
+  });
+  const client = new LanSession({
+    modes: LAN_MULTIPLAYER_CATALOG,
+    transportFactory: network.create,
+    randomUint32: sequence([9])
+  });
+
+  const offer = await host.startHost("classic");
+  const answer = await client.startJoin(offer);
+  await host.acceptHostAnswer(answer);
+  host.markFinished();
+
+  host.handleMessage({ definitely: "not a protocol message" });
+
+  assert.equal(host.getSnapshot().state, "finished");
+  assert.equal(host.getSnapshot().error, null);
+});
+
+test("repeated LAN host cancel paths release handlers and transports", async () => {
+  const network = new FakeLanNetwork();
+  const session = new LanSession({
+    modes: LAN_MULTIPLAYER_CATALOG,
+    transportFactory: network.create,
+    randomUint32: sequence([1, 2, 3])
+  });
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await session.startHost("classic");
+    const transport = network.transports[attempt];
+    session.cancel();
+    assert.equal(transport.closeCount, 1);
+    assert.equal(transport.messageHandlers.size, 0);
+    assert.equal(transport.stateHandlers.size, 0);
+    assert.equal(transport.errorHandlers.size, 0);
+    assert.equal(session.getSnapshot().state, "idle");
+  }
 });

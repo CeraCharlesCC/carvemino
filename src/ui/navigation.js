@@ -89,6 +89,7 @@ export function createNavigation({
 
   function showScreen(screenName) {
     if (!screens.has(screenName)) return;
+    if (gamePaused && screenName !== currentScreen) clearPause();
     if (currentScreen === "menu" && screenName !== "menu") attract.stop();
     currentScreen = screenName;
     for (const [name, screen] of screens) screen.hidden = name !== screenName;

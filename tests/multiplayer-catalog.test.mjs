@@ -29,7 +29,7 @@ test("multiplayer catalog is distinct from single-player profile modes", () => {
   assert.throws(() => getMultiplayerMode("missing"), /Unknown multiplayer mode/);
 });
 
-test("the initial LAN integration slice enables Classic VS without promoting Carver early", () => {
-  assert.deepEqual(LAN_MULTIPLAYER_CATALOG.map((mode) => mode.id), ["classic"]);
+test("LAN promotes both Classic VS and Carver VS through the shared multiplayer catalog", () => {
+  assert.deepEqual(LAN_MULTIPLAYER_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
   assert.equal(Object.isFrozen(LAN_MULTIPLAYER_CATALOG), true);
 });
