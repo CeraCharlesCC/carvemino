@@ -84,7 +84,7 @@ function makeDropPlan(state, spawnAtWorldTick, rules) {
 }
 
 export function maintainDropQueue(state, rules, events) {
-  const desired = Math.max(1, rules.progression.previewCount);
+  const desired = Math.max(1, rules.progression.dropQueueDepth);
   while (state.dropQueue.length < desired) {
     let spawnAtWorldTick;
     if (state.dropQueue.length === 0 && state.nextScheduledSpawnWorldTick == null) {

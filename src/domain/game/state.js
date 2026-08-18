@@ -7,6 +7,7 @@ import {
 import { hashSeed } from "./random.js";
 import { getEditableFillCells } from "./sculpt.js";
 import { maintainDropQueue } from "./drop-planner.js";
+import { getTemplateCellValue, getTemplateCells } from "../rules.js";
 
 const GAME_SCHEMA_VERSION = 2;
 
@@ -59,29 +60,87 @@ export function getFocusedPiece(state) {
   return piece ? clonePiece(piece) : null;
 }
 
+function projectCell(cell) {
+  return { x: cell.x, y: cell.y };
+}
 
-export function createGameViewState(state) {
-  const focused = currentFocusedPiece(state);
+function cellStyleForValue(rules, cellValue) {
+  const style = rules.presentation.cellStyles[String(cellValue)];
+  if (!style) throw new Error(`Missing presentation style for cell value ${cellValue}`);
+  return style;
+}
+
+function projectPiece(piece, state, rules) {
   return {
-    worldTick: state.worldTick,
-    stepTick: state.stepTick,
-    worldHoldSteps: state.worldHoldSteps,
-    board: {
-      width: state.board.width,
-      height: state.board.height,
-      visibleHeight: state.board.visibleHeight,
-      hiddenHeight: state.board.hiddenHeight,
-      cells: Array.from(state.board.cells)
+    id: piece.id,
+    x: piece.x,
+    y: piece.y - state.board.hiddenHeight,
+    cells: piece.cells.map(projectCell),
+    style: cellStyleForValue(rules, piece.cellValue),
+    pendingLock: piece.pendingLock
+  };
+}
+
+function projectBoard(state, rules) {
+  const { width, visibleHeight, hiddenHeight, cells } = state.board;
+  const start = hiddenHeight * width;
+  const end = start + visibleHeight * width;
+  return {
+    width,
+    height: visibleHeight,
+    cells: Array.from(cells.slice(start, end), (cellValue) => (
+      cellValue === 0 ? null : cellStyleForValue(rules, cellValue)
+    ))
+  };
+}
+
+function projectNextPiece(state, rules) {
+  const plan = state.dropQueue[0];
+  if (!plan) return null;
+  return {
+    x: plan.x,
+    cells: getTemplateCells(rules, plan.templateId, plan.rotation),
+    style: cellStyleForValue(rules, getTemplateCellValue(rules, plan.templateId))
+  };
+}
+
+function projectSculpt(state, focused, rules) {
+  const fillCost = rules.sculpting.fillCost;
+  const canCarve = Boolean(focused)
+    && focused.carved < focused.carveLimit
+    && focused.cells.length > rules.sculpting.minimumCells;
+  const canFill = Boolean(focused) && state.scrap >= fillCost;
+  return {
+    carve: {
+      remaining: focused ? Math.max(0, focused.carveLimit - focused.carved) : 0,
+      limit: focused ? focused.carveLimit : rules.sculpting.carveLimit,
+      targets: canCarve ? focused.cells.map(projectCell) : []
     },
-    activePieces: state.activePieces.map(clonePiece),
-    focusedPiece: focused ? clonePiece(focused) : null,
-    editableFillCells: focused ? getEditableFillCells(state, focused.id) : [],
-    next: state.dropQueue[0] ? { ...state.dropQueue[0] } : null,
+    fill: {
+      cost: fillCost,
+      targets: canFill ? getEditableFillCells(state, focused.id).map(projectCell) : []
+    }
+  };
+}
+
+export function createGameViewState(state, rules) {
+  if (!rules) throw new Error("rules are required to project game state");
+  const focused = currentFocusedPiece(state);
+  const activePieces = state.activePieces.map((piece) => projectPiece(piece, state, rules));
+  const focusedPiece = focused
+    ? activePieces.find((piece) => piece.id === focused.id) || null
+    : null;
+  return {
+    board: projectBoard(state, rules),
+    activePieces,
+    focusedPiece,
+    sculpt: projectSculpt(state, focused, rules),
+    nextPiece: projectNextPiece(state, rules),
     score: state.score,
     scrap: state.scrap,
     totalLines: state.totalLines,
     level: state.level,
-    incomingGarbage: state.incomingGarbage.map((packet) => ({ ...packet })),
+    incomingGarbageRows: state.incomingGarbage.reduce((sum, packet) => sum + packet.rows, 0),
     status: state.status,
     gameOverReason: state.gameOverReason
   };

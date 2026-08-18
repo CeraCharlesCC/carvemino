@@ -5,7 +5,8 @@ const RULE_KEYS = Object.freeze([
   "sculpting",
   "progression",
   "scoring",
-  "pieces"
+  "pieces",
+  "presentation"
 ]);
 
 function isPlainObject(value) {
@@ -47,6 +48,11 @@ function assertNumberTable(value, path) {
     throw new Error(`${path} must be a non-empty array`);
   }
   value.forEach((entry, index) => assertInteger(entry, `${path}[${index}]`, { minimum: 0 }));
+}
+
+function assertCellStyle(style, path) {
+  assertExactKeys(style, ["fill"], path);
+  assertNonEmptyString(style.fill, `${path}.fill`);
 }
 
 function cloneValue(value) {
@@ -134,7 +140,7 @@ function validateRules(rules) {
       "spawnStartWorldTicks",
       "spawnStepWorldTicks",
       "spawnMinimumWorldTicks",
-      "previewCount"
+      "dropQueueDepth"
     ],
     "rules.progression"
   );
@@ -145,7 +151,7 @@ function validateRules(rules) {
   assertInteger(rules.progression.spawnStartWorldTicks, "rules.progression.spawnStartWorldTicks", { minimum: 0 });
   assertInteger(rules.progression.spawnStepWorldTicks, "rules.progression.spawnStepWorldTicks", { minimum: 0 });
   assertInteger(rules.progression.spawnMinimumWorldTicks, "rules.progression.spawnMinimumWorldTicks", { minimum: 1 });
-  assertInteger(rules.progression.previewCount, "rules.progression.previewCount", { minimum: 1 });
+  assertInteger(rules.progression.dropQueueDepth, "rules.progression.dropQueueDepth", { minimum: 1 });
 
   assertExactKeys(rules.scoring, ["lineClear", "carve", "fill"], "rules.scoring");
   assertNumberTable(rules.scoring.lineClear, "rules.scoring.lineClear");
@@ -158,6 +164,29 @@ function validateRules(rules) {
   const templates = Object.entries(rules.pieces.templates);
   if (templates.length === 0) throw new Error("rules.pieces.templates must contain at least one template");
   for (const [templateId, template] of templates) validatePieceTemplate(templateId, template);
+
+  assertExactKeys(rules.presentation, ["cellStyles"], "rules.presentation");
+  assertPlainObject(rules.presentation.cellStyles, "rules.presentation.cellStyles");
+  for (const [cellValue, style] of Object.entries(rules.presentation.cellStyles)) {
+    const numericValue = Number(cellValue);
+    if (!Number.isInteger(numericValue)
+        || numericValue < 1
+        || numericValue > 255
+        || String(numericValue) !== cellValue) {
+      throw new Error(`rules.presentation.cellStyles.${cellValue} must use an integer cell value between 1 and 255`);
+    }
+    assertCellStyle(style, `rules.presentation.cellStyles.${cellValue}`);
+  }
+
+  const styledCellValues = new Set([
+    rules.pieces.garbageCellValue,
+    ...templates.map(([, template]) => template.cellValue)
+  ]);
+  for (const cellValue of styledCellValues) {
+    if (!Object.hasOwn(rules.presentation.cellStyles, String(cellValue))) {
+      throw new Error(`rules.presentation.cellStyles.${cellValue} is required for used cell value ${cellValue}`);
+    }
+  }
 }
 
 export function defineRules(definition) {

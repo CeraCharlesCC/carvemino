@@ -1,17 +1,4 @@
 import { ACHIEVEMENTS, DEFAULT_AUDIO_SETTINGS } from "../app/profile.js";
-import { getTemplateCellValue, getTemplateCells } from "../domain/rules.js";
-
-const PALETTE = [
-  "#000000",
-  "#6b9e8f",
-  "#b5a66a",
-  "#8a7b96",
-  "#7a9a6d",
-  "#a6645c",
-  "#6882a3",
-  "#b0864e",
-  "#5a5d55"
-];
 
 const SCULPT_CURSOR_COLORS = Object.freeze({
   CARVE: "#d98b43",
@@ -71,20 +58,16 @@ export function getTitleScreenAction(code) {
   return null;
 }
 
-export function getSculptAction(view, cursor, rules) {
+export function getSculptAction(view, cursor) {
   const piece = view?.focusedPiece;
-  if (!piece || !cursor || !rules) return null;
-
-  const isOccupied = piece.cells.some((cell) => cell.x === cursor.x && cell.y === cursor.y);
-  if (isOccupied) {
-    const canCarve = piece.carved < piece.carveLimit
-      && piece.cells.length > rules.sculpting.minimumCells;
-    return canCarve ? "CARVE" : null;
+  if (!piece || !cursor || !view.sculpt) return null;
+  if (view.sculpt.carve.targets.some((cell) => cell.x === cursor.x && cell.y === cursor.y)) {
+    return "CARVE";
   }
-
-  if (view.scrap < rules.sculpting.fillCost) return null;
-  const canFill = view.editableFillCells.some((cell) => cell.x === cursor.x && cell.y === cursor.y);
-  return canFill ? "FILL" : null;
+  if (view.sculpt.fill.targets.some((cell) => cell.x === cursor.x && cell.y === cursor.y)) {
+    return "FILL";
+  }
+  return null;
 }
 
 function clearCanvas(canvas, context) {
@@ -93,9 +76,12 @@ function clearCanvas(canvas, context) {
   context.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-function drawCell(context, x, y, size, value, focused = false, pendingLock = false) {
+function drawCell(context, x, y, size, style, focused = false, pendingLock = false) {
+  if (!style || typeof style.fill !== "string") {
+    throw new Error("projected cell style with a fill color is required");
+  }
   const inset = 1.5;
-  context.fillStyle = PALETTE[value] || "#c8ccbe";
+  context.fillStyle = style.fill;
   context.fillRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
   context.strokeStyle = pendingLock ? "#f0b35d" : focused ? "#9aa592" : "#0a0b0866";
   context.lineWidth = pendingLock || focused ? 2 : 1;
@@ -209,7 +195,6 @@ export function createUi({
   const modeScoreOutputs = new Map();
   const recordScoreOutputs = new Map();
   let activeMode = null;
-  let rules = null;
   let profile = emptyProfile(modes);
   let currentScreen = "menu";
   let lastView = null;
@@ -374,15 +359,14 @@ export function createUi({
   function renderField(view) {
     const board = view.board;
     const cellSize = fieldCanvas.width / board.width;
-    const visibleTop = board.hiddenHeight;
     clearCanvas(fieldCanvas, field);
-    drawGrid(field, board.width, board.visibleHeight, cellSize);
+    drawGrid(field, board.width, board.height, cellSize);
 
-    for (let y = visibleTop; y < board.height; y += 1) {
+    for (let y = 0; y < board.height; y += 1) {
       for (let x = 0; x < board.width; x += 1) {
-        const value = board.cells[y * board.width + x];
-        if (value === 0) continue;
-        drawCell(field, x * cellSize, (y - visibleTop) * cellSize, cellSize, value);
+        const style = board.cells[y * board.width + x];
+        if (!style) continue;
+        drawCell(field, x * cellSize, y * cellSize, cellSize, style);
       }
     }
 
@@ -390,23 +374,22 @@ export function createUi({
       const isFocused = view.focusedPiece && piece.id === view.focusedPiece.id;
       for (const cell of piece.cells) {
         const x = piece.x + cell.x;
-        const y = piece.y + cell.y - visibleTop;
-        if (y < 0 || y >= board.visibleHeight) continue;
+        const y = piece.y + cell.y;
+        if (y < 0 || y >= board.height) continue;
         drawCell(
           field,
           x * cellSize,
           y * cellSize,
           cellSize,
-          piece.cellValue,
+          piece.style,
           isFocused,
           piece.pendingLock
         );
       }
     }
 
-    if (view.incomingGarbage.length > 0) {
-      const rows = view.incomingGarbage.reduce((sum, packet) => sum + packet.rows, 0);
-      const warningRows = Math.min(rows, board.visibleHeight);
+    if (view.incomingGarbageRows > 0) {
+      const warningRows = Math.min(view.incomingGarbageRows, board.height);
       field.fillStyle = "#ffb4a233";
       field.fillRect(
         0,
@@ -419,8 +402,8 @@ export function createUi({
 
   function renderNext(view) {
     clearCanvas(nextCanvas, next);
-    if (!view.next || !rules) return;
-    const cells = getTemplateCells(rules, view.next.templateId, view.next.rotation);
+    if (!view.nextPiece) return;
+    const cells = view.nextPiece.cells;
     let maxX = 0;
     let maxY = 0;
     for (const cell of cells) {
@@ -432,9 +415,14 @@ export function createUi({
     const height = (maxY + 1) * cellSize;
     const originX = (nextCanvas.width - width) / 2;
     const originY = (nextCanvas.height - height) / 2;
-    const value = getTemplateCellValue(rules, view.next.templateId);
     for (const cell of cells) {
-      drawCell(next, originX + cell.x * cellSize, originY + cell.y * cellSize, cellSize, value);
+      drawCell(
+        next,
+        originX + cell.x * cellSize,
+        originY + cell.y * cellSize,
+        cellSize,
+        view.nextPiece.style
+      );
     }
   }
 
@@ -447,7 +435,7 @@ export function createUi({
       return;
     }
 
-    const editable = view.editableFillCells;
+    const editable = view.sculpt.fill.targets;
     const all = [...piece.cells, ...editable];
     let minX = Math.min(...all.map((cell) => cell.x));
     let maxX = Math.max(...all.map((cell) => cell.x));
@@ -505,13 +493,13 @@ export function createUi({
     for (const cell of piece.cells) {
       const px = originX + (cell.x - minX) * cellSize;
       const py = originY + (cell.y - minY) * cellSize;
-      drawCell(focus, px, py, cellSize, piece.cellValue, true);
+      drawCell(focus, px, py, cellSize, piece.style, true);
     }
 
     if (focusCursor) {
       const px = originX + (focusCursor.x - minX) * cellSize;
       const py = originY + (focusCursor.y - minY) * cellSize;
-      const sculptAction = getSculptAction(view, focusCursor, rules);
+      const sculptAction = getSculptAction(view, focusCursor);
       const cursorColor = SCULPT_CURSOR_COLORS[sculptAction || "NONE"];
       focus.save();
       focus.fillStyle = "#f1f5e624";
@@ -541,8 +529,8 @@ export function createUi({
   function renderFocusConnector(view) {
     const piece = view.focusedPiece;
     const visibleCells = piece?.cells.filter((cell) => {
-      const y = piece.y + cell.y - view.board.hiddenHeight;
-      return y >= 0 && y < view.board.visibleHeight;
+      const y = piece.y + cell.y;
+      return y >= 0 && y < view.board.height;
     }) || [];
 
     if (view.status === "gameover" || visibleCells.length === 0) {
@@ -563,13 +551,13 @@ export function createUi({
     const fieldLeft = (fieldRect.left - shellRect.left) / scaleX;
     const fieldTop = (fieldRect.top - shellRect.top) / scaleY;
     const cellWidth = fieldCanvas.clientWidth / view.board.width;
-    const cellHeight = fieldCanvas.clientHeight / view.board.visibleHeight;
+    const cellHeight = fieldCanvas.clientHeight / view.board.height;
     const centerX = visibleCells.reduce(
       (sum, cell) => sum + piece.x + cell.x + 0.5,
       0
     ) / visibleCells.length;
     const centerY = visibleCells.reduce(
-      (sum, cell) => sum + piece.y + cell.y - view.board.hiddenHeight + 0.5,
+      (sum, cell) => sum + piece.y + cell.y + 0.5,
       0
     ) / visibleCells.length;
     const startX = fieldLeft + centerX * cellWidth;
@@ -595,16 +583,16 @@ export function createUi({
     level.textContent = String(view.level);
     lines.textContent = String(view.totalLines);
     scrap.textContent = String(view.scrap).padStart(2, "0");
-    fillCost.textContent = `${rules.sculpting.fillCost} scrap`;
+    fillCost.textContent = `${view.sculpt.fill.cost} scrap`;
     if (view.focusedPiece) {
-      cut.textContent = `${view.focusedPiece.carveLimit - view.focusedPiece.carved} / ${view.focusedPiece.carveLimit}`;
+      cut.textContent = `${view.sculpt.carve.remaining} / ${view.sculpt.carve.limit}`;
     } else {
       cut.textContent = "-";
     }
 
-    if (view.next) {
+    if (view.nextPiece) {
       const boardCellPx = fieldCanvas.clientWidth / view.board.width;
-      const cursorCenter = (view.next.x + 0.5) * boardCellPx;
+      const cursorCenter = (view.nextPiece.x + 0.5) * boardCellPx;
       const labelHalfWidth = 37;
       const labelCenter = Math.max(
         labelHalfWidth,
@@ -622,9 +610,17 @@ export function createUi({
     }
   }
 
+  function configureFieldCanvas(board) {
+    const width = 320;
+    const height = Math.round((width / board.width) * board.height);
+    if (fieldCanvas.width !== width) fieldCanvas.width = width;
+    if (fieldCanvas.height !== height) fieldCanvas.height = height;
+    gameShell.style.setProperty("--field-height", `${height}px`);
+  }
+
   function render(view) {
-    if (!rules) return;
     lastView = view;
+    configureFieldCanvas(view.board);
     renderField(view);
     renderNext(view);
     renderFocus(view);
@@ -646,7 +642,7 @@ export function createUi({
   function sculptAtCursor() {
     if (!lastView || !lastView.focusedPiece || !focusCursor) return;
     const piece = lastView.focusedPiece;
-    if (!getSculptAction(lastView, focusCursor, rules)) return;
+    if (!getSculptAction(lastView, focusCursor)) return;
     sendCommand({ type: "SCULPT", pieceId: piece.id, x: focusCursor.x, y: focusCursor.y });
   }
 
@@ -749,14 +745,11 @@ export function createUi({
     if (currentScreen === "options") renderOptions();
   }
 
-  function setGameMode(nextMode) {
+  function setGameMode(modeId) {
+    const nextMode = modes.find((mode) => mode.id === modeId);
+    if (!nextMode) throw new Error(`Unknown UI game mode: ${modeId}`);
     activeMode = nextMode;
-    rules = nextMode.rules;
     modeName.textContent = nextMode.name.toUpperCase();
-    fillCost.textContent = `${rules.sculpting.fillCost} scrap`;
-    fieldCanvas.width = 320;
-    fieldCanvas.height = Math.round((fieldCanvas.width / rules.board.width) * rules.board.visibleHeight);
-    gameShell.style.setProperty("--field-height", `${fieldCanvas.height}px`);
     focusCursor = null;
     focusCursorPieceId = null;
     lastView = null;

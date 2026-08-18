@@ -17,7 +17,7 @@ export const CLASSIC_RULESET = defineRules({
     spawnStartWorldTicks: 480,
     spawnStepWorldTicks: 60,
     spawnMinimumWorldTicks: 60,
-    previewCount: 2
+    dropQueueDepth: 2
   }),
   scoring: Object.freeze({ lineClear: Object.freeze([0, 100, 300, 500, 800]), carve: 5, fill: 10 }),
   pieces: Object.freeze({
@@ -30,6 +30,18 @@ export const CLASSIC_RULESET = defineRules({
       Z: Object.freeze({ cells: Object.freeze([[0, 0], [1, 0], [1, 1], [2, 1]]), rotations: Object.freeze([0, 1]), cellValue: 5 }),
       J: Object.freeze({ cells: Object.freeze([[0, 0], [0, 1], [1, 1], [2, 1]]), rotations: Object.freeze([0, 1, 2, 3]), cellValue: 6 }),
       L: Object.freeze({ cells: Object.freeze([[2, 0], [0, 1], [1, 1], [2, 1]]), rotations: Object.freeze([0, 1, 2, 3]), cellValue: 7 })
+    })
+  }),
+  presentation: Object.freeze({
+    cellStyles: Object.freeze({
+      1: Object.freeze({ fill: "#6b9e8f" }),
+      2: Object.freeze({ fill: "#b5a66a" }),
+      3: Object.freeze({ fill: "#8a7b96" }),
+      4: Object.freeze({ fill: "#7a9a6d" }),
+      5: Object.freeze({ fill: "#a6645c" }),
+      6: Object.freeze({ fill: "#6882a3" }),
+      7: Object.freeze({ fill: "#b0864e" }),
+      8: Object.freeze({ fill: "#5a5d55" })
     })
   })
 });

@@ -17,7 +17,7 @@ export const CARVER_RULESET = defineRules({
     spawnStartWorldTicks: 540,
     spawnStepWorldTicks: 60,
     spawnMinimumWorldTicks: 90,
-    previewCount: 2
+    dropQueueDepth: 2
   }),
   scoring: Object.freeze({ lineClear: Object.freeze([0, 140, 380, 700, 1200, 1800]), carve: 8, fill: 12 }),
   pieces: Object.freeze({
@@ -30,6 +30,18 @@ export const CARVER_RULESET = defineRules({
       U: Object.freeze({ cells: Object.freeze([[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]]), rotations: Object.freeze([0, 1, 2, 3]), cellValue: 5 }),
       P: Object.freeze({ cells: Object.freeze([[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]]), rotations: Object.freeze([0, 1, 2, 3]), cellValue: 6 }),
       CRATE: Object.freeze({ cells: Object.freeze([[0, 0], [1, 0], [2, 0], [0, 1], [2, 1], [0, 2], [1, 2], [2, 2]]), rotations: Object.freeze([0]), cellValue: 7 })
+    })
+  }),
+  presentation: Object.freeze({
+    cellStyles: Object.freeze({
+      1: Object.freeze({ fill: "#6b9e8f" }),
+      2: Object.freeze({ fill: "#b5a66a" }),
+      3: Object.freeze({ fill: "#8a7b96" }),
+      4: Object.freeze({ fill: "#7a9a6d" }),
+      5: Object.freeze({ fill: "#a6645c" }),
+      6: Object.freeze({ fill: "#6882a3" }),
+      7: Object.freeze({ fill: "#b0864e" }),
+      8: Object.freeze({ fill: "#5a5d55" })
     })
   })
 });

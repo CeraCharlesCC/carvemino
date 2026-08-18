@@ -63,6 +63,10 @@ function assertGameState(state) {
   return engineForState(state).assert(state);
 }
 
+function viewGame(state) {
+  return engineForState(state).view(state);
+}
+
 function spawnI(game, rules) {
   game.dropQueue[0].templateId = "I";
   game.dropQueue[0].rotation = 0;
@@ -132,6 +136,79 @@ test("a game state can only be advanced by the engine that created it", () => {
     () => differentRulesEngine.step(game, []),
     /ruleset mismatch/
   );
+});
+
+test("game projection is a complete presentation contract without simulation bookkeeping", () => {
+  const rules = makeTestRules();
+  const game = createGame({ seed: 101, rules });
+  const piece = spawnI(game, rules);
+  game.scrap = rules.sculpting.fillCost;
+  game.board.cells[boardIndex(game.board, 0, 0)] = 1;
+  game.board.cells[boardIndex(game.board, 0, game.board.hiddenHeight)] = rules.pieces.garbageCellValue;
+  queueGarbage(game, {
+    id: "view-warning",
+    rows: 3,
+    applyAtWorldTick: game.worldTick + 100,
+    seed: 9
+  });
+
+  const nextPlan = game.dropQueue[0];
+  const expectedFillTargets = getEditableFillCells(game, piece.id);
+  const view = viewGame(game);
+
+  assert.deepEqual(Object.keys(view).sort(), [
+    "activePieces",
+    "board",
+    "focusedPiece",
+    "gameOverReason",
+    "incomingGarbageRows",
+    "level",
+    "nextPiece",
+    "score",
+    "scrap",
+    "sculpt",
+    "status",
+    "totalLines"
+  ].sort());
+  assert.deepEqual(view.board, {
+    width: game.board.width,
+    height: game.board.visibleHeight,
+    cells: view.board.cells
+  });
+  assert.equal(view.board.cells.length, game.board.width * game.board.visibleHeight);
+  assert.deepEqual(view.board.cells[0], rules.presentation.cellStyles[rules.pieces.garbageCellValue]);
+  assert(!view.board.cells.some((style) => style?.fill === rules.presentation.cellStyles[1].fill),
+    "hidden board rows are not projected");
+
+  assert.deepEqual(Object.keys(view.focusedPiece).sort(), [
+    "cells", "id", "pendingLock", "style", "x", "y"
+  ]);
+  assert.equal(view.focusedPiece.y, piece.y - game.board.hiddenHeight);
+  assert.deepEqual(view.focusedPiece.style, rules.presentation.cellStyles[piece.cellValue]);
+  for (const internalField of [
+    "templateId", "rotation", "cellValue", "carved", "carveLimit",
+    "restingWorldTicks", "spawnIndex", "committed"
+  ]) {
+    assert.equal(Object.hasOwn(view.focusedPiece, internalField), false);
+  }
+
+  assert.deepEqual(view.sculpt.carve.targets, piece.cells);
+  assert.equal(view.sculpt.carve.remaining, piece.carveLimit - piece.carved);
+  assert.equal(view.sculpt.carve.limit, piece.carveLimit);
+  assert.equal(view.sculpt.fill.cost, rules.sculpting.fillCost);
+  assert.deepEqual(view.sculpt.fill.targets, expectedFillTargets);
+
+  assert.deepEqual(Object.keys(view.nextPiece).sort(), ["cells", "style", "x"]);
+  assert.equal(view.nextPiece.x, nextPlan.x);
+  assert.deepEqual(view.nextPiece.cells, getTemplateCells(rules, nextPlan.templateId, nextPlan.rotation));
+  assert.deepEqual(
+    view.nextPiece.style,
+    rules.presentation.cellStyles[rules.pieces.templates[nextPlan.templateId].cellValue]
+  );
+  assert.equal(view.incomingGarbageRows, 3);
+
+  game.scrap = rules.sculpting.fillCost - 1;
+  assert.deepEqual(viewGame(game).sculpt.fill.targets, []);
 });
 
 test("carving may split a piece into disconnected regions", () => {

@@ -37,7 +37,7 @@ function startGame(modeId = activeModeId) {
   const session = createGameSession({ seed, rules: mode.rules });
   audio.startGame({ modeId: mode.id, level: session.game.level });
 
-  ui.setGameMode(mode);
+  ui.setGameMode(mode.id);
   runtime = new GameRuntime({
     session,
     onEvents(events, gameState) {
@@ -56,7 +56,7 @@ function startGame(modeId = activeModeId) {
 }
 
 const ui = createUi({
-  modes: SINGLEPLAYER_CATALOG,
+  modes: SINGLEPLAYER_CATALOG.map(({ id, name, description }) => ({ id, name, description })),
   sendCommand(command) {
     if (runtime) runtime.command(command);
   },

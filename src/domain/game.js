@@ -55,7 +55,7 @@ export function createGameEngine(rules) {
     },
 
     view(state) {
-      return createGameViewState(bind(state));
+      return createGameViewState(bind(state), rules);
     },
 
     snapshot(state) {

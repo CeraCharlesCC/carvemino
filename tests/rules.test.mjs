@@ -19,6 +19,7 @@ test("rules definitions are validated, detached, and deeply frozen", () => {
   assert.equal(Object.isFrozen(rules), true);
   assert.equal(Object.isFrozen(rules.simulation), true);
   assert.equal(Object.isFrozen(rules.pieces.templates.I.cells), true);
+  assert.equal(Object.isFrozen(rules.presentation.cellStyles[1]), true);
 });
 
 test("rules definitions reject mode metadata and unknown fields", () => {
@@ -60,6 +61,13 @@ test("rules definitions reject invalid semantic values", () => {
   assert.throws(
     () => defineRules(invalidRotation),
     /rules\.pieces\.templates\.I\.rotations\[1\] must be an integer between 0 and 3/
+  );
+
+  const missingCellStyle = mutableCopy(CLASSIC_RULESET);
+  delete missingCellStyle.presentation.cellStyles[1];
+  assert.throws(
+    () => defineRules(missingCellStyle),
+    /rules\.presentation\.cellStyles\.1 is required for used cell value 1/
   );
 });
 
