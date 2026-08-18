@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS } from "../src/config.js";
 import { getGameInputAction } from "../src/ui/game-screen.js";
 import {
+  createOnScreenGameInput,
   getOnScreenGameAction,
   isGameplayActionId,
-  isRepeatingGameAction
+  isRepeatingGameAction,
+  triggerHapticFeedback
 } from "../src/ui/game-input.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
@@ -116,4 +119,134 @@ test("on-screen gameplay actions validate data attributes and only repeat cursor
 
   control.dataset.gameAction = "pause";
   assert.equal(getOnScreenGameAction(target, root), null);
+});
+
+test("on-screen pointer input exposes a pressed state and feature-detected haptics", () => {
+  const handlers = new Map();
+  const pressedClasses = new Set();
+  const control = {
+    disabled: false,
+    dataset: { gameAction: "hardDrop" },
+    classList: {
+      add: (value) => pressedClasses.add(value),
+      remove: (value) => pressedClasses.delete(value)
+    },
+    setPointerCapture() {}
+  };
+  const target = { closest: () => control };
+  const root = {
+    addEventListener: (type, handler) => handlers.set(type, handler),
+    removeEventListener: (type) => handlers.delete(type),
+    contains: (candidate) => candidate === control
+  };
+  const actions = [];
+  const haptics = [];
+  const input = createOnScreenGameInput({
+    root,
+    performAction(actionId) {
+      actions.push(actionId);
+      return true;
+    },
+    vibrate(duration) {
+      haptics.push(duration);
+    }
+  });
+  let prevented = false;
+
+  handlers.get("pointerdown")({
+    isPrimary: true,
+    pointerType: "touch",
+    pointerId: 7,
+    target,
+    preventDefault() { prevented = true; }
+  });
+
+  assert.deepEqual(actions, ["hardDrop"]);
+  assert.deepEqual(haptics, [8]);
+  assert.equal(prevented, true);
+  assert.equal(pressedClasses.has("is-pressed"), true);
+
+  handlers.get("pointerup")({ pointerId: 7 });
+  assert.equal(pressedClasses.has("is-pressed"), false);
+  input.destroy();
+});
+
+test("on-screen input keeps simultaneous touch pointers independent", () => {
+  const handlers = new Map();
+  const makeControl = (actionId) => {
+    const pressed = new Set();
+    return {
+      pressed,
+      control: {
+        disabled: false,
+        dataset: { gameAction: actionId },
+        classList: {
+          add: (value) => pressed.add(value),
+          remove: (value) => pressed.delete(value)
+        },
+        setPointerCapture() {}
+      }
+    };
+  };
+  const left = makeControl("hardDrop");
+  const right = makeControl("sculpt");
+  const root = {
+    addEventListener: (type, handler) => handlers.set(type, handler),
+    removeEventListener: (type) => handlers.delete(type),
+    contains: (candidate) => candidate === left.control || candidate === right.control
+  };
+  const actions = [];
+  const input = createOnScreenGameInput({
+    root,
+    performAction(actionId) {
+      actions.push(actionId);
+      return true;
+    },
+    vibrate: null
+  });
+  const eventFor = (pointerId, control) => ({
+    isPrimary: pointerId === 1,
+    pointerType: "touch",
+    pointerId,
+    target: { closest: () => control },
+    preventDefault() {}
+  });
+
+  handlers.get("pointerdown")(eventFor(1, left.control));
+  handlers.get("pointerdown")(eventFor(2, right.control));
+  assert.deepEqual(actions, ["hardDrop", "sculpt"]);
+  assert.equal(left.pressed.has("is-pressed"), true);
+  assert.equal(right.pressed.has("is-pressed"), true);
+
+  handlers.get("pointerup")({ pointerId: 1 });
+  assert.equal(left.pressed.has("is-pressed"), false);
+  assert.equal(right.pressed.has("is-pressed"), true);
+  handlers.get("pointercancel")({ pointerId: 2 });
+  assert.equal(right.pressed.has("is-pressed"), false);
+  input.destroy();
+});
+
+test("haptic feedback is optional and never required for controls", () => {
+  assert.equal(triggerHapticFeedback(null), false);
+  assert.equal(triggerHapticFeedback(() => { throw new Error("unsupported"); }), false);
+  assert.equal(triggerHapticFeedback(() => true), true);
+});
+
+test("controller markup covers tablet rails, phone deck, and pause access", () => {
+  const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(markup, /tablet-control-rail-left[\s\S]*data-game-action="focusPrevious"/);
+  assert.match(markup, /tablet-control-rail-right[\s\S]*data-game-action="focusNext"/);
+  assert.match(markup, /game-control-surface[\s\S]*data-game-action="hardDrop"/);
+  assert.match(markup, /game-control-surface[\s\S]*data-game-action="sculpt"/);
+  assert.equal((markup.match(/data-pause-game/g) || []).length, 2);
+  assert.doesNotMatch(styles, /data-active-screen="game"\]\s+\.game-control-surface/);
+  assert.doesNotMatch(styles, /data-active-screen="game"\]\s+\.tablet-control-rail/);
+  assert.match(styles, /\.drop-button\s*\{[\s\S]*?top:\s*var\(--deck-action-stagger\)/);
+  assert.match(styles, /\.sculpt-button\s*\{[\s\S]*?top:\s*calc\(0px\s*-\s*var\(--deck-action-stagger\)\)/);
+  assert.match(styles, /orientation:\s*portrait[\s\S]*?\.console-layout\s*\{[\s\S]*?height:\s*100%[\s\S]*?display:\s*flex/);
+  assert.match(styles, /orientation:\s*portrait[\s\S]*?\.game-control-surface\s*\{[\s\S]*?margin:\s*auto\s+0\s+0/);
+  assert.match(styles, /\.rail-drop-button\s*\{\s*grid-area:\s*2\s*\/\s*1/);
+  assert.match(styles, /\.rail-sculpt-button\s*\{\s*grid-area:\s*1\s*\/\s*2/);
 });

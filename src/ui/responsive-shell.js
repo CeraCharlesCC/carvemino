@@ -43,6 +43,15 @@ export function createResponsiveShell({ stage, frame, shell, viewport = window }
     return Number.isFinite(value) ? Math.max(0, value) : 0;
   }
 
+  function getPreferredWidth() {
+    const styles = viewport.getComputedStyle?.(stage);
+    if (!styles) return DEFAULT_NATURAL_WIDTH;
+    const value = Number.parseFloat(styles.getPropertyValue("--game-shell-preferred-width"));
+    return Number.isFinite(value) && value > 0
+      ? Math.min(DEFAULT_NATURAL_WIDTH, value)
+      : DEFAULT_NATURAL_WIDTH;
+  }
+
   function getBottomClearance(stageRect) {
     const cabinet = stage.closest?.(".arcade-cabinet");
     const cabinetRect = cabinet?.getBoundingClientRect?.();
@@ -58,10 +67,11 @@ export function createResponsiveShell({ stage, frame, shell, viewport = window }
 
   function refresh() {
     const isCompact = compactLayout?.matches === true;
-    if (isCompact) {
+    const preferredWidth = getPreferredWidth();
+    if (isCompact || preferredWidth < DEFAULT_NATURAL_WIDTH) {
       frame.style.removeProperty("width");
       frame.style.removeProperty("height");
-      shell.style.width = `${Math.min(DEFAULT_NATURAL_WIDTH, stage.clientWidth)}px`;
+      shell.style.width = `${Math.min(preferredWidth, stage.clientWidth)}px`;
     } else {
       shell.style.removeProperty("width");
     }

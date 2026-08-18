@@ -29,9 +29,20 @@ export function getOnScreenGameAction(target, root) {
   return isGameplayActionId(control.dataset?.gameAction) ? control.dataset.gameAction : null;
 }
 
+export function triggerHapticFeedback(vibrate = globalThis.navigator?.vibrate) {
+  if (typeof vibrate !== "function") return false;
+  try {
+    vibrate.call(globalThis.navigator, 8);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function createOnScreenGameInput({
   root,
   performAction,
+  vibrate = globalThis.navigator?.vibrate,
   repeatDelay = 240,
   repeatInterval = 85
 }) {
@@ -50,6 +61,9 @@ export function createOnScreenGameInput({
     if (active.timeout !== null) clearTimeout(active.timeout);
     if (active.interval !== null) clearInterval(active.interval);
     activePointers.delete(pointerId);
+    if (![...activePointers.values()].some(({ control }) => control === active.control)) {
+      active.control?.classList?.remove("is-pressed");
+    }
   }
 
   function startRepeat(pointerId, actionId) {
@@ -73,15 +87,18 @@ export function createOnScreenGameInput({
     if (event.isPrimary === false && event.pointerType === "mouse") return;
     const actionId = getOnScreenGameAction(event.target, root);
     if (!actionId) return;
+    const control = event.target?.closest?.("[data-game-action]");
 
     clearPointer(event.pointerId);
-    activePointers.set(event.pointerId, { actionId, timeout: null, interval: null });
-    root.setPointerCapture?.(event.pointerId);
+    activePointers.set(event.pointerId, { actionId, control, timeout: null, interval: null });
+    control?.classList?.add("is-pressed");
+    control?.setPointerCapture?.(event.pointerId);
     event.preventDefault();
     if (performAction(actionId) === false) {
       clearPointer(event.pointerId);
       return;
     }
+    triggerHapticFeedback(vibrate);
     startRepeat(event.pointerId, actionId);
   }
 

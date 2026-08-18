@@ -8,17 +8,21 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="console-layout">
-  <aside class="tablet-control-rail tablet-control-rail-left" aria-hidden="true">
-    <span class="rail-trigger"></span>
-    <span class="rail-dpad">
-      <i class="rail-dpad-up">▲</i>
-      <i class="rail-dpad-left">◀</i>
-      <i class="rail-dpad-center"></i>
-      <i class="rail-dpad-right">▶</i>
-      <i class="rail-dpad-down">▼</i>
-    </span>
-    <span class="rail-secondary-button">SELECT</span>
+  <div class="console-layout" data-active-screen="menu">
+  <aside class="tablet-control-rail tablet-control-rail-left physical-control-surface" role="group" aria-label="Left tablet game controls">
+    <div class="rail-control-pod">
+      <span class="rail-trigger" aria-hidden="true"></span>
+      <div class="rail-dpad" role="group" aria-label="Sculpt cursor">
+        <button class="rail-dpad-button rail-dpad-up" type="button" data-game-action="cursorUp" aria-label="Move sculpt cursor up">▲</button>
+        <button class="rail-dpad-button rail-dpad-left" type="button" data-game-action="cursorLeft" aria-label="Move sculpt cursor left">◀</button>
+        <span class="rail-dpad-center" aria-hidden="true"></span>
+        <button class="rail-dpad-button rail-dpad-right" type="button" data-game-action="cursorRight" aria-label="Move sculpt cursor right">▶</button>
+        <button class="rail-dpad-button rail-dpad-down" type="button" data-game-action="cursorDown" aria-label="Move sculpt cursor down">▼</button>
+      </div>
+      <button class="rail-function-button" type="button" data-game-action="focusPrevious" aria-label="Select previous focused piece">
+        <span>−</span> PREV
+      </button>
+    </div>
   </aside>
 
   <main class="arcade-cabinet" aria-label="Carvemino arcade cabinet">
@@ -242,7 +246,7 @@
     </div>
   </main>
 
-  <div class="game-control-surface" role="group" aria-label="Touch game controls">
+  <div class="game-control-surface physical-control-surface" role="group" aria-label="Touch game controls">
     <div class="touch-dpad" role="group" aria-label="Sculpt cursor">
       <button class="dpad-button dpad-up" type="button" data-game-action="cursorUp" aria-label="Move sculpt cursor up">▲</button>
       <button class="dpad-button dpad-left" type="button" data-game-action="cursorLeft" aria-label="Move sculpt cursor left">◀</button>
@@ -253,7 +257,7 @@
 
     <div class="system-controls" role="group" aria-label="System controls">
       <button type="button" data-game-action="focusNext" aria-label="Select next focused piece"><span>SELECT</span>FOCUS</button>
-      <button type="button" id="touch-pause-game" aria-label="Pause game" aria-keyshortcuts="Escape"><span>START</span>PAUSE</button>
+      <button type="button" data-pause-game aria-label="Pause or resume game" aria-keyshortcuts="Escape"><span>START</span>PAUSE</button>
     </div>
 
     <div class="action-controls" role="group" aria-label="Piece actions">
@@ -262,10 +266,18 @@
     </div>
   </div>
 
-  <aside class="tablet-control-rail tablet-control-rail-right" aria-hidden="true">
-    <span class="rail-trigger"></span>
-    <span class="rail-action-buttons"><i>B</i><i>A</i></span>
-    <span class="rail-secondary-button">START</span>
+  <aside class="tablet-control-rail tablet-control-rail-right physical-control-surface" role="group" aria-label="Right tablet game controls">
+    <div class="rail-control-pod">
+      <span class="rail-trigger" aria-hidden="true"></span>
+      <div class="rail-action-buttons" role="group" aria-label="Piece actions">
+        <button class="rail-action-button rail-drop-button" type="button" data-game-action="hardDrop" aria-label="Hard drop"><span>B</span><small>DROP</small></button>
+        <button class="rail-action-button rail-sculpt-button" type="button" data-game-action="sculpt" aria-label="Sculpt cell"><span>A</span><small>SCULPT</small></button>
+      </div>
+      <div class="rail-system-controls" role="group" aria-label="Focus and pause controls">
+        <button class="rail-function-button" type="button" data-game-action="focusNext" aria-label="Select next focused piece"><span>+</span> NEXT</button>
+        <button class="rail-function-button rail-pause-button" type="button" data-pause-game aria-label="Pause or resume game" aria-keyshortcuts="Escape"><span>START</span> PAUSE</button>
+      </div>
+    </div>
   </aside>
   </div>
 

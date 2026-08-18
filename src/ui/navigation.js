@@ -1,6 +1,11 @@
+import { triggerHapticFeedback } from "./game-input.js";
+
 const MENU_PREVIOUS_KEYS = new Set(["ArrowUp", "ArrowLeft", "KeyW", "KeyA"]);
 const MENU_NEXT_KEYS = new Set(["ArrowDown", "ArrowRight", "KeyS", "KeyD"]);
 const NON_REPEATING_UI_KEYS = new Set(["Enter", "Space", "Escape", "KeyR", "KeyO"]);
+
+const CONTROLLER_PREVIOUS_ACTIONS = new Set(["cursorUp", "cursorLeft", "focusPrevious"]);
+const CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext"]);
 
 export function getTitleScreenAction(code) {
   if (code === "Enter") return "start";
@@ -27,7 +32,8 @@ export function createNavigation({
   const playAgainButton = document.querySelector("#play-again");
   const gameOverBackButton = document.querySelector("#game-over-back");
   const pauseGameButton = document.querySelector("#pause-game");
-  const touchPauseGameButton = document.querySelector("#touch-pause-game");
+  const controllerPauseButtons = [...document.querySelectorAll("[data-pause-game]")];
+  const consoleLayout = document.querySelector(".console-layout");
   const pauseOverlay = document.querySelector("#pause-overlay");
   const resumeGameButton = document.querySelector("#resume-game");
   const pressStart = document.querySelector("#press-start");
@@ -35,6 +41,13 @@ export function createNavigation({
   let currentScreen = "menu";
   let gamePaused = false;
   let secondaryReturnScreen = "menu";
+
+  function updateControllerStartLabels() {
+    const label = currentScreen === "game"
+      ? (gamePaused ? "Resume game" : "Pause game")
+      : "Start or confirm selection";
+    for (const button of controllerPauseButtons) button.setAttribute("aria-label", label);
+  }
 
   function focusFirstMenuButton(screenName) {
     const screen = screens.get(screenName);
@@ -51,16 +64,13 @@ export function createNavigation({
     if (currentScreen === "menu" && screenName !== "menu") attract.stop();
     currentScreen = screenName;
     for (const [name, screen] of screens) screen.hidden = name !== screenName;
+    if (consoleLayout) consoleLayout.dataset.activeScreen = screenName;
+    updateControllerStartLabels();
     if (screenName === "options") profileUi.renderOptions();
     if (screenName === "menu") attract.start();
     if (screenName === "game") gameScreen.refreshLayout();
     if (screenName !== "game") focusFirstMenuButton(screenName);
     onScreenChange(screenName);
-  }
-
-  function performGameAction(actionId) {
-    if (currentScreen !== "game" || gamePaused || gameScreen.getStatus() !== "playing") return false;
-    return gameScreen.performAction(actionId);
   }
 
   function navigateTo(screenName) {
@@ -72,9 +82,11 @@ export function createNavigation({
     showScreen(screenName);
   }
 
-  function setPaused(paused) {
+  function setPaused(paused, returnFocus = pauseGameButton) {
     if (gamePaused === paused) return;
     gamePaused = paused;
+    if (consoleLayout) consoleLayout.dataset.gameState = paused ? "paused" : "playing";
+    updateControllerStartLabels();
     pauseOverlay.hidden = !paused;
     if (paused) {
       pauseGame();
@@ -83,12 +95,14 @@ export function createNavigation({
       });
     } else {
       resumeGame();
-      requestAnimationFrame(() => pauseGameButton.focus());
+      requestAnimationFrame(() => returnFocus?.focus());
     }
   }
 
   function clearPause() {
     gamePaused = false;
+    if (consoleLayout) consoleLayout.dataset.gameState = "playing";
+    updateControllerStartLabels();
     pauseOverlay.hidden = true;
   }
 
@@ -106,17 +120,82 @@ export function createNavigation({
     ].join(", "))];
   }
 
+  function moveMenuSelection(movingPrevious, container = screens.get(currentScreen)) {
+    const buttons = getMenuButtons(container);
+    if (buttons.length === 0) return false;
+    let index = buttons.indexOf(document.activeElement);
+    if (index < 0) index = movingPrevious ? 0 : -1;
+    index = (index + (movingPrevious ? -1 : 1) + buttons.length) % buttons.length;
+    buttons[index].focus();
+    onAudioEvent("select");
+    return true;
+  }
+
+  function activateMenuSelection(container = screens.get(currentScreen), fallback = null) {
+    const buttons = getMenuButtons(container);
+    const button = buttons.includes(document.activeElement)
+      ? document.activeElement
+      : fallback || buttons[0];
+    if (!button) return false;
+    button.click();
+    return true;
+  }
+
+  function goBackWithController() {
+    if (currentScreen === "menu") return false;
+    if (currentScreen === "game") {
+      if (gamePaused) {
+        onAudioEvent("back");
+        setPaused(false);
+        return true;
+      }
+      if (gameScreen.getStatus() === "gameover") {
+        onAudioEvent("back");
+        quitToSingleplayer();
+        return true;
+      }
+      return false;
+    }
+    onAudioEvent("back");
+    if (currentScreen === "records" || currentScreen === "options") {
+      showScreen(secondaryReturnScreen);
+    } else {
+      showScreen("menu");
+    }
+    return true;
+  }
+
+  function performControllerAction(actionId) {
+    if (currentScreen === "game" && !gamePaused && gameScreen.getStatus() === "playing") {
+      return gameScreen.performAction(actionId);
+    }
+
+    const menuContainer = currentScreen === "game"
+      ? (gamePaused ? pauseOverlay : gameOver)
+      : screens.get(currentScreen);
+    if (CONTROLLER_PREVIOUS_ACTIONS.has(actionId)) {
+      return moveMenuSelection(true, menuContainer);
+    }
+    if (CONTROLLER_NEXT_ACTIONS.has(actionId)) {
+      return moveMenuSelection(false, menuContainer);
+    }
+    if (actionId === "sculpt") {
+      const fallback = currentScreen === "menu"
+        ? pressStart
+        : currentScreen === "game" && gameScreen.getStatus() === "gameover"
+          ? playAgainButton
+          : null;
+      return activateMenuSelection(menuContainer, fallback);
+    }
+    if (actionId === "hardDrop") return goBackWithController();
+    return false;
+  }
+
   function handleMenuNavigation(event, container = screens.get(currentScreen)) {
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return false;
     const movingPrevious = MENU_PREVIOUS_KEYS.has(event.code);
     if (!movingPrevious && !MENU_NEXT_KEYS.has(event.code)) return false;
-    const buttons = getMenuButtons(container);
-    if (buttons.length === 0) return false;
-    let index = buttons.indexOf(document.activeElement);
-    if (index < 0) index = 0;
-    index = (index + (movingPrevious ? -1 : 1) + buttons.length) % buttons.length;
-    buttons[index].focus();
-    onAudioEvent("select");
+    if (!moveMenuSelection(movingPrevious, container)) return false;
     event.preventDefault();
     return true;
   }
@@ -234,11 +313,25 @@ export function createNavigation({
     onAudioEvent("confirm");
     setPaused(true);
   });
-  touchPauseGameButton?.addEventListener("click", () => {
-    if (currentScreen !== "game" || gamePaused || gameScreen.getStatus() !== "playing") return;
-    onAudioEvent("confirm");
-    setPaused(true);
-  });
+  for (const button of controllerPauseButtons) {
+    button.addEventListener("click", () => {
+      const status = gameScreen.getStatus();
+      if (currentScreen !== "game") {
+        triggerHapticFeedback();
+        activateMenuSelection(screens.get(currentScreen), currentScreen === "menu" ? pressStart : null);
+        return;
+      }
+      if (status === "gameover") {
+        triggerHapticFeedback();
+        activateMenuSelection(gameOver, playAgainButton);
+        return;
+      }
+      if (!gamePaused && status !== "playing") return;
+      triggerHapticFeedback();
+      onAudioEvent(gamePaused ? "back" : "confirm");
+      setPaused(!gamePaused, button);
+    });
+  }
   resumeGameButton.addEventListener("click", () => {
     onAudioEvent("back");
     setPaused(false);
@@ -266,7 +359,8 @@ export function createNavigation({
 
   return {
     clearPause,
-    performGameAction,
+    performControllerAction,
+    performGameAction: performControllerAction,
     showScreen
   };
 }

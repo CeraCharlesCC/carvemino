@@ -51,7 +51,7 @@ export function createUi({
 
   createOnScreenGameInput({
     root: document.querySelector(".console-layout"),
-    performAction: (actionId) => navigation.performGameAction(actionId)
+    performAction: (actionId) => navigation.performControllerAction(actionId)
   });
 
   function setGameMode(modeId) {
