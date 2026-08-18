@@ -20,6 +20,7 @@ class MemoryTransport {
     this.sent = [];
     this.messageHandlers = new Set();
     this.stateHandlers = new Set();
+    this.closeCount = 0;
   }
 
   onMessage(handler) {
@@ -42,6 +43,11 @@ class MemoryTransport {
 
   setState(state) {
     for (const handler of this.stateHandlers) handler(state);
+  }
+
+  close() {
+    this.open = false;
+    this.closeCount += 1;
   }
 }
 
@@ -489,4 +495,59 @@ test("legacy remote attack messages are rejected instead of mutating the shared 
   assert.equal(getPlayerGame(client.match, "b").incomingGarbage.length, 0);
   assert.equal(hashMatch(client.match), beforeHash);
   assert.equal(hashMatch(hostMatch), beforeHash);
+});
+
+test("leaving a live network match notifies the peer and closes both transports", () => {
+  const rules = makeTestRules();
+  const policy = createVersusPolicy("network-runtime-leave");
+  const hostMatch = createMatch({
+    id: "leave-match",
+    playerIds: ["a", "b"],
+    seed: 8,
+    rules,
+    policy
+  });
+  const clientMatch = createMatch({
+    id: "leave-match",
+    playerIds: ["a", "b"],
+    seed: 8,
+    rules,
+    policy
+  });
+  const { host, client, transports } = createRuntimePair({ hostMatch, clientMatch, rules, policy });
+
+  host.leave();
+
+  assert.equal(host.disposed, true);
+  assert.equal(host.stopReason, "local-left");
+  assert.equal(client.disposed, true);
+  assert.equal(client.stopReason, "peer-left");
+  assert.equal(transports.host.closeCount, 1);
+  assert.equal(transports.client.closeCount, 1);
+});
+
+test("direct ICE failure terminates a live network runtime and closes its transport", () => {
+  const rules = makeTestRules();
+  const policy = createVersusPolicy("network-runtime-ice-failure");
+  const hostMatch = createMatch({
+    id: "ice-failure-match",
+    playerIds: ["a", "b"],
+    seed: 12,
+    rules,
+    policy
+  });
+  const clientMatch = createMatch({
+    id: "ice-failure-match",
+    playerIds: ["a", "b"],
+    seed: 12,
+    rules,
+    policy
+  });
+  const { host, transports } = createRuntimePair({ hostMatch, clientMatch, rules, policy });
+
+  transports.host.setState("ice-failed");
+
+  assert.equal(host.disposed, true);
+  assert.equal(host.stopReason, "transport-ice-failed");
+  assert.equal(transports.host.closeCount, 1);
 });

@@ -12,13 +12,22 @@ import {
   triggerHapticFeedback
 } from "../src/ui/game-input.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
+import { getLanStatusText } from "../src/ui/lan-lobby.js";
 import {
   claimStartupManualVisit,
   createManualDemoState,
   getManualDemoTarget,
   performManualDemoAction
 } from "../src/ui/startup-manual.js";
-import { getBackScreen, getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
+import {
+  getBackScreen,
+  getGameExitScreen,
+  getSculptAction,
+  getTitleScreenAction,
+  getVersusEventLabel,
+  getVersusResultLabel,
+  shouldPauseGameSimulation
+} from "../src/ui/ui.js";
 
 function createPointerControl(actionId) {
   const pressed = new Set();
@@ -93,8 +102,45 @@ test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled
   assert.match(html, /data-nav="lan"/);
   assert.match(html, /data-nav="lan-host"/);
   assert.match(html, /data-nav="lan-join"/);
+  for (const id of [
+    "lan-host-mode",
+    "lan-create-invite",
+    "lan-host-offer",
+    "lan-host-answer",
+    "lan-accept-answer",
+    "lan-join-offer",
+    "lan-create-answer",
+    "lan-join-answer",
+    "opponent-field",
+    "peer-state",
+    "versus-feed"
+  ]) {
+    assert.match(html, new RegExp(`id="${id}"`), id);
+  }
   assert.match(html, /<button[^>]+disabled[^>]+aria-disabled="true"[^>]+tabindex="-1"[^>]*>\s*<span>Online<\/span><b>WIP<\/b>/i);
   assert.doesNotMatch(html, /<button[^>]+disabled[^>]+data-nav="lan(?:-host|-join)?"/i);
+});
+
+test("multiplayer menus never pause one peer and exit back to LAN", () => {
+  assert.equal(shouldPauseGameSimulation({ kind: "singleplayer" }), true);
+  assert.equal(shouldPauseGameSimulation({ kind: "multiplayer" }), false);
+  assert.equal(getGameExitScreen({ kind: "singleplayer" }), "singleplayer");
+  assert.equal(getGameExitScreen({ kind: "multiplayer" }), "lan");
+});
+
+test("VS result and battle event copy is local-player aware", () => {
+  assert.equal(getVersusResultLabel({ type: "winner", winnerId: "a" }, "a"), "WIN");
+  assert.equal(getVersusResultLabel({ type: "winner", winnerId: "b" }, "a"), "LOSE");
+  assert.equal(getVersusResultLabel({ type: "draw" }, "a"), "DRAW");
+  assert.equal(getVersusEventLabel({ type: "ATTACK_GENERATED", playerId: "a", rows: 2 }, "a"), "ATTACK +2");
+  assert.equal(getVersusEventLabel({ type: "GARBAGE_SENT", sourcePlayerId: "a", packet: { rows: 2 } }, "a"), "SENT 2");
+  assert.equal(getVersusEventLabel({ type: "GARBAGE_CANCELLED", playerId: "a", rows: 1 }, "a"), "CANCEL 1");
+  assert.equal(getVersusEventLabel({ type: "ATTACK_GENERATED", playerId: "b", rows: 4 }, "a"), null);
+});
+
+test("LAN lobby status exposes failures without stranding the signaling screen", () => {
+  assert.match(getLanStatusText({ phase: "offer-ready", error: null }), /INVITE READY/);
+  assert.match(getLanStatusText({ phase: "failed", error: "bad answer" }), /CONNECTION FAILED.*bad answer/i);
 });
 
 test("sculpt action follows projected legal targets", () => {

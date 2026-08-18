@@ -10,6 +10,27 @@ const SCULPT_CURSOR_COLORS = Object.freeze({
   NONE: "#f1f5e6"
 });
 
+export function getVersusResultLabel(result, localPlayerId) {
+  if (!result) return "MATCH OVER";
+  if (result.type === "draw") return "DRAW";
+  if (result.type === "winner") return result.winnerId === localPlayerId ? "WIN" : "LOSE";
+  return "MATCH OVER";
+}
+
+export function getVersusEventLabel(event, localPlayerId) {
+  if (!event || !localPlayerId) return null;
+  if (event.type === "ATTACK_GENERATED" && event.playerId === localPlayerId) {
+    return `ATTACK +${event.rows}`;
+  }
+  if (event.type === "GARBAGE_SENT" && event.sourcePlayerId === localPlayerId) {
+    return `SENT ${event.packet?.rows || 0}`;
+  }
+  if (event.type === "GARBAGE_CANCELLED" && event.playerId === localPlayerId) {
+    return `CANCEL ${event.rows}`;
+  }
+  return null;
+}
+
 export function getSculptAction(view, cursor) {
   const piece = view?.focusedPiece;
   if (!piece || !cursor || !view.sculpt) return null;
@@ -80,7 +101,23 @@ export function createGameScreen({ sendCommand }) {
   const finalScore = document.querySelector("#final-score");
   const playAgainButton = document.querySelector("#play-again");
   const pauseGameButton = document.querySelector("#pause-game");
+  const headerScore = document.querySelector(".header-score");
   const modeName = document.querySelector("#mode-name");
+  const gameScreen = document.querySelector("#game-screen");
+  const gameOverEyebrow = document.querySelector("#game-over-eyebrow");
+  const gameOverTitle = document.querySelector("#game-over-title");
+  const finalScorePanel = document.querySelector("#final-score-panel");
+  const versusResultDetail = document.querySelector("#versus-result-detail");
+  const pauseEyebrow = document.querySelector("#pause-eyebrow");
+  const pauseTitle = document.querySelector("#pause-title");
+  const resumeGameButton = document.querySelector("#resume-game");
+  const restartGameButton = document.querySelector("#restart-game");
+  const gameOverBackButton = document.querySelector("#game-over-back");
+  const versusPanel = document.querySelector("#versus-panel");
+  const opponentCanvas = document.querySelector("#opponent-field");
+  const opponent = opponentCanvas.getContext("2d");
+  const peerState = document.querySelector("#peer-state");
+  const versusFeed = document.querySelector("#versus-feed");
   const focusConnector = document.querySelector("#focus-connector");
   const focusConnectorPath = document.querySelector("#focus-connector-path");
   const responsiveShell = createResponsiveShell({
@@ -93,6 +130,9 @@ export function createGameScreen({ sendCommand }) {
   let focusLayout = null;
   let focusCursor = null;
   let focusCursorPieceId = null;
+  let lastMeta = null;
+  let gameContext = Object.freeze({ kind: "singleplayer", localPlayerId: null });
+  let versusMessages = [];
 
   function resetFocusCursor(piece) {
     focusCursorPieceId = piece ? piece.id : null;
@@ -141,6 +181,42 @@ export function createGameScreen({ sendCommand }) {
         warningRows * cellSize
       );
     }
+  }
+
+  function renderOpponent(view) {
+    if (!view) return;
+    const board = view.board;
+    const width = 100;
+    const height = Math.round((width / board.width) * board.height);
+    if (opponentCanvas.width !== width) opponentCanvas.width = width;
+    if (opponentCanvas.height !== height) opponentCanvas.height = height;
+    const cellSize = width / board.width;
+    clearCanvas(opponentCanvas, opponent);
+    drawGrid(opponent, board.width, board.height, cellSize);
+
+    for (let y = 0; y < board.height; y += 1) {
+      for (let x = 0; x < board.width; x += 1) {
+        const style = board.cells[y * board.width + x];
+        if (style) drawCell(opponent, x * cellSize, y * cellSize, cellSize, style);
+      }
+    }
+    for (const piece of view.activePieces) {
+      for (const cell of piece.cells) {
+        const x = piece.x + cell.x;
+        const y = piece.y + cell.y;
+        if (y < 0 || y >= board.height) continue;
+        drawCell(opponent, x * cellSize, y * cellSize, cellSize, piece.style, false, piece.pendingLock);
+      }
+    }
+  }
+
+  function renderConnectionState(meta) {
+    if (gameContext.kind !== "multiplayer") return;
+    const state = String(meta?.connectionStats?.transportState || "open");
+    if (state.includes("failed")) peerState.textContent = "FAILED";
+    else if (state.includes("disconnected") || state.includes("closed")) peerState.textContent = "LOST";
+    else if (state.includes("open") || state.includes("connected")) peerState.textContent = "OPEN";
+    else peerState.textContent = state.replace(/^connection-|^channel-/, "").toUpperCase().slice(0, 12);
   }
 
   function renderNext(view) {
@@ -318,9 +394,10 @@ export function createGameScreen({ sendCommand }) {
     );
   }
 
-  function renderHud(view) {
+  function renderHud(view, meta = null) {
     const wasGameOverHidden = gameOver.hidden;
-    const isGameOver = view.status === "gameover";
+    const isVersus = gameContext.kind === "multiplayer";
+    const isGameOver = isVersus ? meta?.matchStatus === "finished" : view.status === "gameover";
     score.textContent = String(view.score).padStart(7, "0");
     finalScore.textContent = String(view.score).padStart(7, "0");
     level.textContent = String(view.level);
@@ -346,9 +423,13 @@ export function createGameScreen({ sendCommand }) {
     }
     gameOver.hidden = !isGameOver;
     pauseGameButton.disabled = isGameOver;
+    if (isVersus) {
+      gameOverTitle.textContent = getVersusResultLabel(meta?.matchResult, gameContext.localPlayerId);
+      versusResultDetail.textContent = "LAN VS // MATCH COMPLETE";
+    }
     if (isGameOver && wasGameOverHidden) {
       requestAnimationFrame(() => {
-        if (lastView?.status === "gameover") playAgainButton.focus();
+        if (!gameOver.hidden) playAgainButton.focus();
       });
     }
   }
@@ -361,14 +442,19 @@ export function createGameScreen({ sendCommand }) {
     gameShell.style.setProperty("--field-height", `${height}px`);
   }
 
-  function render(view) {
+  function render(view, meta = null) {
     lastView = view;
+    lastMeta = meta;
     configureFieldCanvas(view.board);
     responsiveShell.refresh();
     renderField(view);
     renderNext(view);
     renderFocus(view);
-    renderHud(view);
+    renderHud(view, meta);
+    if (gameContext.kind === "multiplayer") {
+      renderOpponent(meta?.opponentView);
+      renderConnectionState(meta);
+    }
     renderFocusConnector(view);
   }
 
@@ -412,15 +498,55 @@ export function createGameScreen({ sendCommand }) {
     return true;
   }
 
-  function setGameMode(mode) {
+  function setGameMode(mode, { kind = "singleplayer", localPlayerId = null } = {}) {
     modeName.textContent = mode.name.toUpperCase();
+    gameContext = Object.freeze({ kind, localPlayerId });
+    const isVersus = kind === "multiplayer";
+    gameScreen.dataset.gameKind = kind;
+    gameShell.dataset.versus = isVersus ? "true" : "false";
+    headerScore.hidden = isVersus;
+    versusPanel.hidden = !isVersus;
+    gameOverEyebrow.textContent = isVersus ? "MATCH COMPLETE" : "RUN COMPLETE";
+    gameOverTitle.textContent = isVersus ? "MATCH OVER" : "GAME OVER";
+    finalScorePanel.hidden = isVersus;
+    versusResultDetail.hidden = !isVersus;
+    pauseGameButton.textContent = isVersus ? "MENU" : "PAUSE";
+    pauseEyebrow.textContent = isVersus ? "MATCH CONTINUES" : "GAME SUSPENDED";
+    pauseTitle.textContent = isVersus ? "MATCH MENU" : "PAUSED";
+    restartGameButton.hidden = isVersus;
+    resumeGameButton.querySelector("span").textContent = isVersus ? "Return to Match" : "Resume";
+    playAgainButton.querySelector("span").textContent = isVersus ? "LAN Lobby" : "Play Again";
+    gameOverBackButton.querySelector("span").textContent = isVersus ? "LAN" : "Back";
+    peerState.textContent = isVersus ? "OPEN" : "OFFLINE";
+    versusMessages = [];
+    versusFeed.replaceChildren();
     focusCursor = null;
     focusCursorPieceId = null;
     lastView = null;
+    lastMeta = null;
+    responsiveShell.scheduleRefresh();
+  }
+
+  function handleMatchEvents(events) {
+    if (gameContext.kind !== "multiplayer") return;
+    const labels = events
+      .map((event) => getVersusEventLabel(event, gameContext.localPlayerId))
+      .filter(Boolean);
+    if (labels.length === 0) return;
+    versusMessages = [...versusMessages, ...labels].slice(-3);
+    versusFeed.replaceChildren(...versusMessages.map((label) => {
+      const item = document.createElement("span");
+      item.textContent = label;
+      return item;
+    }));
   }
 
   return {
-    getStatus: () => lastView?.status || null,
+    getContext: () => gameContext,
+    getStatus: () => gameContext.kind === "multiplayer" && lastMeta?.matchStatus === "finished"
+      ? "gameover"
+      : lastView?.status || null,
+    handleMatchEvents,
     handleKey,
     performAction,
     refreshLayout: responsiveShell.scheduleRefresh,

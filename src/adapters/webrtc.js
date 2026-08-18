@@ -1,14 +1,32 @@
 import { decodeMessage, encodeMessage } from "../app/protocol.js";
 
-function waitForIceGatheringComplete(connection) {
+function waitForIceGatheringComplete(connection, signal) {
   if (connection.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise((resolve) => {
+  if (signal?.aborted) return Promise.reject(new Error("WebRTC transport closed during ICE gathering"));
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      connection.removeEventListener("icegatheringstatechange", listener);
+      signal?.removeEventListener("abort", abortListener);
+    };
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      callback(value);
+    };
     const listener = () => {
       if (connection.iceGatheringState !== "complete") return;
-      connection.removeEventListener("icegatheringstatechange", listener);
-      resolve();
+      finish(resolve);
+    };
+    const abortListener = () => {
+      finish(reject, new Error("WebRTC transport closed during ICE gathering"));
     };
     connection.addEventListener("icegatheringstatechange", listener);
+    signal?.addEventListener("abort", abortListener, { once: true });
+
+    if (signal?.aborted) abortListener();
+    else listener();
   });
 }
 
@@ -24,15 +42,37 @@ function decodeDescription(text) {
   return parsed;
 }
 
+function defaultPeerConnectionFactory(rtcConfig) {
+  if (typeof RTCPeerConnection !== "function") {
+    throw new Error("WebRTC is not available in this browser");
+  }
+  return new RTCPeerConnection(rtcConfig);
+}
+
 export class WebRtcPeerTransport {
-  constructor({ rtcConfig = {}, initiator = false, channelName = "carvemino" } = {}) {
-    this.connection = new RTCPeerConnection(rtcConfig);
+  constructor({
+    rtcConfig = {},
+    initiator = false,
+    channelName = "carvemino",
+    peerConnectionFactory = defaultPeerConnectionFactory
+  } = {}) {
+    if (typeof peerConnectionFactory !== "function") {
+      throw new Error("peerConnectionFactory must be a function");
+    }
+    this.connection = peerConnectionFactory(rtcConfig);
     this.channel = null;
     this.messageHandlers = new Set();
     this.stateHandlers = new Set();
+    this.errorHandlers = new Set();
+    this.closed = false;
+    this.lastError = null;
+    this.closeController = new AbortController();
 
     this.connection.addEventListener("connectionstatechange", () => {
-      for (const handler of this.stateHandlers) handler(this.connection.connectionState);
+      this.emitState(`connection-${this.connection.connectionState}`);
+    });
+    this.connection.addEventListener("iceconnectionstatechange", () => {
+      this.emitState(`ice-${this.connection.iceConnectionState}`);
     });
 
     if (initiator) {
@@ -49,15 +89,41 @@ export class WebRtcPeerTransport {
         const message = decodeMessage(event.data);
         for (const handler of this.messageHandlers) handler(message);
       } catch (error) {
-        console.error("Rejected WebRTC message", error);
+        this.reportError(error);
       }
     });
     channel.addEventListener("open", () => {
-      for (const handler of this.stateHandlers) handler("open");
+      this.emitState("channel-open");
     });
     channel.addEventListener("close", () => {
-      for (const handler of this.stateHandlers) handler("closed");
+      this.emitState("channel-closed");
     });
+    channel.addEventListener("error", (event) => {
+      this.reportError(event?.error instanceof Error ? event.error : new Error("WebRTC DataChannel error"));
+    });
+  }
+
+  getState() {
+    return Object.freeze({
+      connectionState: String(this.connection?.connectionState || "unknown"),
+      iceConnectionState: String(this.connection?.iceConnectionState || "unknown"),
+      iceGatheringState: String(this.connection?.iceGatheringState || "unknown"),
+      signalingState: String(this.connection?.signalingState || "unknown"),
+      channelState: String(this.channel?.readyState || "none"),
+      closed: this.closed,
+      error: this.lastError ? this.lastError.message : null
+    });
+  }
+
+  emitState(state) {
+    const snapshot = this.getState();
+    for (const handler of this.stateHandlers) handler(state, snapshot);
+  }
+
+  reportError(error) {
+    this.lastError = error instanceof Error ? error : new Error(String(error));
+    for (const handler of this.errorHandlers) handler(this.lastError, this.getState());
+    this.emitState("error");
   }
 
   onMessage(handler) {
@@ -70,16 +136,26 @@ export class WebRtcPeerTransport {
     return () => this.stateHandlers.delete(handler);
   }
 
+  onError(handler) {
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
+  }
+
   send(message) {
     if (!this.channel || this.channel.readyState !== "open") return false;
-    this.channel.send(encodeMessage(message));
+    try {
+      this.channel.send(encodeMessage(message));
+    } catch (error) {
+      this.reportError(error);
+      return false;
+    }
     return true;
   }
 
   async createOfferText() {
     const offer = await this.connection.createOffer();
     await this.connection.setLocalDescription(offer);
-    await waitForIceGatheringComplete(this.connection);
+    await waitForIceGatheringComplete(this.connection, this.closeController.signal);
     return encodeDescription(this.connection.localDescription);
   }
 
@@ -87,7 +163,7 @@ export class WebRtcPeerTransport {
     await this.connection.setRemoteDescription(decodeDescription(offerText));
     const answer = await this.connection.createAnswer();
     await this.connection.setLocalDescription(answer);
-    await waitForIceGatheringComplete(this.connection);
+    await waitForIceGatheringComplete(this.connection, this.closeController.signal);
     return encodeDescription(this.connection.localDescription);
   }
 
@@ -96,7 +172,12 @@ export class WebRtcPeerTransport {
   }
 
   close() {
-    if (this.channel) this.channel.close();
-    this.connection.close();
+    if (this.closed) return false;
+    this.closed = true;
+    this.closeController.abort();
+    if (this.channel && this.channel.readyState !== "closed") this.channel.close();
+    if (this.connection?.connectionState !== "closed") this.connection.close();
+    this.emitState("closed");
+    return true;
   }
 }

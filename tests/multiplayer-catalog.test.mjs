@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { SINGLEPLAYER_CATALOG } from "../src/app/catalog.js";
 import {
+  LAN_MULTIPLAYER_CATALOG,
   MULTIPLAYER_CATALOG,
   getMultiplayerMode,
   isMultiplayerModeId
@@ -26,4 +27,9 @@ test("multiplayer catalog is distinct from single-player profile modes", () => {
   assert.equal(isMultiplayerModeId("carver"), true);
   assert.equal(isMultiplayerModeId("missing"), false);
   assert.throws(() => getMultiplayerMode("missing"), /Unknown multiplayer mode/);
+});
+
+test("the initial LAN integration slice enables Classic VS without promoting Carver early", () => {
+  assert.deepEqual(LAN_MULTIPLAYER_CATALOG.map((mode) => mode.id), ["classic"]);
+  assert.equal(Object.isFrozen(LAN_MULTIPLAYER_CATALOG), true);
 });

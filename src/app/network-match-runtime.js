@@ -14,7 +14,18 @@ import {
 } from "../domain/match.js";
 
 const NETWORK_ROLES = new Set(["host", "client"]);
-const TERMINAL_TRANSPORT_STATES = new Set(["closed", "failed", "disconnected"]);
+const TERMINAL_TRANSPORT_STATES = new Set([
+  "closed",
+  "failed",
+  "disconnected",
+  "channel-closed",
+  "connection-closed",
+  "connection-failed",
+  "connection-disconnected",
+  "ice-closed",
+  "ice-failed",
+  "ice-disconnected"
+]);
 const DEFAULT_INPUT_DELAY_TICKS = 3;
 const DEFAULT_HASH_INTERVAL_TICKS = 60;
 const MAX_CHECKPOINT_HISTORY = 8;
@@ -591,6 +602,10 @@ export class NetworkMatchRuntime {
     this.frameHandle = null;
     this.removeMessageHandler();
     this.removeStateHandler();
-    this.onStop(reason, this.connectionStats);
+    try {
+      this.transport.close?.();
+    } finally {
+      this.onStop(reason, this.connectionStats);
+    }
   }
 }

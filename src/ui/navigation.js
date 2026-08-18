@@ -22,6 +22,14 @@ export function getBackScreen(screenName) {
   return SCREEN_BACK_DESTINATIONS[screenName] || null;
 }
 
+export function shouldPauseGameSimulation(gameContext) {
+  return gameContext?.kind !== "multiplayer";
+}
+
+export function getGameExitScreen(gameContext) {
+  return gameContext?.kind === "multiplayer" ? "lan" : "singleplayer";
+}
+
 export function getTitleScreenAction(code) {
   if (code === "Enter") return "start";
   if (code === "KeyR") return "records";
@@ -60,9 +68,12 @@ export function createNavigation({
   let gamePaused = false;
 
   function updateControllerStartLabels() {
-    const label = currentScreen === "game"
-      ? (gamePaused ? "Resume game" : "Pause game")
-      : "Start or confirm selection";
+    const isMultiplayer = gameScreen.getContext?.()?.kind === "multiplayer";
+    const label = currentScreen !== "game"
+      ? "Start or confirm selection"
+      : isMultiplayer
+        ? (gamePaused ? "Return to match" : "Open match menu")
+        : (gamePaused ? "Resume game" : "Pause game");
     for (const button of controllerPauseButtons) button.setAttribute("aria-label", label);
   }
 
@@ -100,13 +111,14 @@ export function createNavigation({
     if (consoleLayout) consoleLayout.dataset.gameState = paused ? "paused" : "playing";
     updateControllerStartLabels();
     pauseOverlay.hidden = !paused;
+    const pausesSimulation = shouldPauseGameSimulation(gameScreen.getContext?.());
     if (paused) {
-      pauseGame();
+      if (pausesSimulation) pauseGame();
       requestAnimationFrame(() => {
         if (gamePaused) resumeGameButton.focus();
       });
     } else {
-      resumeGame();
+      if (pausesSimulation) resumeGame();
       requestAnimationFrame(() => returnFocus?.focus());
     }
   }
@@ -118,10 +130,11 @@ export function createNavigation({
     pauseOverlay.hidden = true;
   }
 
-  function quitToSingleplayer() {
+  function quitToGameOrigin() {
+    const destination = getGameExitScreen(gameScreen.getContext?.());
     clearPause();
     quitGame();
-    showScreen("singleplayer");
+    showScreen(destination);
   }
 
   function getMenuButtons(container) {
@@ -163,7 +176,7 @@ export function createNavigation({
       }
       if (gameScreen.getStatus() === "gameover") {
         onAudioEvent("back");
-        quitToSingleplayer();
+        quitToGameOrigin();
         return true;
       }
       return false;
@@ -200,7 +213,7 @@ export function createNavigation({
   }
 
   function handleMenuNavigation(event, container = screens.get(currentScreen)) {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return false;
+    if (event.target?.matches?.("input, select, textarea")) return false;
     const movingPrevious = MENU_PREVIOUS_KEYS.has(event.code);
     if (!movingPrevious && !MENU_NEXT_KEYS.has(event.code)) return false;
     if (!moveMenuSelection(movingPrevious, container)) return false;
@@ -235,7 +248,7 @@ export function createNavigation({
       if (gameScreen.getStatus() === "gameover") {
         if (event.code === "Escape") {
           onAudioEvent("back");
-          quitToSingleplayer();
+          quitToGameOrigin();
           event.preventDefault();
         } else if (event.code === "Enter" || event.code === "Space") {
           const buttons = getMenuButtons(gameOver);
@@ -304,7 +317,8 @@ export function createNavigation({
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden" && currentScreen === "game"
-        && !gamePaused && gameScreen.getStatus() === "playing") {
+        && !gamePaused && gameScreen.getStatus() === "playing"
+        && shouldPauseGameSimulation(gameScreen.getContext?.())) {
       setPaused(true);
     }
   });
@@ -360,6 +374,7 @@ export function createNavigation({
     setPaused(false);
   });
   document.querySelector("#restart-game").addEventListener("click", () => {
+    if (!shouldPauseGameSimulation(gameScreen.getContext?.())) return;
     onAudioEvent("confirm");
     clearPause();
     restart();
@@ -367,17 +382,21 @@ export function createNavigation({
   });
   document.querySelector("#quit-game").addEventListener("click", () => {
     onAudioEvent("back");
-    quitToSingleplayer();
+    quitToGameOrigin();
   });
   playAgainButton.addEventListener("click", () => {
     onAudioEvent("confirm");
+    if (!shouldPauseGameSimulation(gameScreen.getContext?.())) {
+      quitToGameOrigin();
+      return;
+    }
     clearPause();
     restart();
     requestAnimationFrame(() => pauseGameButton.focus());
   });
   gameOverBackButton.addEventListener("click", () => {
     onAudioEvent("back");
-    quitToSingleplayer();
+    quitToGameOrigin();
   });
 
   return {
