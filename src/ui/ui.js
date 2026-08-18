@@ -50,7 +50,7 @@ export function createUi({
   });
 
   createOnScreenGameInput({
-    root: document.querySelector("#game-screen"),
+    root: document.querySelector(".console-layout"),
     performAction: (actionId) => navigation.performGameAction(actionId)
   });
 

@@ -37,7 +37,7 @@
 :root {
   color-scheme: dark;
   font-family: "Lucida Console", "Courier New", Courier, monospace;
-  font-size: 12px;
+  font-size: 14px;
 
   --moss:      #9aa592;
   --wire:      #7d8076;
@@ -73,7 +73,7 @@ body {
     env(safe-area-inset-bottom, 0)
     env(safe-area-inset-left, 0);
   display: grid;
-  place-items: center;
+  place-items: start center;
   overflow-x: hidden;
   background:
     radial-gradient(circle at 50% 44%, #171914 0, #0c0e0b 43%, #070805 78%),
@@ -82,13 +82,18 @@ body {
 
 button { color: inherit; font: inherit; }
 
+.console-layout {
+  position: relative;
+  width: min(96vw, 716px);
+}
+
 /* ==========================================================================
    CABINET / CRT LAYERS
    ========================================================================== */
 
 .arcade-cabinet {
   position: relative;
-  width: min(96vw, 698px);
+  width: 100%;
   padding: 18px 18px 13px;
   border: 1px solid #34362e;
   background: #090a08;
@@ -112,19 +117,6 @@ button { color: inherit; font: inherit; }
 .arcade-cabinet::before { top: 8px; }
 .arcade-cabinet::after { bottom: 26px; }
 
-.arcade-cabinet:has(.game-screen:not([hidden])) {
-  width: min(96vw, 716px);
-  margin-block: clamp(6px, 1.5dvh, 18px);
-}
-
-body:has(.game-screen:not([hidden])) {
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  place-items: start center;
-  overflow: hidden;
-}
-
 .crt-frame {
   position: relative;
   padding: 6px;
@@ -138,6 +130,7 @@ body:has(.game-screen:not([hidden])) {
 
 .crt-glass {
   position: relative;
+  height: min(724px, calc(100dvh - 90px));
   overflow: hidden;
   border: 1px solid #36382f;
   background: var(--glass);
@@ -155,7 +148,7 @@ body:has(.game-screen:not([hidden])) {
   gap: 5px;
   color: #4e5046;
   font-family: "Courier New", Courier, monospace;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.4px;
 }
@@ -231,11 +224,19 @@ body:has(.game-screen:not([hidden])) {
 .attract-card[hidden] { display: none !important; }
 
 .menu-screen {
-  min-height: 540px;
+  height: 100%;
+  min-height: 0;
   padding: 52px 48px 36px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
+}
+
+.menu-screen:not(.attract-screen) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--arrow) transparent;
+  scrollbar-width: thin;
 }
 
 /* ==========================================================================
@@ -243,7 +244,7 @@ body:has(.game-screen:not([hidden])) {
    ========================================================================== */
 
 .attract-screen {
-  min-height: 540px;
+  min-height: 0;
   padding: 22px 36px 20px;
   justify-content: flex-start;
 }
@@ -254,7 +255,7 @@ body:has(.game-screen:not([hidden])) {
   justify-content: space-between;
   gap: 24px;
   color: var(--wire);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1.5px;
 }
 .attract-scoreline output { color: var(--moss); }
@@ -268,6 +269,8 @@ body:has(.game-screen:not([hidden])) {
 
 .attract-card {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   text-align: center;
 }
 
@@ -276,7 +279,7 @@ body:has(.game-screen:not([hidden])) {
 .eyebrow {
   margin: 0 0 11px;
   color: var(--moss);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 3px;
   text-transform: uppercase;
@@ -326,7 +329,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .subtitle {
   margin: 17px 0 0;
   color: var(--wire);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 6px;
 }
 
@@ -340,6 +343,8 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 }
 
 .sculpt-demo {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -395,7 +400,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 }
 .sculpt-demo-readout span {
   color: var(--wire);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 2px;
 }
 .sculpt-demo-readout span b { color: var(--moss); }
@@ -408,7 +413,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .sculpt-demo-readout small {
   margin-top: 12px;
   color: var(--wire);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.6;
   letter-spacing: 1px;
 }
@@ -429,12 +434,18 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   gap: 12px;
   border-bottom: 1px solid var(--line);
   text-align: left;
-  font-size: 11px;
+  font-size: 12px;
+}
+.attract-ranking div > * { min-width: 0; }
+.attract-ranking span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .attract-ranking div:last-child { border-bottom: 0; }
 .attract-ranking b { color: var(--moss); }
 .attract-ranking span { letter-spacing: 1px; }
-.attract-ranking output { color: var(--ink); font-size: 13px; letter-spacing: 2px; }
+.attract-ranking output { color: var(--ink); font-size: 14px; letter-spacing: 2px; }
 
 .start-button {
   align-self: center;
@@ -469,7 +480,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   background: transparent;
   color: var(--wire);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1px;
 }
 .attract-secondary button:hover,
@@ -488,7 +499,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   margin: auto 0 0;
   color: #64675e;
   font-family: "Courier New", Courier, monospace;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.5px;
   text-align: center;
@@ -500,7 +511,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 
 .screen-heading { margin-bottom: 30px; }
 
-.select-game-screen { justify-content: center; }
+.select-game-screen { justify-content: flex-start; }
 
 /* ==========================================================================
    MENU SYSTEM — sprite-like selection, no smooth app-style transitions
@@ -540,7 +551,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 }
 
 .menu-button > span {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -548,7 +559,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 
 .menu-button b {
   color: var(--wire);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1px;
 }
 
@@ -586,7 +597,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .menu-button:disabled:hover::before { content: none; }
 
 .mode-button { min-height: 66px; }
-.mode-button > span { font-size: 15px; }
+.mode-button > span { font-size: 16px; }
 .back-button { min-height: 42px; margin-top: 12px; }
 .back-button > span { font-size: 12px; }
 .compact-menu { margin-top: 22px; }
@@ -597,7 +608,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   justify-content: center;
   gap: 24px;
   color: #73766c;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1px;
 }
 
@@ -615,7 +626,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .record-section + .record-section { border-top: 1px solid var(--arrow); }
 
 .record-section h3,
-.keybinding-heading > b { font-size: 11px; letter-spacing: 2px; }
+.keybinding-heading > b { font-size: 12px; letter-spacing: 2px; }
 
 .record-section h3 {
   display: flex;
@@ -629,7 +640,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   display: flex;
   justify-content: space-between;
   padding: 6px 0;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 1px;
 }
 .record-score output { color: var(--moss); font-size: 14px; }
@@ -642,9 +653,9 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   padding: 7px 9px;
   border-left: 2px solid var(--arrow);
   color: var(--wire);
-  font-size: 10px;
+  font-size: 11px;
 }
-.achievement-item b { font-size: 11px; letter-spacing: 1px; }
+.achievement-item b { font-size: 12px; letter-spacing: 1px; }
 .achievement-item.unlocked { color: var(--ink); border-color: var(--moss); }
 .achievement-item.unlocked span { color: var(--wire); }
 
@@ -668,7 +679,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .keybinding-row {
   min-height: 44px;
   border-right: 1px solid var(--line);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 .keybinding-row button { min-width: 72px; }
@@ -687,7 +698,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   gap: 10px;
   padding: 10px 14px;
   border-right: 1px solid var(--line);
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 1px;
   text-transform: uppercase;
 }
@@ -714,7 +725,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   border: 1px solid var(--arrow);
   background: transparent;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1px;
   transition: color .15s, background .15s, border-color .15s;
 }
@@ -735,8 +746,11 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .game-screen {
   --game-header-height: 44px;
   position: relative;
+  height: 100%;
   min-width: 0;
   min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .game-header {
@@ -752,7 +766,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .game-header > div:first-child { display: flex; align-items: baseline; gap: 9px; }
 .game-header .eyebrow { margin: 0; }
 .game-header strong { font-size: 12px; letter-spacing: 2px; }
-.header-score { color: var(--wire); font-size: 10px; }
+.header-score { color: var(--wire); font-size: 11px; }
 .header-score output { color: var(--ink); }
 
 
@@ -764,7 +778,9 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   --game-stage-reserved-height: 0px;
   width: 100%;
   min-width: 0;
+  min-height: 0;
   display: grid;
+  align-items: start;
   justify-items: center;
   overflow: hidden;
 }
@@ -774,6 +790,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   width: 576px;
   height: calc(var(--field-height) + var(--drop-guide-height));
   max-width: 100%;
+  max-height: 100%;
 }
 
 .game-shell {
@@ -810,7 +827,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   left: 0;
   width: 32px;
   color: var(--moss);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1;
   text-align: center;
   transform: translateX(-50%);
@@ -843,7 +860,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .hud-section h2 {
   margin: 0 0 8px;
   color: var(--moss);
-  font-size: 11px;
+  font-size: 13px;
   letter-spacing: 2px;
 }
 
@@ -859,7 +876,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 
 #score {
   display: block;
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: 4px;
   text-align: right;
   color: var(--ink);
@@ -870,7 +887,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   justify-content: space-between;
   margin-top: 6px;
   color: var(--wire);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 #focus { width: 198px; height: auto; aspect-ratio: 1; cursor: default; }
@@ -879,7 +896,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   display: flex;
   justify-content: space-between;
   padding-top: 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .focus-nav {
@@ -888,7 +905,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   align-items: center;
   justify-content: space-between;
   gap: 7px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 kbd {
@@ -900,7 +917,7 @@ kbd {
   background: var(--olive);
   color: var(--moss);
   font: inherit;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1;
 }
 
@@ -1027,45 +1044,373 @@ kbd {
   text-align: center;
 }
 
+/* ==========================================================================
+   TOUCH CONTROLS — compact handheld layout
+   ========================================================================== */
+
+.game-control-surface,
+.tablet-control-rail {
+  display: none;
+}
+
+.game-control-surface {
+  min-width: 0;
+  min-height: 136px;
+  margin-top: 8px;
+  padding: 10px clamp(10px, 4vw, 24px) 12px;
+  grid-template-columns: minmax(102px, 1fr) auto minmax(102px, 1fr);
+  align-items: center;
+  gap: clamp(8px, 3vw, 24px);
+  border: 1px solid #34362e;
+  border-radius: 5px 5px 18px 18px;
+  overflow: clip;
+  background:
+    linear-gradient(180deg, #181a16, #0e100d 72%),
+    var(--panel);
+  box-shadow: inset 0 1px 0 #292c25, inset 0 -8px 18px #0008, 0 12px 28px #0008;
+}
+
+.game-control-surface button {
+  margin: 0;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.game-control-surface button:active {
+  color: var(--moss);
+  filter: brightness(1.35);
+  transform: translateY(2px);
+}
+
+.touch-dpad {
+  width: 108px;
+  height: 108px;
+  display: grid;
+  grid-template-columns: repeat(3, 36px);
+  grid-template-rows: repeat(3, 36px);
+  justify-self: start;
+  filter: drop-shadow(0 4px 0 #050605);
+}
+
+.dpad-button,
+.dpad-center {
+  background: #282a25;
+  box-shadow: inset 0 0 0 1px #3a3c35;
+}
+
+.dpad-button {
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 14px;
+}
+.dpad-up { grid-area: 1 / 2; border-radius: 5px 5px 0 0 !important; }
+.dpad-left { grid-area: 2 / 1; border-radius: 5px 0 0 5px !important; }
+.dpad-center { grid-area: 2 / 2; position: relative; }
+.dpad-center::after {
+  content: "";
+  position: absolute;
+  inset: 11px;
+  border-radius: 50%;
+  background: #1b1d19;
+  box-shadow: inset 0 1px 2px #000;
+}
+.dpad-right { grid-area: 2 / 3; border-radius: 0 5px 5px 0 !important; }
+.dpad-down { grid-area: 3 / 2; border-radius: 0 0 5px 5px !important; }
+
+.system-controls {
+  align-self: end;
+  padding-bottom: 5px;
+  display: flex;
+  gap: 8px;
+  transform: rotate(-8deg);
+}
+
+.system-controls button {
+  min-width: 44px;
+  min-height: 25px;
+  padding: 4px 7px;
+  border-radius: 12px;
+  background: #30322c;
+  box-shadow: inset 0 0 0 1px #484b42, 0 3px 0 #050605;
+  color: var(--wire);
+  font-size: 8px;
+  letter-spacing: .5px;
+}
+.system-controls span { display: block; color: var(--ink); font-size: 9px; }
+
+.action-controls {
+  width: 116px;
+  min-height: 100px;
+  display: flex;
+  justify-self: end;
+  align-items: center;
+  justify-content: space-between;
+  transform: rotate(-10deg);
+}
+
+.action-button {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border-radius: 50%;
+  background: #4a4930;
+  box-shadow: inset 0 0 0 2px #626047, inset 0 -5px 0 #29291d, 0 5px 0 #050605;
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: .5px;
+}
+.action-button span {
+  display: block;
+  margin-bottom: 3px;
+  color: #e0e3d6;
+  font-size: 17px;
+  font-weight: 700;
+}
+.sculpt-button { margin-top: -32px !important; }
+.drop-button { margin-top: 32px !important; }
+
+.tablet-control-rail {
+  position: absolute;
+  z-index: 0;
+  top: 24px;
+  bottom: 24px;
+  width: 96px;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 12px 30px;
+  border: 1px solid #3b3d35;
+  background: linear-gradient(90deg, #11130f, #252820 48%, #11130f);
+  box-shadow: inset 0 0 18px #0008, 0 14px 32px #0008;
+}
+.tablet-control-rail-left {
+  right: calc(100% + 7px);
+  border-radius: 24px 7px 7px 24px;
+}
+.tablet-control-rail-right {
+  left: calc(100% + 7px);
+  border-radius: 7px 24px 24px 7px;
+}
+.rail-trigger {
+  width: 34px;
+  height: 10px;
+  border-radius: 5px;
+  background: #090a08;
+  box-shadow: inset 0 0 0 1px #41443b;
+}
+.rail-dpad {
+  width: 72px;
+  height: 72px;
+  margin-top: clamp(54px, 16dvh, 130px);
+  display: grid;
+  grid-template-columns: repeat(3, 24px);
+  grid-template-rows: repeat(3, 24px);
+  filter: drop-shadow(0 3px 0 #050605);
+}
+.rail-dpad i {
+  display: grid;
+  place-items: center;
+  background: #2d3029;
+  color: #858b7e;
+  font: 700 9px/1 Arial, sans-serif;
+  box-shadow: inset 0 0 0 1px #44473e;
+}
+.rail-dpad-up { grid-area: 1 / 2; border-radius: 4px 4px 0 0; }
+.rail-dpad-left { grid-area: 2 / 1; border-radius: 4px 0 0 4px; }
+.rail-dpad-center { grid-area: 2 / 2; }
+.rail-dpad-right { grid-area: 2 / 3; border-radius: 0 4px 4px 0; }
+.rail-dpad-down { grid-area: 3 / 2; border-radius: 0 0 4px 4px; }
+.rail-dpad-center::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #151713;
+}
+.rail-action-buttons {
+  width: 76px;
+  height: 90px;
+  margin-top: clamp(52px, 15dvh, 120px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transform: rotate(-10deg);
+}
+.rail-action-buttons i {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #45462f;
+  color: var(--ink);
+  font: 700 14px/1 Arial, sans-serif;
+  box-shadow: inset 0 0 0 1px #62634a, inset 0 -4px 0 #25261b, 0 4px 0 #050605;
+}
+.rail-action-buttons i:first-child { align-self: flex-end; }
+.rail-action-buttons i:last-child { align-self: flex-start; }
+.rail-secondary-button {
+  min-width: 58px;
+  margin-top: clamp(56px, 8dvh, 82px);
+  padding: 7px 8px 6px;
+  border-radius: 12px;
+  background: #30322c;
+  color: #8a8e83;
+  font: 700 8px/1 "Lucida Console", monospace;
+  letter-spacing: .5px;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px #4b4e45, 0 3px 0 #050605;
+  transform: rotate(-7deg);
+}
+.tablet-control-rail-right .rail-secondary-button { transform: rotate(7deg); }
+
 
 /* ==========================================================================
    RESPONSIVE
    ========================================================================== */
 
 @media (max-height: 820px) {
-  .arcade-cabinet:has(.game-screen:not([hidden])) {
+  .arcade-cabinet {
     padding: 8px 8px 6px;
-    margin-block: 4px;
   }
-  .arcade-cabinet:has(.game-screen:not([hidden])) .crt-frame {
+  .arcade-cabinet .crt-frame {
     padding: 4px;
     border-width: 3px;
   }
-  .arcade-cabinet:has(.game-screen:not([hidden])) .cabinet-hardware { display: none; }
+  .arcade-cabinet .cabinet-hardware { display: none; }
   .game-screen { --game-header-height: 38px; }
   .game-header { padding-block: 5px; }
 }
 
 @media (max-width: 700px) {
+  .console-layout { width: 100%; }
   .arcade-cabinet {
     width: 100%;
     border-left: 0;
     border-right: 0;
-  }
-  .arcade-cabinet:has(.game-screen:not([hidden])) {
-    width: 100%;
-    margin-block: 0;
   }
   .menu-screen { padding: 40px 24px 30px; }
   .audio-settings { grid-template-columns: 1fr; }
   .audio-setting-row { border-right: 0; border-bottom: 1px solid var(--line); }
   .audio-setting-row:last-child { border-bottom: 0; }
   .keybinding-list { grid-template-columns: 1fr; }
-  .game-screen { overflow: visible; }
+  .game-screen { overflow: hidden; }
 }
 
-@media (max-width: 620px), (pointer: coarse) and (orientation: portrait) {
+@media (max-width: 699px) {
+  .arcade-cabinet { padding-inline: 8px; }
+  .crt-frame { padding: 4px; border-width: 3px; }
+  .game-shell { grid-template-columns: minmax(0, 57%) minmax(0, 43%); }
+  .vertical-logo { display: none; }
+  .hud { min-height: 0; }
+  #field { width: 100%; }
+  .drop-guide { height: 32px; }
+  .hud-section { padding: 8px 10px; }
+  .hud-section h2 { margin-bottom: 5px; }
+  #next { width: min(100%, 150px); }
+  #focus { width: min(100%, 150px); }
+  .resource-row { padding-top: 5px; }
+  .focus-nav { margin-top: 8px; }
+  .menu-screen { padding-top: 30px; }
+  .attract-screen {
+    padding-top: 18px;
+    padding-inline: 16px;
+  }
+  .attract-stage { min-width: 0; }
+  .attract-card-heading { margin-bottom: 16px; }
+  .sculpt-demo { gap: 12px; }
+  .sculpt-demo-grid {
+    width: min(44%, 140px);
+    padding: 5px;
+    gap: 1px;
+  }
+  .sculpt-demo-readout {
+    width: min(44%, 128px);
+    min-height: 100px;
+    padding: 8px 0 0 12px;
+  }
+  .sculpt-demo-readout span { font-size: 10px; letter-spacing: 1px; }
+  .sculpt-demo-readout strong { margin-top: 12px; font-size: 18px; }
+  .sculpt-demo-readout small { margin-top: 8px; font-size: 9px; }
+  .attract-ranking div {
+    min-height: 46px;
+    padding-inline: 5px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 6px;
+    font-size: 11px;
+  }
+  .attract-ranking output { font-size: 12px; letter-spacing: 1px; }
+}
+
+@media (max-width: 360px) {
+  .game-control-surface {
+    padding-inline: 6px;
+    grid-template-columns: 90px minmax(78px, 1fr) 96px;
+    gap: 4px;
+  }
+  .touch-dpad {
+    width: 90px;
+    height: 90px;
+    grid-template-columns: repeat(3, 30px);
+    grid-template-rows: repeat(3, 30px);
+  }
+  .dpad-button { min-width: 30px; min-height: 30px; font-size: 12px; }
+  .dpad-center::after { inset: 9px; }
+  .system-controls { gap: 4px; }
+  .system-controls button {
+    min-width: 38px;
+    padding-inline: 3px;
+    font-size: 7px;
+  }
+  .system-controls span { font-size: 8px; }
+  .action-controls { width: 96px; }
+  .action-button { width: 44px; height: 44px; }
+}
+
+@media (max-width: 699px), (pointer: coarse) and (orientation: portrait) {
   .game-header { position: sticky; top: 0; z-index: 12; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .game-control-surface { display: grid; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) and (max-width: 699px) {
+  .crt-glass { height: min(600px, calc(100dvh - 207px)); }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) and (min-width: 700px) {
+  .crt-glass { height: min(724px, calc(100dvh - 207px)); }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 599px) {
+  .crt-glass { height: calc(100dvh - 122px); }
+  .game-control-surface { display: grid; }
+  .game-control-surface {
+    min-height: 96px;
+    height: 96px;
+    padding: 4px 24px 6px;
+  }
+  .touch-dpad {
+    width: 84px;
+    height: 84px;
+    grid-template-columns: repeat(3, 28px);
+    grid-template-rows: repeat(3, 28px);
+  }
+  .dpad-button { min-width: 28px; min-height: 28px; font-size: 12px; }
+  .dpad-center::after { inset: 8px; }
+  .system-controls { align-self: center; padding-bottom: 0; }
+  .action-controls { min-height: 76px; }
+  .attract-stage { min-height: 180px; }
+  .attract-card-heading { margin-bottom: 8px; }
+  .attract-ranking div { min-height: 36px; }
+}
+
+/* A landscape touch device with a tablet-sized short edge gets side rails. */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+  .console-layout { width: min(calc(100vw - 220px), 716px); }
+  .tablet-control-rail { display: flex; }
 }
 
 @media (pointer: coarse) {
@@ -1078,12 +1423,12 @@ kbd {
 }
 
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 700px) {
-  .arcade-cabinet:has(.game-screen:not([hidden])) {
+  .arcade-cabinet {
     padding: 4px;
     border-left: 0;
     border-right: 0;
   }
-  .arcade-cabinet:has(.game-screen:not([hidden])) .crt-frame {
+  .arcade-cabinet .crt-frame {
     padding: 2px;
     border-width: 2px;
   }

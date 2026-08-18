@@ -27,6 +27,7 @@ export function createNavigation({
   const playAgainButton = document.querySelector("#play-again");
   const gameOverBackButton = document.querySelector("#game-over-back");
   const pauseGameButton = document.querySelector("#pause-game");
+  const touchPauseGameButton = document.querySelector("#touch-pause-game");
   const pauseOverlay = document.querySelector("#pause-overlay");
   const resumeGameButton = document.querySelector("#resume-game");
   const pressStart = document.querySelector("#press-start");
@@ -230,6 +231,11 @@ export function createNavigation({
   }
   pauseGameButton.addEventListener("click", () => {
     if (gameScreen.getStatus() === "gameover") return;
+    onAudioEvent("confirm");
+    setPaused(true);
+  });
+  touchPauseGameButton?.addEventListener("click", () => {
+    if (currentScreen !== "game" || gamePaused || gameScreen.getStatus() !== "playing") return;
     onAudioEvent("confirm");
     setPaused(true);
   });

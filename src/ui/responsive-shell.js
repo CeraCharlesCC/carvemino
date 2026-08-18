@@ -27,6 +27,7 @@ export function createResponsiveShell({ stage, frame, shell, viewport = window }
   if (!stage || !frame || !shell) throw new Error("responsive shell elements are required");
 
   const coarsePointer = viewport.matchMedia?.("(pointer: coarse)");
+  const compactLayout = viewport.matchMedia?.("(max-width: 699px)");
   let scheduledFrame = null;
 
   function getPixelProperty(element, property) {
@@ -56,6 +57,15 @@ export function createResponsiveShell({ stage, frame, shell, viewport = window }
   }
 
   function refresh() {
+    const isCompact = compactLayout?.matches === true;
+    if (isCompact) {
+      frame.style.removeProperty("width");
+      frame.style.removeProperty("height");
+      shell.style.width = `${Math.min(DEFAULT_NATURAL_WIDTH, stage.clientWidth)}px`;
+    } else {
+      shell.style.removeProperty("width");
+    }
+
     const stageRect = stage.getBoundingClientRect();
     if (stageRect.width <= 0) return null;
 
@@ -66,13 +76,16 @@ export function createResponsiveShell({ stage, frame, shell, viewport = window }
     const visualViewport = viewport.visualViewport;
     const viewportHeight = visualViewport?.height || viewport.innerHeight || naturalHeight;
     const viewportTop = visualViewport?.offsetTop || 0;
-    const availableHeight = Math.max(
+    const viewportAvailableHeight = Math.max(
       1,
       viewportHeight
         - Math.max(0, stageRect.top - viewportTop)
         - getBottomClearance(stageRect)
         - getReservedHeight()
     );
+    const availableHeight = stageRect.height > 0
+      ? Math.min(viewportAvailableHeight, stageRect.height)
+      : viewportAvailableHeight;
     const isCoarse = coarsePointer?.matches === true;
     const scale = getResponsiveShellScale({
       availableWidth: stage.clientWidth || stageRect.width,
@@ -100,6 +113,7 @@ export function createResponsiveShell({ stage, frame, shell, viewport = window }
   viewport.visualViewport?.addEventListener("resize", scheduleRefresh);
   viewport.visualViewport?.addEventListener("scroll", scheduleRefresh);
   coarsePointer?.addEventListener?.("change", scheduleRefresh);
+  compactLayout?.addEventListener?.("change", scheduleRefresh);
 
   return {
     refresh,
@@ -110,6 +124,7 @@ export function createResponsiveShell({ stage, frame, shell, viewport = window }
       viewport.visualViewport?.removeEventListener("resize", scheduleRefresh);
       viewport.visualViewport?.removeEventListener("scroll", scheduleRefresh);
       coarsePointer?.removeEventListener?.("change", scheduleRefresh);
+      compactLayout?.removeEventListener?.("change", scheduleRefresh);
     }
   };
 }
