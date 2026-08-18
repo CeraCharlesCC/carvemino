@@ -1,12 +1,13 @@
 import { defineRules } from "../domain/rules.js";
 
 export const CLASSIC_RULESET = defineRules({
-  id: "carvemino-classic-rules-v2",
+  id: "carvemino-classic-rules-v3",
   board: { width: 10, visibleHeight: 20, hiddenHeight: 4 },
   simulation: {
     stepsPerSecond: 60,
     lockDelayWorldTicks: 24,
     operationGraceSteps: 8,
+    focusGraceSteps: 2,
     dropCoverageHistoryLength: 48,
     dropPositionSampleCount: 2
   },
@@ -17,8 +18,9 @@ export const CLASSIC_RULESET = defineRules({
     gravityStepWorldTicks: 2,
     gravityMinimumWorldTicks: 3,
     spawnStartWorldTicks: 480,
-    spawnStepWorldTicks: 60,
-    spawnMinimumWorldTicks: 60,
+    spawnStepWorldTicks: 0,
+    spawnMinimumWorldTicks: 150,
+    spawnCurve: { endLevel: 99, easeOutExponentMilli: 1500 },
     dropQueueDepth: 2
   },
   scoring: { lineClear: [0, 100, 300, 500, 800], carve: 5, fill: 10 },

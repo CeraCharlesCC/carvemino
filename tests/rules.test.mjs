@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "../src/app/catalog.js";
-import { defineRules } from "../src/domain/rules.js";
+import { defineRules, spawnIntervalWorldTicksForLevel } from "../src/domain/rules.js";
 import { CLASSIC_RULESET } from "../src/rulesets/classic.js";
 
 function mutableCopy(value) {
@@ -70,12 +70,47 @@ test("rules definitions reject invalid semantic values", () => {
     /rules\.simulation\.dropPositionSampleCount must be an integer >= 1/
   );
 
+  const invalidFocusGrace = mutableCopy(CLASSIC_RULESET);
+  invalidFocusGrace.simulation.focusGraceSteps = -1;
+  assert.throws(
+    () => defineRules(invalidFocusGrace),
+    /rules\.simulation\.focusGraceSteps must be an integer >= 0/
+  );
+
   const missingCellStyle = mutableCopy(CLASSIC_RULESET);
   delete missingCellStyle.presentation.cellStyles[1];
   assert.throws(
     () => defineRules(missingCellStyle),
     /rules\.presentation\.cellStyles\.1 is required for used cell value 1/
   );
+});
+
+test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () => {
+  const seconds = (level) => spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, level) / 60;
+
+  assert.equal(seconds(1), 8);
+  assert.equal(seconds(99), 2.5);
+  assert.equal(seconds(120), 2.5, "levels beyond the curve endpoint stay capped");
+
+  assert(seconds(10) > 7.2 && seconds(10) < 7.3);
+  assert(seconds(20) > 6.4 && seconds(20) < 6.6);
+  assert(seconds(50) > 4.4 && seconds(50) < 4.5);
+  assert(seconds(80) > 2.9 && seconds(80) < 3.0);
+
+  let previous = spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, 1);
+  for (let level = 2; level <= 99; level += 1) {
+    const current = spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, level);
+    assert(current <= previous, `spawn interval must not increase at level ${level}`);
+    previous = current;
+  }
+
+  const tenLevelDrop = (startLevel) => (
+    spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, startLevel)
+    - spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, startLevel + 10)
+  );
+  assert(tenLevelDrop(1) > tenLevelDrop(31));
+  assert(tenLevelDrop(31) > tenLevelDrop(61));
+  assert(tenLevelDrop(61) > tenLevelDrop(81));
 });
 
 test("rules definitions reject piece rotations that cannot fit the configured board", () => {

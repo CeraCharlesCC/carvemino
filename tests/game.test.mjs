@@ -308,6 +308,79 @@ test("successful sculpt pauses the whole playfield timeline for the grace window
   assert(resumed.some((event) => event.type === "PIECE_MOVED" && event.pieceId === "other"));
 });
 
+test("successful continuous sculpting refreshes the full operation grace", () => {
+  const rules = makeTestRules();
+  const game = createGame({ seed: 21, rules });
+  const piece = spawnI(game, rules);
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 1, y: 0 }], rules);
+  assert.equal(game.worldHoldSteps, rules.simulation.operationGraceSteps - 1);
+
+  stepGame(game, [{ type: "SCULPT", pieceId: piece.id, x: 2, y: 0 }], rules);
+  assert.equal(
+    game.worldHoldSteps,
+    rules.simulation.operationGraceSteps - 1,
+    "another successful edit refreshes the sculpt hold instead of merely preserving its remainder"
+  );
+});
+
+test("focus switching adds a short hold but cannot freeze one world tick indefinitely", () => {
+  const rules = makeTestRules();
+  const game = createGame({ seed: 22, rules });
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  game.nextScheduledSpawnWorldTick = 1480;
+  game.activePieces = [
+    {
+      id: "first",
+      templateId: "I",
+      cellValue: 1,
+      x: 0,
+      y: 5,
+      cells: [{ x: 0, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingWorldTicks: 0,
+      spawnIndex: 1,
+      committed: false
+    },
+    {
+      id: "second",
+      templateId: "I",
+      cellValue: 1,
+      x: 9,
+      y: 5,
+      cells: [{ x: 0, y: 0 }],
+      carved: 0,
+      carveLimit: 2,
+      restingWorldTicks: 0,
+      spawnIndex: 2,
+      committed: false
+    }
+  ];
+  game.focusedPieceId = "first";
+
+  stepGame(game, [{ type: "FOCUS_NEXT" }], rules);
+  assert.equal(game.focusedPieceId, "second");
+  assert.equal(game.worldTick, 20);
+  assert.equal(game.worldHoldSteps, rules.simulation.focusGraceSteps - 1);
+  assert.equal(game.lastFocusHoldWorldTick, 20);
+
+  stepGame(game, [{ type: "FOCUS_NEXT" }], rules);
+  assert.equal(game.focusedPieceId, "first");
+  assert.equal(game.worldTick, 20);
+  assert.equal(game.worldHoldSteps, 0, "switching during the hold does not refresh it");
+
+  stepGame(game, [{ type: "FOCUS_NEXT" }], rules);
+  assert.equal(game.focusedPieceId, "second");
+  assert.equal(game.worldTick, 21, "the same world tick must advance before Focus can pause again");
+
+  stepGame(game, [{ type: "FOCUS_NEXT" }], rules);
+  assert.equal(game.worldTick, 21);
+  assert.equal(game.lastFocusHoldWorldTick, 21);
+});
+
 test("global grace defers scheduled spawns and garbage", () => {
   const rules = makeTestRules({ simulation: { operationGraceSteps: 2 } });
   const game = createGame({ seed: 24, rules });
@@ -455,6 +528,85 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
     && event.pieceId === "locking"));
   assert.equal(game.activePieces.find((piece) => piece.id === "falling").y, 5);
   assert.equal(game.worldTick, 20, "lock resolution does not consume world time");
+  assert(!locked.some((event) => event.type === "PIECE_SPAWNED"),
+    "another useful active piece keeps the scheduled spawn cadence");
+});
+
+test("natural lock immediately spawns a replacement when no useful piece remains", () => {
+  const rules = makeTestRules();
+  const game = createGame({ seed: 28, rules });
+  const bottom = game.board.height - 1;
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  game.nextScheduledSpawnWorldTick = 1480;
+  game.activePieces = [{
+    id: "last-useful",
+    templateId: "I",
+    rotation: 0,
+    cellValue: 1,
+    x: 0,
+    y: bottom,
+    cells: [{ x: 0, y: 0 }],
+    carved: 0,
+    carveLimit: 2,
+    restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1,
+    pendingLock: false,
+    spawnIndex: 1,
+    committed: false
+  }];
+  game.focusedPieceId = "last-useful";
+  game.nextSpawnIndex = 2;
+
+  stepGame(game, [], rules);
+  for (let i = 1; i < rules.simulation.operationGraceSteps; i += 1) {
+    const held = stepGame(game, [], rules);
+    assert(!held.some((event) => event.type === "PIECE_SPAWNED"));
+  }
+
+  const resolved = stepGame(game, [], rules);
+  const spawned = resolved.find((event) => event.type === "PIECE_SPAWNED");
+
+  assert(resolved.some((event) => event.type === "PIECE_LOCKED"
+    && event.pieceId === "last-useful"));
+  assert(spawned, "replacement spawns on the natural-lock resolution step");
+  assert.equal(game.focusedPieceId, spawned.pieceId);
+  assert.equal(game.worldTick, 20, "replacement spawn does not add post-lock world delay");
+  assertGameState(game);
+});
+
+test("natural lock without operation grace also spawns a replacement immediately", () => {
+  const rules = makeTestRules({ simulation: { operationGraceSteps: 0 } });
+  const game = createGame({ seed: 29, rules });
+  const bottom = game.board.height - 1;
+  game.worldTick = 20;
+  game.dropQueue.forEach((plan, index) => { plan.spawnAtWorldTick = 1000 + index * 100; });
+  game.nextScheduledSpawnWorldTick = 1480;
+  game.activePieces = [{
+    id: "instant-lock",
+    templateId: "I",
+    rotation: 0,
+    cellValue: 1,
+    x: 0,
+    y: bottom,
+    cells: [{ x: 0, y: 0 }],
+    carved: 0,
+    carveLimit: 2,
+    restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1,
+    pendingLock: false,
+    spawnIndex: 1,
+    committed: false
+  }];
+  game.focusedPieceId = "instant-lock";
+  game.nextSpawnIndex = 2;
+
+  const events = stepGame(game, [], rules);
+  const spawned = events.find((event) => event.type === "PIECE_SPAWNED");
+
+  assert(events.some((event) => event.type === "PIECE_LOCKED"
+    && event.pieceId === "instant-lock"));
+  assert(spawned);
+  assert.equal(game.focusedPieceId, spawned.pieceId);
+  assertGameState(game);
 });
 
 test("an ordinary gravity landing reaches pending lock without pulse alignment", () => {

@@ -1,12 +1,13 @@
 import { defineRules } from "../domain/rules.js";
 
 export const CARVER_RULESET = defineRules({
-  id: "carvemino-carver-rules-v2",
+  id: "carvemino-carver-rules-v3",
   board: { width: 10, visibleHeight: 24, hiddenHeight: 6 },
   simulation: {
     stepsPerSecond: 60,
     lockDelayWorldTicks: 30,
     operationGraceSteps: 8,
+    focusGraceSteps: 2,
     dropCoverageHistoryLength: 48,
     dropPositionSampleCount: 2
   },

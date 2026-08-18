@@ -24,7 +24,7 @@ function cycleFocus(state, direction, events) {
   const usefulPieces = state.activePieces.filter((piece) => !piece.committed);
   if (usefulPieces.length === 0) {
     state.focusedPieceId = null;
-    return;
+    return false;
   }
 
   const ordered = [...usefulPieces].sort((a, b) => a.spawnIndex - b.spawnIndex);
@@ -36,7 +36,9 @@ function cycleFocus(state, direction, events) {
   if (state.focusedPieceId !== nextId) {
     state.focusedPieceId = nextId;
     events.push({ type: "FOCUS_CHANGED", pieceId: nextId });
+    return true;
   }
+  return false;
 }
 
 function focusNextUsefulPieceAfter(state, piece, events) {
@@ -90,10 +92,10 @@ function applyCommands(state, commands, rules, events) {
     if (!command || typeof command.type !== "string") continue;
     switch (command.type) {
       case "FOCUS_NEXT":
-        cycleFocus(state, 1, events);
+        if (cycleFocus(state, 1, events)) startFocusWorldHold(state, rules);
         break;
       case "FOCUS_PREVIOUS":
-        cycleFocus(state, -1, events);
+        if (cycleFocus(state, -1, events)) startFocusWorldHold(state, rules);
         break;
       case "SCULPT":
         if (applySculpt(state, command, rules, events)) refreshWorldHold(state, rules);
@@ -127,6 +129,15 @@ function applyGravity(state, rules, events) {
 
 function operationGraceSteps(rules) {
   return rules.simulation.operationGraceSteps;
+}
+
+function startFocusWorldHold(state, rules) {
+  const focusGraceSteps = rules.simulation.focusGraceSteps;
+  if (focusGraceSteps <= 0) return;
+  if (state.worldHoldSteps > 0) return;
+  if (state.lastFocusHoldWorldTick === state.worldTick) return;
+  state.worldHoldSteps = focusGraceSteps;
+  state.lastFocusHoldWorldTick = state.worldTick;
 }
 
 function refreshWorldHold(state, rules) {
@@ -218,6 +229,14 @@ function resolveLocks(state, pieces, rules, events) {
   return lockedAny;
 }
 
+function replenishAfterNaturalLock(state, rules, events) {
+  if (state.status !== "playing") return;
+  maintainDropQueue(state, rules, events);
+  if (state.activePieces.some((piece) => !piece.committed)) return;
+  bringNextSpawnForward(state);
+  spawnDuePieces(state, rules, events);
+}
+
 function beginDueNaturalLocks(state, rules, events) {
   const ordered = [...state.activePieces].sort(
     (a, b) => pieceBottom(b) - pieceBottom(a) || a.spawnIndex - b.spawnIndex
@@ -231,7 +250,9 @@ function beginDueNaturalLocks(state, rules, events) {
   if (due.length === 0) return false;
 
   if (operationGraceSteps(rules) === 0) {
-    resolveLocks(state, due, rules, events);
+    if (resolveLocks(state, due, rules, events)) {
+      replenishAfterNaturalLock(state, rules, events);
+    }
     return true;
   }
 
@@ -299,7 +320,7 @@ export function stepGameState(state, commands, rules) {
   }
 
   if (finalizePendingLocks(state, rules, events)) {
-    if (state.status === "playing") maintainDropQueue(state, rules, events);
+    replenishAfterNaturalLock(state, rules, events);
     return events;
   }
 

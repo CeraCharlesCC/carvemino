@@ -14,7 +14,7 @@ import {
   getTemplateRotations
 } from "../rules.js";
 
-const GAME_SCHEMA_VERSION = 3;
+const GAME_SCHEMA_VERSION = 4;
 const RANDOM_STREAM_KEYS = Object.freeze(["pieces", "rotations", "drops"]);
 const BOARD_KEYS = Object.freeze(["width", "height", "visibleHeight", "hiddenHeight", "cells"]);
 const DROP_PLAN_KEYS = Object.freeze(["pieceId", "templateId", "rotation", "x", "spawnAtWorldTick"]);
@@ -58,6 +58,7 @@ export function createGameState({ seed = 1, rules }) {
     worldTick: 0,
     stepTick: 0,
     worldHoldSteps: 0,
+    lastFocusHoldWorldTick: -1,
     board: {
       width: rules.board.width,
       height: boardHeight,
@@ -185,6 +186,7 @@ export function snapshotGameState(state) {
     worldTick: state.worldTick,
     stepTick: state.stepTick,
     worldHoldSteps: state.worldHoldSteps,
+    lastFocusHoldWorldTick: state.lastFocusHoldWorldTick,
     board: {
       width: state.board.width,
       height: state.board.height,
@@ -221,6 +223,7 @@ const CURRENT_SNAPSHOT_KEYS = Object.freeze([
   "worldTick",
   "stepTick",
   "worldHoldSteps",
+  "lastFocusHoldWorldTick",
   "board",
   "activePieces",
   "focusedPieceId",
@@ -446,7 +449,11 @@ function assertCurrentSnapshot(snapshot, rules) {
   assertSafeInteger(snapshot.stepTick, "snapshot.stepTick", { minimum: 0 });
   assertSafeInteger(snapshot.worldHoldSteps, "snapshot.worldHoldSteps", {
     minimum: 0,
-    maximum: rules.simulation.operationGraceSteps
+    maximum: Math.max(rules.simulation.operationGraceSteps, rules.simulation.focusGraceSteps)
+  });
+  assertSafeInteger(snapshot.lastFocusHoldWorldTick, "snapshot.lastFocusHoldWorldTick", {
+    minimum: -1,
+    maximum: snapshot.worldTick
   });
   assertBoardSnapshot(snapshot.board, rules);
 

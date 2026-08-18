@@ -17,9 +17,9 @@ function assertPlainObject(value, path) {
   if (!isPlainObject(value)) throw new Error(`${path} must be an object`);
 }
 
-function assertExactKeys(value, expectedKeys, path) {
+function assertExactKeys(value, expectedKeys, path, optionalKeys = []) {
   assertPlainObject(value, path);
-  const expected = new Set(expectedKeys);
+  const expected = new Set([...expectedKeys, ...optionalKeys]);
   for (const key of Object.keys(value)) {
     if (!expected.has(key)) throw new Error(`${path}.${key} is not a supported field`);
   }
@@ -117,6 +117,7 @@ function validateRules(rules) {
       "stepsPerSecond",
       "lockDelayWorldTicks",
       "operationGraceSteps",
+      "focusGraceSteps",
       "dropCoverageHistoryLength",
       "dropPositionSampleCount"
     ],
@@ -125,6 +126,7 @@ function validateRules(rules) {
   assertInteger(rules.simulation.stepsPerSecond, "rules.simulation.stepsPerSecond", { minimum: 1 });
   assertInteger(rules.simulation.lockDelayWorldTicks, "rules.simulation.lockDelayWorldTicks", { minimum: 0 });
   assertInteger(rules.simulation.operationGraceSteps, "rules.simulation.operationGraceSteps", { minimum: 0 });
+  assertInteger(rules.simulation.focusGraceSteps, "rules.simulation.focusGraceSteps", { minimum: 0 });
   assertInteger(
     rules.simulation.dropCoverageHistoryLength,
     "rules.simulation.dropCoverageHistoryLength",
@@ -158,7 +160,8 @@ function validateRules(rules) {
       "spawnMinimumWorldTicks",
       "dropQueueDepth"
     ],
-    "rules.progression"
+    "rules.progression",
+    ["spawnCurve"]
   );
   assertInteger(rules.progression.linesPerLevel, "rules.progression.linesPerLevel", { minimum: 1 });
   assertInteger(rules.progression.gravityStartWorldTicks, "rules.progression.gravityStartWorldTicks", { minimum: 1 });
@@ -168,6 +171,19 @@ function validateRules(rules) {
   assertInteger(rules.progression.spawnStepWorldTicks, "rules.progression.spawnStepWorldTicks", { minimum: 0 });
   assertInteger(rules.progression.spawnMinimumWorldTicks, "rules.progression.spawnMinimumWorldTicks", { minimum: 1 });
   assertInteger(rules.progression.dropQueueDepth, "rules.progression.dropQueueDepth", { minimum: 1 });
+  if (rules.progression.spawnCurve !== undefined) {
+    assertExactKeys(
+      rules.progression.spawnCurve,
+      ["endLevel", "easeOutExponentMilli"],
+      "rules.progression.spawnCurve"
+    );
+    assertInteger(rules.progression.spawnCurve.endLevel, "rules.progression.spawnCurve.endLevel", { minimum: 2 });
+    assertInteger(
+      rules.progression.spawnCurve.easeOutExponentMilli,
+      "rules.progression.spawnCurve.easeOutExponentMilli",
+      { minimum: 1000 }
+    );
+  }
 
   assertExactKeys(rules.scoring, ["lineClear", "carve", "fill"], "rules.scoring");
   assertNumberTable(rules.scoring.lineClear, "rules.scoring.lineClear");
@@ -290,6 +306,15 @@ export function gravityIntervalWorldTicksForLevel(rules, level) {
 
 export function spawnIntervalWorldTicksForLevel(rules, level) {
   const p = rules.progression;
+  if (p.spawnCurve) {
+    const clampedLevel = Math.max(1, Math.min(p.spawnCurve.endLevel, level));
+    const t = (clampedLevel - 1) / (p.spawnCurve.endLevel - 1);
+    const exponent = p.spawnCurve.easeOutExponentMilli / 1000;
+    const progress = 1 - Math.pow(1 - t, exponent);
+    const curvedTicks = p.spawnStartWorldTicks
+      + (p.spawnMinimumWorldTicks - p.spawnStartWorldTicks) * progress;
+    return Math.max(p.spawnMinimumWorldTicks, Math.ceil(curvedTicks));
+  }
   return Math.max(
     p.spawnMinimumWorldTicks,
     p.spawnStartWorldTicks - (level - 1) * p.spawnStepWorldTicks
