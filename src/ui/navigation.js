@@ -7,6 +7,21 @@ const NON_REPEATING_UI_KEYS = new Set(["Enter", "Space", "Escape", "KeyR", "KeyO
 const CONTROLLER_PREVIOUS_ACTIONS = new Set(["cursorUp", "cursorLeft", "focusPrevious"]);
 const CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext"]);
 
+export const SCREEN_BACK_DESTINATIONS = Object.freeze({
+  play: "menu",
+  singleplayer: "play",
+  multiplayer: "play",
+  lan: "multiplayer",
+  "lan-host": "lan",
+  "lan-join": "lan",
+  records: "menu",
+  options: "menu"
+});
+
+export function getBackScreen(screenName) {
+  return SCREEN_BACK_DESTINATIONS[screenName] || null;
+}
+
 export function getTitleScreenAction(code) {
   if (code === "Enter") return "start";
   if (code === "KeyR") return "records";
@@ -43,7 +58,6 @@ export function createNavigation({
 
   let currentScreen = "menu";
   let gamePaused = false;
-  let secondaryReturnScreen = "menu";
 
   function updateControllerStartLabels() {
     const label = currentScreen === "game"
@@ -77,11 +91,6 @@ export function createNavigation({
   }
 
   function navigateTo(screenName) {
-    if ((screenName === "records" || screenName === "options") && currentScreen !== screenName) {
-      secondaryReturnScreen = currentScreen === "records" || currentScreen === "options"
-        ? "menu"
-        : currentScreen;
-    }
     showScreen(screenName);
   }
 
@@ -160,11 +169,7 @@ export function createNavigation({
       return false;
     }
     onAudioEvent("back");
-    if (currentScreen === "records" || currentScreen === "options") {
-      showScreen(secondaryReturnScreen);
-    } else {
-      showScreen("menu");
-    }
+    showScreen(getBackScreen(currentScreen) || "menu");
     return true;
   }
 
@@ -279,7 +284,6 @@ export function createNavigation({
           returnFocus: document.activeElement?.focus ? document.activeElement : titleManualButton || pressStart
         });
       } else if (action === "records" || action === "options") {
-        secondaryReturnScreen = "menu";
         onAudioEvent("confirm");
         showScreen(action);
       }
@@ -293,8 +297,7 @@ export function createNavigation({
     if (handleMenuNavigation(event)) return;
     if (event.code === "Escape" && currentScreen !== "menu") {
       onAudioEvent("back");
-      if (currentScreen === "records" || currentScreen === "options") showScreen(secondaryReturnScreen);
-      else showScreen("menu");
+      showScreen(getBackScreen(currentScreen) || "menu");
       event.preventDefault();
     }
   });
@@ -315,7 +318,8 @@ export function createNavigation({
   for (const button of document.querySelectorAll("[data-back]")) {
     button.addEventListener("click", () => {
       onAudioEvent("back");
-      showScreen(secondaryReturnScreen);
+      const destination = button.dataset.back;
+      if (destination) showScreen(destination);
     });
   }
   for (const button of document.querySelectorAll("[data-open-manual]")) {

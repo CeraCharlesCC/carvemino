@@ -7,7 +7,7 @@ import { claimStartupManualVisit, createStartupManual } from "./startup-manual.j
 import { createI18n } from "../i18n.js";
 
 export { getSculptAction } from "./game-screen.js";
-export { getTitleScreenAction } from "./navigation.js";
+export { getBackScreen, getTitleScreenAction } from "./navigation.js";
 
 export function createUi({
   modes,

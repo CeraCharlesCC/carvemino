@@ -607,6 +607,17 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
 .back-button > span { font-size: 12px; }
 .compact-menu { margin-top: 22px; }
 
+.menu-placeholder {
+  max-width: 520px;
+  padding: 18px;
+  border: 1px solid var(--arrow);
+  color: var(--wire);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  line-height: 1.6;
+  text-align: center;
+}
+
 .menu-footer {
   margin-top: 24px;
   display: flex;

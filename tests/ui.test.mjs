@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { createI18n, resolveLocale } from "../src/i18n.js";
@@ -17,7 +18,7 @@ import {
   getManualDemoTarget,
   performManualDemoAction
 } from "../src/ui/startup-manual.js";
-import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
+import { getBackScreen, getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
 
 function createPointerControl(actionId) {
   const pressed = new Set();
@@ -67,6 +68,33 @@ test("title screen keyboard actions are explicit and do not use selection keys",
   for (const code of ["Space", "KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown"]) {
     assert.equal(getTitleScreenAction(code), null);
   }
+});
+
+test("multiplayer menu routes have explicit back destinations", () => {
+  assert.equal(getBackScreen("play"), "menu");
+  assert.equal(getBackScreen("singleplayer"), "play");
+  assert.equal(getBackScreen("multiplayer"), "play");
+  assert.equal(getBackScreen("lan"), "multiplayer");
+  assert.equal(getBackScreen("lan-host"), "lan");
+  assert.equal(getBackScreen("lan-join"), "lan");
+  assert.equal(getBackScreen("records"), "menu");
+  assert.equal(getBackScreen("options"), "menu");
+  assert.equal(getBackScreen("missing"), null);
+});
+
+test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /id="press-start"[^>]+data-nav="play"/);
+  for (const screen of ["play", "singleplayer", "multiplayer", "lan", "lan-host", "lan-join"]) {
+    assert.match(html, new RegExp(`data-screen="${screen}"`), screen);
+  }
+  assert.match(html, /data-nav="singleplayer"/);
+  assert.match(html, /data-nav="multiplayer"/);
+  assert.match(html, /data-nav="lan"/);
+  assert.match(html, /data-nav="lan-host"/);
+  assert.match(html, /data-nav="lan-join"/);
+  assert.match(html, /<button[^>]+disabled[^>]+aria-disabled="true"[^>]+tabindex="-1"[^>]*>\s*<span>Online<\/span><b>WIP<\/b>/i);
+  assert.doesNotMatch(html, /<button[^>]+disabled[^>]+data-nav="lan(?:-host|-join)?"/i);
 });
 
 test("sculpt action follows projected legal targets", () => {

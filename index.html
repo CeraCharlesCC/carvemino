@@ -74,7 +74,7 @@
             </div>
           </div>
 
-          <button class="start-button" id="press-start" type="button" data-nav="singleplayer" aria-keyshortcuts="Enter">
+          <button class="start-button" id="press-start" type="button" data-nav="play" aria-keyshortcuts="Enter">
             <span data-input-hint="keyboard">PRESS ENTER TO START</span>
             <span data-input-hint="touch">TAP OR PRESS START</span>
           </button>
@@ -85,7 +85,28 @@
             <span aria-hidden="true">•</span>
             <button type="button" data-nav="options" tabindex="-1" aria-keyshortcuts="O"><kbd data-input-hint="keyboard">O</kbd> OPTIONS</button>
           </nav>
-          <p class="cabinet-credit">CARVEMINO SYSTEM 94 // 1 PLAYER</p>
+          <p class="cabinet-credit">CARVEMINO SYSTEM 94 // 1-2 PLAYERS</p>
+        </section>
+
+        <section class="screen menu-screen select-game-screen" id="play-screen" data-screen="play" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">FREE PLAY // SELECT PLAY</p>
+            <h2>SELECT PLAY</h2>
+          </header>
+          <nav class="arcade-menu" aria-label="Play type">
+            <button class="menu-button mode-button" type="button" data-nav="singleplayer">
+              <span>Single Player</span><b>SOLO</b>
+            </button>
+            <button class="menu-button mode-button" type="button" data-nav="multiplayer">
+              <span>Multiplayer</span><b>VS</b>
+            </button>
+            <button class="menu-button back-button" type="button" data-back="menu"><span>Back</span></button>
+          </nav>
+          <div class="menu-footer">
+            <span data-input-hint="keyboard">WASD / ARROWS SELECT</span>
+            <span data-input-hint="keyboard">ENTER CONFIRM · ESC BACK</span>
+            <span data-input-hint="touch">D-PAD SELECT · A / START CONFIRM · B BACK</span>
+          </div>
         </section>
 
         <section class="screen menu-screen select-game-screen" id="singleplayer-screen" data-screen="singleplayer" hidden>
@@ -94,12 +115,77 @@
             <h2>SELECT GAME</h2>
           </header>
           <nav class="arcade-menu mode-menu" id="mode-menu" aria-label="Singleplayer modes"></nav>
+          <nav class="arcade-menu compact-menu" aria-label="Singleplayer navigation">
+            <button class="menu-button back-button" type="button" data-back="play"><span>Back</span></button>
+          </nav>
           <div class="menu-footer">
             <span data-input-hint="keyboard">WASD / ARROWS SELECT</span>
             <span data-input-hint="keyboard">ENTER START</span>
             <span data-input-hint="touch">D-PAD SELECT</span>
             <span data-input-hint="touch">A / START CONFIRM · B BACK</span>
           </div>
+        </section>
+
+        <section class="screen menu-screen select-game-screen" id="multiplayer-screen" data-screen="multiplayer" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">PLAYER VS PLAYER // SELECT LINK</p>
+            <h2>MULTIPLAYER</h2>
+          </header>
+          <nav class="arcade-menu" aria-label="Multiplayer connection type">
+            <button class="menu-button mode-button" type="button" data-nav="lan">
+              <span>LAN</span><b>LOCAL NETWORK</b>
+            </button>
+            <button class="menu-button mode-button" type="button" disabled aria-disabled="true" tabindex="-1">
+              <span>Online</span><b>WIP</b>
+            </button>
+            <button class="menu-button back-button" type="button" data-back="play"><span>Back</span></button>
+          </nav>
+          <div class="menu-footer">
+            <span data-input-hint="keyboard">ENTER CONFIRM · ESC BACK</span>
+            <span data-input-hint="touch">A / START CONFIRM · B BACK</span>
+          </div>
+        </section>
+
+        <section class="screen menu-screen select-game-screen" id="lan-screen" data-screen="lan" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">LAN VS // SELECT ROLE</p>
+            <h2>LAN</h2>
+          </header>
+          <nav class="arcade-menu" aria-label="LAN role">
+            <button class="menu-button mode-button" type="button" data-nav="lan-host">
+              <span>Host</span><b>CREATE MATCH</b>
+            </button>
+            <button class="menu-button mode-button" type="button" data-nav="lan-join">
+              <span>Join</span><b>JOIN MATCH</b>
+            </button>
+            <button class="menu-button back-button" type="button" data-back="multiplayer"><span>Back</span></button>
+          </nav>
+          <div class="menu-footer">
+            <span data-input-hint="keyboard">ENTER CONFIRM · ESC BACK</span>
+            <span data-input-hint="touch">A / START CONFIRM · B BACK</span>
+          </div>
+        </section>
+
+        <section class="screen menu-screen select-game-screen" id="lan-host-screen" data-screen="lan-host" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">LAN VS // HOST</p>
+            <h2>HOST</h2>
+          </header>
+          <p class="menu-placeholder">CONNECTION SETUP IS RESERVED FOR THE LAN LOBBY MILESTONE.</p>
+          <nav class="arcade-menu compact-menu">
+            <button class="menu-button back-button" type="button" data-back="lan"><span>Back</span></button>
+          </nav>
+        </section>
+
+        <section class="screen menu-screen select-game-screen" id="lan-join-screen" data-screen="lan-join" hidden>
+          <header class="screen-heading">
+            <p class="eyebrow">LAN VS // JOIN</p>
+            <h2>JOIN</h2>
+          </header>
+          <p class="menu-placeholder">CONNECTION SETUP IS RESERVED FOR THE LAN LOBBY MILESTONE.</p>
+          <nav class="arcade-menu compact-menu">
+            <button class="menu-button back-button" type="button" data-back="lan"><span>Back</span></button>
+          </nav>
         </section>
 
         <section class="screen menu-screen" id="records-screen" data-screen="records" hidden>
@@ -118,7 +204,7 @@
             </section>
           </div>
           <nav class="arcade-menu compact-menu">
-            <button class="menu-button back-button" type="button" data-back><span>Back</span></button>
+            <button class="menu-button back-button" type="button" data-back="menu"><span>Back</span></button>
           </nav>
         </section>
 
@@ -160,7 +246,7 @@
             <div class="keybinding-list" id="keybinding-list"></div>
           </div>
           <nav class="arcade-menu compact-menu">
-            <button class="menu-button back-button" type="button" data-back><span>Back</span></button>
+            <button class="menu-button back-button" type="button" data-back="menu"><span>Back</span></button>
           </nav>
         </section>
 
