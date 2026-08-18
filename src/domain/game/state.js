@@ -277,6 +277,11 @@ function assertNonEmptyString(value, path) {
   }
 }
 
+function generatedPieceNumber(pieceId) {
+  const match = /^p([1-9]\d*)$/.exec(pieceId);
+  return match ? BigInt(match[1]) : null;
+}
+
 function assertArray(value, path, maximumLength = Number.MAX_SAFE_INTEGER) {
   if (!Array.isArray(value)) throw new Error(`${path} must be an array`);
   if (value.length > maximumLength) {
@@ -449,6 +454,8 @@ function assertCurrentSnapshot(snapshot, rules) {
   assertArray(snapshot.activePieces, "snapshot.activePieces", boardCellCount);
   const pieceIds = new Set();
   const spawnIndexes = new Set();
+  let highestReservedPieceNumber = 0n;
+  let highestReservedSpawnIndex = 0;
   for (const [index, piece] of snapshot.activePieces.entries()) {
     const path = `snapshot.activePieces[${index}]`;
     assertPieceSnapshot(piece, path, rules, boardCellCount);
@@ -458,6 +465,11 @@ function assertCurrentSnapshot(snapshot, rules) {
     }
     pieceIds.add(piece.id);
     spawnIndexes.add(piece.spawnIndex);
+    const pieceNumber = generatedPieceNumber(piece.id);
+    if (pieceNumber !== null && pieceNumber > highestReservedPieceNumber) {
+      highestReservedPieceNumber = pieceNumber;
+    }
+    highestReservedSpawnIndex = Math.max(highestReservedSpawnIndex, piece.spawnIndex);
   }
 
   if (snapshot.focusedPieceId !== null) {
@@ -474,6 +486,10 @@ function assertCurrentSnapshot(snapshot, rules) {
     assertDropPlan(plan, path, rules);
     if (pieceIds.has(plan.pieceId)) throw new Error(`${path}.pieceId duplicates piece id ${plan.pieceId}`);
     pieceIds.add(plan.pieceId);
+    const pieceNumber = generatedPieceNumber(plan.pieceId);
+    if (pieceNumber !== null && pieceNumber > highestReservedPieceNumber) {
+      highestReservedPieceNumber = pieceNumber;
+    }
     if (plan.spawnAtWorldTick < previousSpawnTick) {
       throw new Error("snapshot.dropQueue must be ordered by spawnAtWorldTick");
     }
@@ -518,6 +534,16 @@ function assertCurrentSnapshot(snapshot, rules) {
   assertStatusFields(snapshot);
   assertSafeInteger(snapshot.nextPieceId, "snapshot.nextPieceId", { minimum: 1 });
   assertSafeInteger(snapshot.nextSpawnIndex, "snapshot.nextSpawnIndex", { minimum: 1 });
+  if (BigInt(snapshot.nextPieceId) <= highestReservedPieceNumber) {
+    throw new Error(
+      `snapshot.nextPieceId must be greater than reserved piece id p${highestReservedPieceNumber}`
+    );
+  }
+  if (snapshot.nextSpawnIndex <= highestReservedSpawnIndex) {
+    throw new Error(
+      `snapshot.nextSpawnIndex must be greater than reserved spawn index ${highestReservedSpawnIndex}`
+    );
+  }
   if (snapshot.nextScheduledSpawnWorldTick !== null) {
     assertSafeInteger(snapshot.nextScheduledSpawnWorldTick, "snapshot.nextScheduledSpawnWorldTick", { minimum: 0 });
   }

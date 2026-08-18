@@ -25,7 +25,6 @@ export const ACHIEVEMENTS = Object.freeze({
 });
 
 const SINGLEPLAYER_MODE_IDS = Object.freeze(SINGLEPLAYER_CATALOG.map((mode) => mode.id));
-const LEGACY_STORAGE_KEYS = Object.freeze(["carvemino-profile-v2"]);
 
 function createDefaultHighScores() {
   return Object.fromEntries(SINGLEPLAYER_MODE_IDS.map((modeId) => [modeId, 0]));
@@ -127,24 +126,9 @@ export function createProfileStore(storage) {
     }
   }
   let data = createDefaultData();
-  let migratedStorageKey = null;
-
   try {
     const saved = storage?.getItem?.(PROFILE_STORAGE_KEY);
-    if (saved != null) {
-      data = normalizeCurrentProfileData(safeParse(saved)) || createDefaultData();
-    } else {
-      for (const legacyKey of LEGACY_STORAGE_KEYS) {
-        const legacySaved = storage?.getItem?.(legacyKey);
-        if (legacySaved == null) continue;
-        const migrated = normalizeCurrentProfileData(safeParse(legacySaved));
-        if (migrated) {
-          data = migrated;
-          migratedStorageKey = legacyKey;
-        }
-        break;
-      }
-    }
+    if (saved != null) data = normalizeCurrentProfileData(safeParse(saved)) || createDefaultData();
   } catch {
     data = createDefaultData();
   }
@@ -157,14 +141,6 @@ export function createProfileStore(storage) {
     } catch {
       // Persistence is optional; the in-memory profile still works.
       return false;
-    }
-  }
-
-  if (migratedStorageKey && persist()) {
-    try {
-      storage?.removeItem?.(migratedStorageKey);
-    } catch {
-      // The stable storage key is already populated; legacy cleanup is optional.
     }
   }
 

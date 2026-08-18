@@ -27,10 +27,6 @@ class MemoryStorage {
   setItem(key, value) {
     this.values.set(key, String(value));
   }
-
-  removeItem(key) {
-    this.values.delete(key);
-  }
 }
 
 test("classic and carver are independent catalog-backed rulesets", () => {
@@ -63,7 +59,6 @@ test("profile stores independent high scores and persists them", () => {
   assert.equal(restored.getHighScore("classic"), 1250);
   assert.equal(restored.getHighScore("carver"), 2100);
   assert(storage.getItem(PROFILE_STORAGE_KEY));
-  assert.equal(storage.getItem("carvemino-profile-v2"), null);
 });
 
 test("profile high scores are catalog-backed and reject unknown mode ids", () => {
@@ -112,10 +107,10 @@ test("rebinding swaps collisions and reset restores defaults", () => {
   assert.deepEqual(snapshot.settings.keybindings, DEFAULT_KEYBINDINGS);
 });
 
-test("profiles with a non-current schema are reset instead of migrated", () => {
+test("profiles with an unsupported schema reset to defaults", () => {
   const storage = new MemoryStorage();
   storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: PROFILE_SCHEMA_VERSION + 1,
     highScores: { classic: 99 },
     achievements: {},
     settings: {
@@ -154,18 +149,6 @@ test("profile records are additive across catalog changes", () => {
   assert.equal(snapshot.highScores.classic, 0);
   assert.equal(snapshot.highScores.carver, 0);
   assert.equal(snapshot.highScores["retired-mode"], 4321);
-});
-
-test("legacy versioned profile storage migrates to the stable key", () => {
-  const storage = new MemoryStorage();
-  const saved = createProfileStore(new MemoryStorage()).getSnapshot();
-  saved.highScores.classic = 777;
-  storage.setItem("carvemino-profile-v2", JSON.stringify(saved));
-
-  const snapshot = createProfileStore(storage).getSnapshot();
-  assert.equal(snapshot.highScores.classic, 777);
-  assert(storage.getItem(PROFILE_STORAGE_KEY));
-  assert.equal(storage.getItem("carvemino-profile-v2"), null);
 });
 
 test("audio settings persist and clamp volumes", () => {

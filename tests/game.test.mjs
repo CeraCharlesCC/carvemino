@@ -765,6 +765,7 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
     committed: false
   }];
   game.focusedPieceId = "pending";
+  game.nextSpawnIndex = 2;
 
   stepGame(game, [], rules);
   const restored = restoreGame(snapshotGame(game));
@@ -844,7 +845,9 @@ test("restore rejects malformed or hostile snapshot state before constructing a 
     ["duplicate applied garbage ids", (snapshot) => { snapshot.appliedGarbageIds = ["g", "g"]; }, /duplicate id/],
     ["status enum", (snapshot) => { snapshot.status = "paused"; }, /snapshot\.status/],
     ["status reason consistency", (snapshot) => { snapshot.gameOverReason = "spawn-blocked"; }, /must be null while playing/],
-    ["level consistency", (snapshot) => { snapshot.level += 1; }, /snapshot\.level must be/]
+    ["level consistency", (snapshot) => { snapshot.level += 1; }, /snapshot\.level must be/],
+    ["rolled-back piece id counter", (snapshot) => { snapshot.nextPieceId = 1; }, /must be greater than reserved piece id/],
+    ["rolled-back spawn index counter", (snapshot) => { snapshot.nextSpawnIndex = 1; }, /must be greater than reserved spawn index/]
   ];
 
   for (const [name, mutate, expected] of cases) {
@@ -904,6 +907,35 @@ test("match policies receive a capability surface instead of mutable match inter
   assert.equal(seen.state.calls, 1);
   assert.deepEqual(seen.getPlayer("solo"), { id: "solo", status: "playing", worldTick: 1 });
   assert(events.some((event) => event.type === "POLICY_BEFORE_STEP"));
+});
+
+test("match policies cannot mutate the validated player roster", () => {
+  const rules = makeTestRules();
+  let validatedPlayerIds = null;
+  const policy = {
+    id: "roster-mutation-test-policy",
+    validatePlayerIds(playerIds) {
+      validatedPlayerIds = playerIds;
+      assert.throws(() => { playerIds.length = 0; }, TypeError);
+    },
+    createState() {
+      return {};
+    },
+    beforeStep() {},
+    onGameEvent() {},
+    afterStep() {}
+  };
+
+  const match = createMatch({
+    id: "roster-mutation-test",
+    playerIds: ["a", "b"],
+    seed: 32,
+    rules,
+    policy
+  });
+
+  assert.equal(Object.isFrozen(validatedPlayerIds), true);
+  assert.deepEqual(match.players.map((player) => player.id), ["a", "b"]);
 });
 
 test("two-line clear in versus produces queued garbage for the opponent", () => {

@@ -102,7 +102,7 @@ export function createMatch({
   if (new Set(normalizedPlayerIds).size !== normalizedPlayerIds.length) {
     throw new Error("playerIds must be unique");
   }
-  policy.validatePlayerIds(normalizedPlayerIds);
+  policy.validatePlayerIds(Object.freeze([...normalizedPlayerIds]));
   const engine = createGameEngine(rules);
 
   return {
