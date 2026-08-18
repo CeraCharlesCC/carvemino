@@ -2,7 +2,7 @@ import { createProfileStore } from "./app/profile.js";
 import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "./app/catalog.js";
 import { GameRuntime } from "./app/runtime.js";
 import { createAudioEngine } from "./audio/engine.js";
-import { createGame, createGameView } from "./domain/game.js";
+import { createGameSession } from "./domain/game.js";
 import { createUi } from "./ui/ui.js";
 
 const profile = createProfileStore();
@@ -10,7 +10,6 @@ const audio = createAudioEngine();
 audio.setSettings(profile.getSnapshot().settings.audio);
 
 let runtime = null;
-let rules = null;
 let activeModeId = null;
 let seed = 1;
 
@@ -34,15 +33,13 @@ function startGame(modeId = activeModeId) {
   stopGame();
   const mode = getSingleplayerMode(modeId);
   activeModeId = mode.id;
-  rules = mode.rules;
   seed = freshSeed();
-  const game = createGame({ seed, rules });
-  audio.startGame({ modeId: mode.id, level: game.level });
+  const session = createGameSession({ seed, rules: mode.rules });
+  audio.startGame({ modeId: mode.id, level: session.game.level });
 
   ui.setGameMode(mode);
   runtime = new GameRuntime({
-    game,
-    rules,
+    session,
     onEvents(events, gameState) {
       audio.handleGameEvents(events, gameState);
       const result = profile.processGameEvents(activeModeId, events, gameState.score);
@@ -54,7 +51,7 @@ function startGame(modeId = activeModeId) {
       ui.render(view);
     }
   });
-  ui.render(createGameView(game));
+  ui.render(session.view());
   runtime.start();
 }
 

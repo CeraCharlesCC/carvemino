@@ -1,4 +1,3 @@
-import { cancelIncomingGarbage, queueGarbage } from "../game.js";
 import { alivePlayers, finishMatch, mix32, playerById } from "./policy-utils.js";
 
 function assertNonEmptyString(value, name) {
@@ -43,7 +42,7 @@ function queueAttack(match, policy, sourcePlayerId, targetPlayerId, rows, events
   const target = playerById(match, targetPlayerId);
   if (!target || target.game.status !== "playing" || rows <= 0) return;
   const packet = makeGarbagePacket(match, policy, sourcePlayerId, target, rows);
-  if (!queueGarbage(target.game, packet)) return;
+  if (!match.engine.queueGarbage(target.game, packet)) return;
 
   events.push({
     type: "GARBAGE_SENT",
@@ -58,7 +57,7 @@ function cancelOutgoingAgainstExistingGarbage(match, policy, attack, events) {
   const source = playerById(match, attack.sourcePlayerId);
   if (!source) return 0;
 
-  const result = cancelIncomingGarbage(source.game, attack.rows);
+  const result = match.engine.cancelIncomingGarbage(source.game, attack.rows);
   if (result.cancelled > 0) {
     events.push({
       type: "GARBAGE_CANCELLED",

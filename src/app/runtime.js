@@ -1,16 +1,14 @@
-import { createGameView, hashGameState, stepGame } from "../domain/game.js";
-
 export class GameRuntime {
-  constructor({ game, rules, onFrame = () => {}, onEvents = () => {} }) {
-    this.game = game;
-    this.rules = rules;
+  constructor({ session, onFrame = () => {}, onEvents = () => {} }) {
+    if (!session) throw new Error("game session is required");
+    this.session = session;
+    this.game = session.game;
     this.onFrame = onFrame;
     this.onEvents = onEvents;
-    this.stepSeconds = 1 / rules.simulation.stepsPerSecond;
+    this.stepSeconds = 1 / session.engine.stepsPerSecond;
     this.accumulator = 0;
     this.lastTime = null;
     this.pendingCommands = [];
-    this.commandLog = [];
     this.running = false;
     this.frameHandle = null;
     this.boundFrame = (time) => this.frame(time);
@@ -23,13 +21,7 @@ export class GameRuntime {
   runOneTick() {
     const commands = this.pendingCommands;
     this.pendingCommands = [];
-    for (const command of commands) {
-      this.commandLog.push({
-        stepTick: this.game.stepTick,
-        ...command
-      });
-    }
-    const events = stepGame(this.game, commands, this.rules);
+    const events = this.session.step(commands);
     if (events.length > 0) this.onEvents(events, this.game);
     return events;
   }
@@ -46,9 +38,9 @@ export class GameRuntime {
       this.accumulator -= this.stepSeconds;
     }
 
-    this.onFrame(createGameView(this.game), {
+    this.onFrame(this.session.view(), {
       interpolation: this.accumulator / this.stepSeconds,
-      stateHash: hashGameState(this.game)
+      stateHash: this.session.hash()
     });
     if (this.game.status === "playing") {
       this.frameHandle = requestAnimationFrame(this.boundFrame);
@@ -71,12 +63,7 @@ export class GameRuntime {
     this.frameHandle = null;
   }
 
-  exportReplay(seed) {
-    return {
-      version: 2,
-      rulesetId: this.rules.id,
-      seed,
-      commands: this.commandLog.map((command) => ({ ...command }))
-    };
+  exportReplay() {
+    return this.session.exportReplay();
   }
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { getSingleplayerMode } from "../src/app/catalog.js";
 import { GameRuntime } from "../src/app/runtime.js";
-import { createGame } from "../src/domain/game.js";
+import { createGameSession } from "../src/domain/game.js";
 
 test("runtime stops scheduling frames after game over", () => {
   const previousRequest = globalThis.requestAnimationFrame;
@@ -17,8 +17,9 @@ test("runtime stops scheduling frames after game over", () => {
 
   try {
     const rules = getSingleplayerMode("classic").rules;
-    const game = createGame({ seed: 1, rules });
-    const runtime = new GameRuntime({ game, rules });
+    const session = createGameSession({ seed: 1, rules });
+    const { game } = session;
+    const runtime = new GameRuntime({ session });
 
     runtime.start();
     assert.equal(callbacks.length, 1);
@@ -36,14 +37,17 @@ test("runtime stops scheduling frames after game over", () => {
 
 test("runtime replay commands are indexed by the fixed-step clock", () => {
   const rules = getSingleplayerMode("classic").rules;
-  const game = createGame({ seed: 2, rules });
-  const runtime = new GameRuntime({ game, rules });
+  const session = createGameSession({ seed: 2, rules });
+  const { game } = session;
+  const runtime = new GameRuntime({ session });
 
   runtime.command({ type: "FOCUS_NEXT" });
   runtime.runOneTick();
 
-  const replay = runtime.exportReplay(2);
+  const replay = runtime.exportReplay();
   assert.equal(game.stepTick, 1);
+  assert.equal(replay.seed, 2);
+  assert.equal(replay.rulesetId, rules.id);
   assert.deepEqual(replay.commands, [{ stepTick: 0, type: "FOCUS_NEXT" }]);
   assert.equal(Object.hasOwn(replay.commands[0], "tick"), false);
 });

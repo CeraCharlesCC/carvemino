@@ -1,4 +1,4 @@
-import { createGame, stepGame } from "./game.js";
+import { createGameEngine } from "./game.js";
 import { mix32, playerById } from "./match/policy-utils.js";
 
 const POLICY_HOOKS = Object.freeze([
@@ -36,14 +36,15 @@ export function createMatch({
     throw new Error("playerIds must be unique");
   }
   policy.validatePlayerIds(normalizedPlayerIds);
+  const engine = createGameEngine(rules);
 
   return {
     version: 2,
     id,
     seed: seed >>> 0,
     matchTick: 0,
-    rules,
-    rulesetId: rules.id,
+    engine,
+    rulesetId: engine.rulesetId,
     policy,
     policyId: policy.id,
     policyState: policy.createState(),
@@ -51,7 +52,7 @@ export function createMatch({
     result: null,
     players: normalizedPlayerIds.map((playerId, index) => ({
       id: playerId,
-      game: createGame({ seed: mix32((seed >>> 0) ^ (index + 1)), rules })
+      game: engine.create({ seed: mix32((seed >>> 0) ^ (index + 1)) })
     }))
   };
 }
@@ -66,7 +67,7 @@ export function stepMatch(match, commandsByPlayer = {}) {
   for (const player of match.players) {
     if (player.game.status !== "playing") continue;
     const commands = commandsByPlayer[player.id] || [];
-    const gameEvents = stepGame(player.game, commands, match.rules);
+    const gameEvents = match.engine.step(player.game, commands);
     gameEventBatches.push({ playerId: player.id, gameEvents });
   }
 

@@ -8,7 +8,7 @@ import {
   createProfileStore
 } from "../src/app/profile.js";
 import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "../src/app/catalog.js";
-import { createGame, stepGame } from "../src/domain/game.js";
+import { createGameEngine } from "../src/domain/game.js";
 import { getTemplateIds } from "../src/domain/rules.js";
 
 class MemoryStorage {
@@ -35,8 +35,9 @@ test("classic and carver are independent catalog-backed rulesets", () => {
   assert.equal(carver.sculpting.carveLimit, 4);
   assert.notDeepEqual(getTemplateIds(carver), getTemplateIds(classic));
 
-  const game = createGame({ seed: 123, rules: carver });
-  stepGame(game, [], carver);
+  const engine = createGameEngine(carver);
+  const game = engine.create({ seed: 123 });
+  engine.step(game, []);
   assert.equal(game.board.visibleHeight, 24);
   assert.equal(game.activePieces[0].carveLimit, 4);
   assert(getTemplateIds(carver).includes(game.activePieces[0].templateId));

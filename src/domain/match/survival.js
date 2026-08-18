@@ -1,4 +1,3 @@
-import { queueGarbage } from "../game.js";
 import { alivePlayers, finishMatch, mix32 } from "./policy-utils.js";
 
 function assertNonEmptyString(value, name) {
@@ -35,7 +34,7 @@ function queueWave(match, policy, events) {
       applyAtWorldTick: player.game.worldTick + policy.garbageWarningWorldTicks,
       seed: mix32(match.seed ^ 0xa5a5a5a5 ^ wave)
     };
-    if (queueGarbage(player.game, packet)) {
+    if (match.engine.queueGarbage(player.game, packet)) {
       events.push({
         type: "SURVIVAL_WAVE_QUEUED",
         playerId: player.id,

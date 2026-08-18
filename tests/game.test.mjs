@@ -1,22 +1,67 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  assertGameState,
-  cancelIncomingGarbage,
-  createGame,
-  getEditableFillCells,
-  hashGameState,
-  queueGarbage,
-  restoreGame,
-  snapshotGame,
-  stepGame
-} from "../src/domain/game.js";
+import { createGameEngine } from "../src/domain/game.js";
 import { createMatch, getPlayerGame, stepMatch } from "../src/domain/match.js";
 import { defineSurvivalPolicy } from "../src/domain/match/survival.js";
 import { defineVersusPolicy } from "../src/domain/match/versus.js";
 import { getTemplateBounds, getTemplateCells } from "../src/domain/rules.js";
 import { makeTestRules } from "./helpers/rules.mjs";
+
+const enginesByRulesetId = new Map();
+
+function engineForRules(rules) {
+  let engine = enginesByRulesetId.get(rules.id);
+  if (!engine) {
+    engine = createGameEngine(rules);
+    enginesByRulesetId.set(rules.id, engine);
+  }
+  return engine;
+}
+
+function engineForState(state) {
+  const engine = enginesByRulesetId.get(state.rulesetId);
+  if (!engine) throw new Error(`No test engine registered for ${state.rulesetId}`);
+  return engine;
+}
+
+function createGame({ seed = 1, rules }) {
+  return engineForRules(rules).create({ seed });
+}
+
+function stepGame(state, commands, rules) {
+  return engineForRules(rules).step(state, commands);
+}
+
+function getEditableFillCells(state, pieceId) {
+  return engineForState(state).getEditableFillCells(state, pieceId);
+}
+
+function queueGarbage(state, packet) {
+  return engineForState(state).queueGarbage(state, packet);
+}
+
+function cancelIncomingGarbage(state, rows) {
+  return engineForState(state).cancelIncomingGarbage(state, rows);
+}
+
+function snapshotGame(state) {
+  return engineForState(state).snapshot(state);
+}
+
+function restoreGame(snapshot) {
+  const engine = enginesByRulesetId.get(snapshot.rulesetId);
+  if (!engine) throw new Error(`No test engine registered for ${snapshot.rulesetId}`);
+  return engine.restore(snapshot);
+}
+
+function hashGameState(state) {
+  return engineForState(state).hash(state);
+}
+
+function assertGameState(state) {
+  return engineForState(state).assert(state);
+}
 
 function spawnI(game, rules) {
   game.dropQueue[0].templateId = "I";
@@ -69,6 +114,24 @@ test("same seed and command stream stays deterministic", () => {
     assert.equal(hashGameState(a), hashGameState(b), `desync at tick ${tick}`);
     if (a.status !== "playing") break;
   }
+});
+
+test("a game state can only be advanced by the engine that created it", () => {
+  const rules = makeTestRules();
+  const engine = createGameEngine(rules);
+  const otherEngine = createGameEngine(rules);
+  const game = engine.create({ seed: 99 });
+
+  assert.throws(
+    () => otherEngine.step(game, []),
+    /not bound to engine/
+  );
+
+  const differentRulesEngine = createGameEngine(makeTestRules({ board: { visibleHeight: 21 } }));
+  assert.throws(
+    () => differentRulesEngine.step(game, []),
+    /ruleset mismatch/
+  );
 });
 
 test("carving may split a piece into disconnected regions", () => {
