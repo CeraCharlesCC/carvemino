@@ -1,5 +1,8 @@
 import { mix32 } from "./policy-utils.js";
 
+const POLICY_STATE_KEYS = Object.freeze(["nextGarbageSequence", "pendingAttacks"]);
+const PENDING_ATTACK_KEYS = Object.freeze(["sourcePlayerId", "rows"]);
+
 function assertNonEmptyString(value, name) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`${name} must be a non-empty string`);
@@ -10,6 +13,89 @@ function assertNonNegativeInteger(value, name) {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`${name} must be an integer >= 0`);
   }
+}
+
+function assertPositiveInteger(value, name) {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${name} must be an integer >= 1`);
+  }
+}
+
+function assertPlainObject(value, name) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${name} must be an object`);
+  }
+}
+
+function assertExactKeys(value, expectedKeys, name) {
+  assertPlainObject(value, name);
+  const expected = new Set(expectedKeys);
+  for (const key of Object.keys(value)) {
+    if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`);
+  }
+  for (const key of expectedKeys) {
+    if (!Object.hasOwn(value, key)) throw new Error(`${name}.${key} is required`);
+  }
+}
+
+function generatedGarbageSequence(id, matchId) {
+  const prefix = `${matchId}:g`;
+  if (typeof id !== "string" || !id.startsWith(prefix)) return null;
+  const suffix = id.slice(prefix.length);
+  if (!/^[1-9]\d*$/.test(suffix)) return null;
+  const sequence = Number(suffix);
+  return Number.isSafeInteger(sequence) ? sequence : null;
+}
+
+function highestReservedGarbageSequence(context) {
+  if (!context?.gameSnapshots) return 0;
+  let highest = 0;
+  for (const gameSnapshot of context.gameSnapshots) {
+    const ids = [
+      ...gameSnapshot.incomingGarbage.map((packet) => packet.id),
+      ...gameSnapshot.appliedGarbageIds
+    ];
+    for (const id of ids) {
+      const sequence = generatedGarbageSequence(id, context.matchId);
+      if (sequence !== null) highest = Math.max(highest, sequence);
+    }
+  }
+  return highest;
+}
+
+function copyPolicyState(state, context, attackTable) {
+  assertExactKeys(state, POLICY_STATE_KEYS, "versus policy state");
+  assertPositiveInteger(state.nextGarbageSequence, "versus policy state.nextGarbageSequence");
+  if (state.nextGarbageSequence >= Number.MAX_SAFE_INTEGER) {
+    throw new Error("versus policy state.nextGarbageSequence is too large to advance safely");
+  }
+  const highestReservedSequence = highestReservedGarbageSequence(context);
+  if (state.nextGarbageSequence <= highestReservedSequence) {
+    throw new Error(
+      `versus policy state.nextGarbageSequence must be greater than reserved garbage sequence ${highestReservedSequence}`
+    );
+  }
+  if (!Array.isArray(state.pendingAttacks)) {
+    throw new Error("versus policy state.pendingAttacks must be an array");
+  }
+  const playerIds = context?.playerIds || [];
+  const pendingAttacks = Array.from(state.pendingAttacks, (attack, index) => {
+    const path = `versus policy state.pendingAttacks[${index}]`;
+    assertExactKeys(attack, PENDING_ATTACK_KEYS, path);
+    assertNonEmptyString(attack.sourcePlayerId, `${path}.sourcePlayerId`);
+    if (!playerIds.includes(attack.sourcePlayerId)) {
+      throw new Error(`${path}.sourcePlayerId must identify a match player`);
+    }
+    assertPositiveInteger(attack.rows, `${path}.rows`);
+    if (!attackTable.includes(attack.rows)) {
+      throw new Error(`${path}.rows is not produced by this versus policy`);
+    }
+    return { sourcePlayerId: attack.sourcePlayerId, rows: attack.rows };
+  });
+  return {
+    nextGarbageSequence: state.nextGarbageSequence,
+    pendingAttacks
+  };
 }
 
 function normalizeAttackTable(lineClearAttackRows) {
@@ -125,6 +211,14 @@ export function defineVersusPolicy({
 
     createState() {
       return { nextGarbageSequence: 1, pendingAttacks: [] };
+    },
+
+    snapshotState(state, context) {
+      return copyPolicyState(state, context, attackTable);
+    },
+
+    restoreState(snapshot, context) {
+      return copyPolicyState(snapshot, context, attackTable);
     },
 
     beforeStep() {},

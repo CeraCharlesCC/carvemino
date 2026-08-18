@@ -1,5 +1,7 @@
 import { mix32 } from "./policy-utils.js";
 
+const POLICY_STATE_KEYS = Object.freeze(["nextWave"]);
+
 function assertNonEmptyString(value, name) {
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`${name} must be a non-empty string`);
@@ -10,6 +12,47 @@ function assertIntegerAtLeast(value, minimum, name) {
   if (!Number.isSafeInteger(value) || value < minimum) {
     throw new Error(`${name} must be an integer >= ${minimum}`);
   }
+}
+
+function assertPlainObject(value, name) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${name} must be an object`);
+  }
+}
+
+function assertExactKeys(value, expectedKeys, name) {
+  assertPlainObject(value, name);
+  const expected = new Set(expectedKeys);
+  for (const key of Object.keys(value)) {
+    if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`);
+  }
+  for (const key of expectedKeys) {
+    if (!Object.hasOwn(value, key)) throw new Error(`${name}.${key} is required`);
+  }
+}
+
+function expectedNextWave(policy, matchTick) {
+  if (matchTick <= policy.firstWaveMatchTick) return 1;
+  const completedWaves = 1 + Math.floor(
+    (matchTick - 1 - policy.firstWaveMatchTick) / policy.waveIntervalMatchTicks
+  );
+  if (completedWaves >= Number.MAX_SAFE_INTEGER) {
+    throw new Error("survival policy state cannot represent the completed wave count safely");
+  }
+  return completedWaves + 1;
+}
+
+function copyPolicyState(state, context, policy) {
+  assertExactKeys(state, POLICY_STATE_KEYS, "survival policy state");
+  assertIntegerAtLeast(state.nextWave, 1, "survival policy state.nextWave");
+  if (state.nextWave >= Number.MAX_SAFE_INTEGER) {
+    throw new Error("survival policy state.nextWave is too large to advance safely");
+  }
+  const nextWave = expectedNextWave(policy, context.matchTick);
+  if (state.nextWave !== nextWave) {
+    throw new Error(`survival policy state.nextWave must be ${nextWave} at matchTick ${context.matchTick}`);
+  }
+  return { nextWave: state.nextWave };
 }
 
 function rowsForWave(policy, matchTick) {
@@ -75,6 +118,14 @@ export function defineSurvivalPolicy({
 
     createState() {
       return { nextWave: 1 };
+    },
+
+    snapshotState(state, context) {
+      return copyPolicyState(state, context, policy);
+    },
+
+    restoreState(snapshot, context) {
+      return copyPolicyState(snapshot, context, policy);
     },
 
     beforeStep(context) {
