@@ -24,6 +24,7 @@ export function createUi({
   changeAudioSetting
 }) {
   let navigation = null;
+  let startupManual = null;
   const i18n = createI18n();
   i18n.apply();
   const attract = createAttract();
@@ -49,11 +50,13 @@ export function createUi({
     quitGame,
     pauseGame,
     resumeGame,
+    openManual({ returnFocus }) {
+      startupManual?.open({ returnFocus, mode: "reference" });
+    },
     onAudioEvent,
     onScreenChange
   });
 
-  let startupManual = null;
   createOnScreenGameInput({
     root: document.querySelector(".console-layout"),
     performAction: (actionId) => {
@@ -67,7 +70,8 @@ export function createUi({
   startupManual = createStartupManual({
     i18n,
     returnFocus: document.querySelector("#press-start"),
-    screen: document.querySelector(".crt-glass")
+    screen: document.querySelector(".crt-glass"),
+    onStart: () => document.querySelector("#press-start")?.click()
   });
 
   function setGameMode(modeId) {
@@ -78,7 +82,7 @@ export function createUi({
   }
 
   navigation.showScreen("menu");
-  startupManual.open();
+  startupManual.open({ mode: "startup" });
 
   return {
     render: gameScreen.render,

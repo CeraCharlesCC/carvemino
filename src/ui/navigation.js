@@ -2,7 +2,7 @@ import { triggerHapticFeedback } from "./game-input.js";
 
 const MENU_PREVIOUS_KEYS = new Set(["ArrowUp", "ArrowLeft", "KeyW", "KeyA"]);
 const MENU_NEXT_KEYS = new Set(["ArrowDown", "ArrowRight", "KeyS", "KeyD"]);
-const NON_REPEATING_UI_KEYS = new Set(["Enter", "Space", "Escape", "KeyR", "KeyO"]);
+const NON_REPEATING_UI_KEYS = new Set(["Enter", "Space", "Escape", "KeyR", "KeyO", "KeyH"]);
 
 const CONTROLLER_PREVIOUS_ACTIONS = new Set(["cursorUp", "cursorLeft", "focusPrevious"]);
 const CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext"]);
@@ -10,6 +10,7 @@ const CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext
 export function getTitleScreenAction(code) {
   if (code === "Enter") return "start";
   if (code === "KeyR") return "records";
+  if (code === "KeyH") return "manual";
   if (code === "KeyO") return "options";
   return null;
 }
@@ -22,6 +23,7 @@ export function createNavigation({
   quitGame,
   pauseGame,
   resumeGame,
+  openManual = () => {},
   onAudioEvent,
   onScreenChange
 }) {
@@ -37,6 +39,7 @@ export function createNavigation({
   const pauseOverlay = document.querySelector("#pause-overlay");
   const resumeGameButton = document.querySelector("#resume-game");
   const pressStart = document.querySelector("#press-start");
+  const titleManualButton = document.querySelector("#title-manual");
 
   let currentScreen = "menu";
   let gamePaused = false;
@@ -269,6 +272,12 @@ export function createNavigation({
       const action = getTitleScreenAction(event.code);
       if (action === "start") {
         pressStart.click();
+      } else if (action === "manual") {
+        onAudioEvent("confirm");
+        openManual({
+          context: "menu",
+          returnFocus: document.activeElement?.focus ? document.activeElement : titleManualButton || pressStart
+        });
       } else if (action === "records" || action === "options") {
         secondaryReturnScreen = "menu";
         onAudioEvent("confirm");
@@ -307,6 +316,15 @@ export function createNavigation({
     button.addEventListener("click", () => {
       onAudioEvent("back");
       showScreen(secondaryReturnScreen);
+    });
+  }
+  for (const button of document.querySelectorAll("[data-open-manual]")) {
+    button.addEventListener("click", () => {
+      onAudioEvent("confirm");
+      openManual({
+        context: button.dataset.manualContext || currentScreen,
+        returnFocus: button
+      });
     });
   }
   pauseGameButton.addEventListener("click", () => {

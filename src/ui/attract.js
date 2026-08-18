@@ -1,27 +1,27 @@
 const ATTRACT_PANELS = Object.freeze([
   ["title", 5200],
-  ["demo", 6000],
+  ["demo", 8200],
   ["records", 4200]
 ]);
 
 const ATTRACT_DEMO_STEPS = Object.freeze([
   {
     action: "CUT",
-    caption: "REMOVE ONE CELL",
+    caption: "SCULPT A SOLID CELL • GAIN 1 SCRAP",
     piece: [[3, 1], [4, 1], [2, 2], [3, 2], [4, 2], [5, 2], [3, 3], [4, 3]],
     actionCells: [[5, 2]],
     ghost: []
   },
   {
     action: "FILL",
-    caption: "PATCH AN OPEN EDGE",
+    caption: "SCULPT A DASHED EDGE • SPEND 2 SCRAP",
     piece: [[3, 1], [4, 1], [2, 2], [3, 2], [4, 2], [3, 3], [4, 3]],
     actionCells: [[2, 3]],
     ghost: []
   },
   {
     action: "DROP",
-    caption: "LOCK THE NEW SHAPE",
+    caption: "HARD DROP TO LOCK IT • COMPLETE ROWS",
     piece: [[3, 3], [4, 3], [2, 4], [3, 4], [4, 4], [2, 5], [3, 5], [4, 5]],
     actionCells: [],
     ghost: [[3, 1], [4, 1], [2, 2], [3, 2], [4, 2], [2, 3], [3, 3], [4, 3]]
@@ -85,7 +85,7 @@ export function createAttract() {
     demoTimer = window.setInterval(() => {
       demoStep = (demoStep + 1) % ATTRACT_DEMO_STEPS.length;
       renderDemoStep(demoStep);
-    }, 1250);
+    }, 2500);
   }
 
   function setPanel(panelName) {

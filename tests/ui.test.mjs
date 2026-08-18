@@ -23,6 +23,7 @@ import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
 test("title screen keyboard actions are explicit and do not use selection keys", () => {
   assert.equal(getTitleScreenAction("Enter"), "start");
   assert.equal(getTitleScreenAction("KeyR"), "records");
+  assert.equal(getTitleScreenAction("KeyH"), "manual");
   assert.equal(getTitleScreenAction("KeyO"), "options");
 
   for (const code of ["Space", "KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown"]) {
@@ -282,8 +283,10 @@ test("startup manual locale follows browser language with an English fallback", 
   const japanese = createI18n({ languages: ["ja"] });
   const english = createI18n({ languages: ["en"] });
   assert.equal(japanese.locale, "ja");
-  assert.equal(japanese.t("manual.title"), "操作マニュアル");
-  assert.equal(english.t("manual.title"), "OPERATOR'S MANUAL");
+  assert.equal(japanese.t("manual.title"), "遊び方");
+  assert.equal(english.t("manual.title"), "HOW TO PLAY");
+  assert.equal(japanese.t("manual.step.drop.copy"), "選んだピースを一番下まで落とします。横一列をすべて埋めると、その列が消えます。");
+  assert.equal(japanese.t("manual.page.controls.lead"), "ゲーム中に使うキーです。");
   assert.equal(english.t("manual.lab.cell", { x: 2, y: 3, action: "CUT" }), "Focus cell 2, 3: CUT");
 });
 
@@ -321,16 +324,41 @@ test("startup manual uses the cabinet display and physical Pad on touch devices"
   const manual = readFileSync(new URL("../src/ui/startup-manual.js", import.meta.url), "utf8");
   const ui = readFileSync(new URL("../src/ui/ui.js", import.meta.url), "utf8");
 
+  assert.match(markup, /id="title-manual"[^>]*data-open-manual[^>]*aria-keyshortcuts="H"/);
+  assert.match(markup, /id="pause-how-to-play"[^>]*data-open-manual/);
   assert.match(markup, /<dialog class="startup-manual" id="startup-manual"/);
+  assert.match(markup, /manual-step-title-row[\s\S]*manual-inline-keys/);
+  assert.match(markup, /class="manual-lab-quick-card"/);
+  assert.match(markup, /manual\.focus-note\.solid/);
+  assert.doesNotMatch(markup, /OPERATOR TIP|CORE LOOP|FOCUS LAB/);
+  assert.doesNotMatch(styles, /manual-operator-tip/);
+  assert.equal((markup.match(/data-manual-page-target=/g) || []).length, 3);
   assert.match(markup, /data-manual-page="1"[\s\S]*id="manual-field-grid"[\s\S]*id="manual-focus-grid"/);
   assert.match(markup, /data-input-hint="keyboard"[\s\S]*data-manual-action="focusPrevious"/);
   assert.match(markup, /class="manual-physical-pad-hint" data-input-hint="touch"/);
   assert.doesNotMatch(markup, /manual-touch-pad/);
   assert.match(styles, /\.manual-book\s*\{[\s\S]*repeating-linear-gradient[\s\S]*linear-gradient/);
   assert.match(styles, /\.startup-manual \.manual-physical-pad-hint\[data-input-hint="touch"\][\s\S]*display:\s*block/);
+  assert.match(styles, /\.manual-book-footer button\.is-start-action[\s\S]*background:\s*var\(--manual-ink\)/);
+  assert.match(styles, /\.manual-pagination button\[aria-current="page"\]/);
   assert.match(styles, /--manual-screen-top[\s\S]*--manual-screen-height/);
   assert.match(manual, /usesPhysicalPad\(\)[\s\S]*dialog\.show\(\)/);
   assert.match(manual, /function handleGameAction\(actionId\)[\s\S]*perform\(actionId\)/);
+  assert.match(manual, /paginationButtons[\s\S]*aria-current/);
   assert.match(ui, /startupManual\?\.handleGameAction\(actionId\)/);
+  assert.match(ui, /startupManual\?\.open\(\{ returnFocus, mode: "reference" \}\)/);
   assert.match(navigation, /document\.querySelector\("#startup-manual"\)\?\.open/);
+  assert.match(navigation, /KeyH[\s\S]*data-open-manual/);
+});
+
+test("affordance improvements clarify resources", () => {
+  const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const attract = readFileSync(new URL("../src/ui/attract.js", import.meta.url), "utf8");
+  const gameScreen = readFileSync(new URL("../src/ui/game-screen.js", import.meta.url), "utf8");
+
+  assert.match(attract, /setInterval\([\s\S]*2500\)/);
+  assert.match(attract, /SCULPT A SOLID CELL • GAIN 1 SCRAP/);
+  assert.match(attract, /SCULPT A DASHED EDGE • SPEND 2 SCRAP/);
+  assert.match(attract, /HARD DROP TO LOCK IT • COMPLETE ROWS/);
+  assert.match(markup, /data-i18n="focus\.resource\.cut">CUT LEFT/);
 });

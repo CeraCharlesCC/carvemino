@@ -194,14 +194,17 @@ function fieldCellAt(state, x, y) {
   return null;
 }
 
-export function createStartupManual({ i18n, returnFocus = null, screen = null } = {}) {
+export function createStartupManual({ i18n, returnFocus = null, screen = null, onStart = null } = {}) {
   const dialog = document.querySelector("#startup-manual");
   if (!dialog) return { open() {}, close() {}, handleGameAction() { return null; } };
 
   const pages = [...dialog.querySelectorAll("[data-manual-page]")];
+  const paginationButtons = [...dialog.querySelectorAll("[data-manual-page-target]")];
   const previousButton = dialog.querySelector("[data-manual-previous]");
   const nextButton = dialog.querySelector("[data-manual-next]");
   const nextLabel = dialog.querySelector("[data-manual-next-label]");
+  const nextIcon = dialog.querySelector("[data-manual-next-icon]");
+  const nextHint = dialog.querySelector("[data-manual-next-hint]");
   const pageNumber = dialog.querySelector("#manual-page-number");
   const labStage = dialog.querySelector("#manual-lab-stage");
   const fieldGrid = dialog.querySelector("#manual-field-grid");
@@ -212,6 +215,8 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null } 
   const status = dialog.querySelector("#manual-lab-status");
   let pageIndex = 0;
   let demoState = createManualDemoState();
+  let activeReturnFocus = returnFocus;
+  let completionMode = "reference";
   const touchInput = globalThis.matchMedia?.("(hover: none) and (pointer: coarse)");
 
   function usesPhysicalPad() {
@@ -288,10 +293,28 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null } 
     pages.forEach((page, index) => { page.hidden = index !== pageIndex; });
     previousButton.disabled = pageIndex === 0;
     pageNumber.textContent = `${String(pageIndex + 1).padStart(2, "0")} / ${String(pages.length).padStart(2, "0")}`;
-    nextLabel.textContent = i18n.t(pageIndex === pages.length - 1 ? "manual.nav.done" : "manual.nav.next");
+    const isLastPage = pageIndex === pages.length - 1;
+    const isStartupCompletion = completionMode === "startup";
+    nextButton.classList.toggle("is-final-action", isLastPage);
+    nextButton.classList.toggle("is-start-action", isLastPage && isStartupCompletion);
+    nextLabel.textContent = i18n.t(isLastPage
+      ? (isStartupCompletion ? "manual.nav.done" : "manual.nav.close")
+      : "manual.nav.next");
+    if (nextIcon) nextIcon.textContent = isLastPage ? "▶" : "→";
+    if (nextHint) {
+      nextHint.hidden = !isLastPage;
+      if (isLastPage) {
+        nextHint.textContent = i18n.t(isStartupCompletion ? "manual.nav.doneHint" : "manual.nav.closeHint");
+      }
+    }
+    paginationButtons.forEach((button) => {
+      const isCurrent = Number(button.dataset.manualPageTarget) === pageIndex;
+      if (isCurrent) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    });
     if (pageIndex === 1) {
       renderDemo();
-      requestAnimationFrame(() => labStage?.focus());
+      requestAnimationFrame(() => labStage?.focus({ preventScroll: true }));
     }
   }
 
@@ -300,7 +323,9 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null } 
     else dialog.removeAttribute("open");
   }
 
-  function open() {
+  function open({ returnFocus: nextReturnFocus = returnFocus, mode = "reference" } = {}) {
+    activeReturnFocus = nextReturnFocus;
+    completionMode = mode;
     pageIndex = 0;
     demoState = createManualDemoState();
     renderPage();
@@ -327,9 +352,20 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null } 
     pageIndex -= 1;
     renderPage();
   });
+  for (const button of paginationButtons) {
+    button.addEventListener("click", () => {
+      const targetIndex = Number(button.dataset.manualPageTarget);
+      if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= pages.length) return;
+      pageIndex = targetIndex;
+      renderPage();
+    });
+  }
   nextButton.addEventListener("click", () => {
     if (pageIndex >= pages.length - 1) {
+      const shouldStart = completionMode === "startup";
+      if (shouldStart) activeReturnFocus = null;
       close();
+      if (shouldStart) requestAnimationFrame(() => onStart?.());
       return;
     }
     pageIndex += 1;
@@ -356,7 +392,10 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null } 
     event.preventDefault();
     event.stopPropagation();
   });
-  dialog.addEventListener("close", () => requestAnimationFrame(() => returnFocus?.focus()));
+  dialog.addEventListener("close", () => {
+    const focusTarget = activeReturnFocus;
+    requestAnimationFrame(() => focusTarget?.focus());
+  });
   window.addEventListener("resize", () => {
     if (dialog.open) positionOverScreen();
   });

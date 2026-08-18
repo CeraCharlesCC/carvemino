@@ -81,6 +81,8 @@
           <nav class="attract-secondary" aria-label="Secondary menu">
             <button type="button" data-nav="records" tabindex="-1" aria-keyshortcuts="R"><kbd data-input-hint="keyboard">R</kbd> RECORDS</button>
             <span aria-hidden="true">•</span>
+            <button type="button" id="title-manual" data-open-manual data-manual-context="menu" tabindex="-1" aria-keyshortcuts="H"><kbd data-input-hint="keyboard">H</kbd> <span data-i18n="menu.manual">MANUAL</span></button>
+            <span aria-hidden="true">•</span>
             <button type="button" data-nav="options" tabindex="-1" aria-keyshortcuts="O"><kbd data-input-hint="keyboard">O</kbd> OPTIONS</button>
           </nav>
           <p class="cabinet-credit">CARVEMINO SYSTEM 94 // 1 PLAYER</p>
@@ -200,9 +202,9 @@
                   <section class="hud-section focus-section">
                     <h2>FOCUS</h2>
                     <canvas id="focus" width="220" height="220" aria-label="focused piece sculpting grid"></canvas>
-                    <div class="resource-row"><span>CUT</span><b id="cut">-</b></div>
-                    <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
-                    <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
+                    <div class="resource-row"><span data-i18n="focus.resource.cut">CUT LEFT</span><b id="cut">-</b></div>
+                    <div class="resource-row"><span data-i18n="focus.resource.scrap">SCRAP</span><b id="scrap">0</b></div>
+                    <div class="resource-row"><span data-i18n="focus.resource.fill">FILL COST</span><b id="fill-cost">2 scrap</b></div>
                     <div class="focus-nav" data-input-hint="keyboard"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
                     <div class="focus-nav focus-nav-single" data-input-hint="handheld"><kbd>SELECT</kbd><span>CYCLE FOCUS</span></div>
                     <div class="focus-nav" data-input-hint="tablet-rail"><kbd>−</kbd><span>&lt; FOCUS &gt;</span><kbd>+</kbd></div>
@@ -239,6 +241,7 @@
               <h2 id="pause-title">PAUSED</h2>
               <nav class="arcade-menu pause-menu" aria-label="Pause menu">
                 <button class="menu-button" type="button" id="resume-game"><span>Resume</span></button>
+                <button class="menu-button" type="button" id="pause-how-to-play" data-open-manual data-manual-context="pause"><span data-i18n="pause.howToPlay">How to Play</span></button>
                 <button class="menu-button" type="button" id="restart-game"><span>Restart</span></button>
                 <button class="menu-button" type="button" id="quit-game"><span>Quit Game</span></button>
               </nav>
@@ -293,10 +296,7 @@
   <dialog class="startup-manual" id="startup-manual" aria-labelledby="manual-title">
     <div class="manual-book">
       <header class="manual-book-header">
-        <div>
-          <p class="manual-kicker" data-i18n="manual.kicker">CARVEMINO SYSTEM 94 // FIELD GUIDE</p>
-          <h1 id="manual-title" data-i18n="manual.title">OPERATOR'S MANUAL</h1>
-        </div>
+        <h1 id="manual-title" data-i18n="manual.title">HOW TO PLAY</h1>
         <button class="manual-close" type="button" data-manual-close
           data-i18n-aria-label="manual.close" aria-label="Close manual">×</button>
       </header>
@@ -304,27 +304,55 @@
       <div class="manual-page-stack">
         <article class="manual-page manual-core-page" data-manual-page="0" aria-labelledby="manual-core-heading">
           <header class="manual-page-heading">
-            <h2 id="manual-core-heading" data-i18n="manual.page.core.title">01 // CORE LOOP</h2>
-            <p data-i18n="manual.page.core.lead">Shape the falling pieces before you commit them to the field.</p>
+            <h2 id="manual-core-heading" data-i18n="manual.page.core.title">1. HOW TO PLAY</h2>
+            <p data-i18n="manual.page.core.lead">Choose a piece, choose a cell, reshape the piece, then drop it.</p>
           </header>
 
           <div class="manual-core-layout">
             <ol class="manual-steps">
               <li>
                 <span class="manual-step-number">01</span>
-                <div><b data-i18n="manual.step.focus.title">FOCUS</b><p data-i18n="manual.step.focus.copy">Choose the active piece you want to edit.</p></div>
+                <div>
+                  <div class="manual-step-title-row">
+                    <b data-i18n="manual.step.focus.title">CHOOSE A PIECE</b>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>Q</kbd><kbd>E</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="touch"><kbd>SELECT</kbd></span>
+                  </div>
+                  <p data-i18n="manual.step.focus.copy">Switch between the falling pieces. The selected piece appears larger in FOCUS.</p>
+                </div>
               </li>
               <li>
                 <span class="manual-step-number">02</span>
-                <div><b data-i18n="manual.step.cursor.title">AIM</b><p data-i18n="manual.step.cursor.copy">Move the sculpt cursor inside FOCUS.</p></div>
+                <div>
+                  <div class="manual-step-title-row">
+                    <b data-i18n="manual.step.cursor.title">CHOOSE A CELL</b>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>WASD</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="touch"><kbd>D-PAD</kbd></span>
+                  </div>
+                  <p data-i18n="manual.step.cursor.copy">Move the cursor in FOCUS. Its color shows whether the cell can be changed.</p>
+                </div>
               </li>
               <li>
                 <span class="manual-step-number">03</span>
-                <div><b data-i18n="manual.step.sculpt.title">CUT / FILL</b><p data-i18n="manual.step.sculpt.copy">Sculpt the selected cell.</p></div>
+                <div>
+                  <div class="manual-step-title-row">
+                    <b data-i18n="manual.step.sculpt.title">RESHAPE THE PIECE</b>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>Z</kbd><kbd>↵</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="touch"><kbd>A</kbd></span>
+                  </div>
+                  <p data-i18n="manual.step.sculpt.copy">Remove a filled cell, or spend SCRAP to fill a dashed cell.</p>
+                </div>
               </li>
               <li>
                 <span class="manual-step-number">04</span>
-                <div><b data-i18n="manual.step.drop.title">DROP</b><p data-i18n="manual.step.drop.copy">Commit the piece and complete rows.</p></div>
+                <div>
+                  <div class="manual-step-title-row">
+                    <b data-i18n="manual.step.drop.title">DROP THE PIECE</b>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>SPACE</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="touch"><kbd>B</kbd></span>
+                  </div>
+                  <p data-i18n="manual.step.drop.copy">Drop the selected piece to the bottom. Fill a complete horizontal row to clear it.</p>
+                </div>
               </li>
             </ol>
 
@@ -346,17 +374,38 @@
                   <span></span><span class="is-piece"></span><span></span><span></span>
                 </div>
               </div>
-              <h3 data-i18n="manual.focus-note.title">READING THE FOCUS WINDOW</h3>
-              <p data-i18n="manual.focus-note.copy">Solid cells belong to the focused piece.</p>
+              <h3 data-i18n="manual.focus-note.title">HOW TO READ FOCUS</h3>
+              <p data-i18n="manual.focus-note.copy">FOCUS shows the piece you are editing.</p>
+              <ul>
+                <li data-i18n="manual.focus-note.solid">Filled cells can be removed with CUT.</li>
+                <li data-i18n="manual.focus-note.dashed">Dashed cells can be added with FILL.</li>
+                <li data-i18n="manual.focus-note.resource">CUT shows edits left. SCRAP shows available material.</li>
+              </ul>
             </aside>
           </div>
         </article>
 
         <article class="manual-page manual-lab-page" data-manual-page="1" aria-labelledby="manual-lab-heading" hidden>
           <header class="manual-page-heading">
-            <h2 id="manual-lab-heading" data-i18n="manual.page.lab.title">02 // FOCUS LAB</h2>
-            <p data-i18n="manual.page.lab.lead">This tiny replica is safe to operate.</p>
+            <h2 id="manual-lab-heading" data-i18n="manual.page.lab.title">2. PRACTICE</h2>
+            <p data-i18n="manual.page.lab.lead">Practice selecting, reshaping, and dropping pieces here.</p>
           </header>
+
+          <aside class="manual-lab-quick-card">
+            <strong data-i18n="manual.lab.quick.title">CONTROLS</strong>
+            <div class="manual-lab-quick-list" data-input-hint="keyboard">
+              <span><kbd>Q / E</kbd><small data-i18n="manual.lab.quick.focus">SELECT PIECE</small></span>
+              <span><kbd>WASD</kbd><small data-i18n="manual.lab.quick.cursor">MOVE</small></span>
+              <span><kbd>Z</kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
+              <span><kbd>SPACE</kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
+            </div>
+            <div class="manual-lab-quick-list" data-input-hint="touch">
+              <span><kbd>SELECT</kbd><small data-i18n="manual.lab.quick.focus">SELECT PIECE</small></span>
+              <span><kbd>D-PAD</kbd><small data-i18n="manual.lab.quick.cursor">MOVE</small></span>
+              <span><kbd>A</kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
+              <span><kbd>B</kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
+            </div>
+          </aside>
 
           <div class="manual-lab-stage" id="manual-lab-stage" tabindex="0" aria-labelledby="manual-lab-heading">
             <div class="manual-mini-console">
@@ -376,14 +425,14 @@
               </section>
             </div>
 
-            <p class="manual-lab-status" id="manual-lab-status" aria-live="polite">Cursor is on a solid cell: SCULPT will CUT it.</p>
+            <p class="manual-lab-status" id="manual-lab-status" aria-live="polite">This filled cell can be removed.</p>
 
             <div class="manual-lab-controls" data-input-hint="keyboard">
-              <p data-i18n="manual.lab.keyboardHint">Use the real default keys here.</p>
+              <p data-i18n="manual.lab.keyboardHint">You can also click the keys below to practice.</p>
               <div class="manual-keyboard-pad">
                 <div class="manual-focus-keys">
-                  <button type="button" data-manual-action="focusPrevious" data-i18n-aria-label="manual.lab.prev"><kbd>Q</kbd><small>PREV</small></button>
-                  <button type="button" data-manual-action="focusNext" data-i18n-aria-label="manual.lab.next"><kbd>E</kbd><small>NEXT</small></button>
+                  <button type="button" data-manual-action="focusPrevious" data-i18n-aria-label="manual.lab.prev"><kbd>Q</kbd><small data-i18n="manual.lab.prevShort">PREVIOUS</small></button>
+                  <button type="button" data-manual-action="focusNext" data-i18n-aria-label="manual.lab.next"><kbd>E</kbd><small data-i18n="manual.lab.nextShort">NEXT</small></button>
                 </div>
                 <div class="manual-dpad">
                   <button class="manual-dpad-up" type="button" data-manual-action="cursorUp" data-i18n-aria-label="manual.lab.up"><kbd>W</kbd></button>
@@ -393,59 +442,65 @@
                   <button class="manual-dpad-down" type="button" data-manual-action="cursorDown" data-i18n-aria-label="manual.lab.down"><kbd>S</kbd></button>
                 </div>
                 <div class="manual-action-keys">
-                  <button type="button" data-manual-action="hardDrop" data-i18n-aria-label="manual.lab.drop"><kbd>SPACE</kbd><small>DROP</small></button>
-                  <button type="button" data-manual-action="sculpt" data-i18n-aria-label="manual.lab.sculpt"><kbd>Z</kbd><small>SCULPT</small></button>
+                  <button type="button" data-manual-action="hardDrop" data-i18n-aria-label="manual.lab.drop"><kbd>SPACE</kbd><small data-i18n="manual.lab.dropShort">DROP</small></button>
+                  <button type="button" data-manual-action="sculpt" data-i18n-aria-label="manual.lab.sculpt"><kbd>Z</kbd><small data-i18n="manual.lab.sculptShort">RESHAPE</small></button>
                 </div>
               </div>
             </div>
 
             <p class="manual-physical-pad-hint" data-input-hint="touch" data-i18n="manual.lab.touchHint">
-              Use the cabinet Pad below to operate this lab.
+              Use the controls below to practice.
             </p>
 
-            <button class="manual-reset" type="button" data-manual-action="reset" data-i18n="manual.lab.reset">RESET LAB</button>
+            <button class="manual-reset" type="button" data-manual-action="reset" data-i18n="manual.lab.reset">START OVER</button>
           </div>
         </article>
 
         <article class="manual-page manual-controls-page" data-manual-page="2" aria-labelledby="manual-controls-heading" hidden>
           <header class="manual-page-heading">
-            <h2 id="manual-controls-heading" data-i18n="manual.page.controls.title">03 // CONTROLS</h2>
-            <p data-i18n="manual.page.controls.lead">This page changes with your device.</p>
+            <h2 id="manual-controls-heading" data-i18n="manual.page.controls.title">3. CONTROL LIST</h2>
+            <p data-i18n="manual.page.controls.lead">Use these controls while playing.</p>
           </header>
 
           <div class="manual-controls-card" data-input-hint="keyboard">
             <h3 data-i18n="manual.controls.keyboard.title">KEYBOARD</h3>
             <dl>
-              <div><dt><kbd>Q</kbd><kbd>E</kbd></dt><dd data-i18n="manual.controls.keyboard.focus">Q / E — previous / next focus</dd></div>
-              <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="manual.controls.keyboard.cursor">W A S D — move sculpt cursor</dd></div>
-              <div><dt><kbd>Z</kbd><kbd>↵</kbd></dt><dd data-i18n="manual.controls.keyboard.sculpt">Z or ENTER — sculpt selected cell</dd></div>
-              <div><dt><kbd>SPACE</kbd></dt><dd data-i18n="manual.controls.keyboard.drop">SPACE — hard drop focused piece</dd></div>
-              <div><dt><kbd>ESC</kbd></dt><dd data-i18n="manual.controls.keyboard.pause">ESC — pause / resume</dd></div>
+              <div><dt><kbd>Q</kbd><kbd>E</kbd></dt><dd data-i18n="manual.controls.keyboard.focus">Select the previous / next piece</dd></div>
+              <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="manual.controls.keyboard.cursor">Move the cursor</dd></div>
+              <div><dt><kbd>Z</kbd><kbd>↵</kbd></dt><dd data-i18n="manual.controls.keyboard.sculpt">Reshape the selected cell</dd></div>
+              <div><dt><kbd>SPACE</kbd></dt><dd data-i18n="manual.controls.keyboard.drop">Drop the selected piece to the bottom</dd></div>
+              <div><dt><kbd>ESC</kbd></dt><dd data-i18n="manual.controls.keyboard.pause">Pause / resume</dd></div>
             </dl>
           </div>
 
           <div class="manual-controls-card" data-input-hint="touch">
             <h3 data-i18n="manual.controls.touch.title">TOUCH CONTROLS</h3>
             <dl>
-              <div><dt><kbd>SELECT</kbd></dt><dd data-i18n="manual.controls.touch.focus">SELECT — cycle focus</dd></div>
-              <div><dt><kbd>D-PAD</kbd></dt><dd data-i18n="manual.controls.touch.cursor">D-PAD — move sculpt cursor</dd></div>
-              <div><dt><kbd>A</kbd></dt><dd data-i18n="manual.controls.touch.sculpt">A / SCULPT — sculpt selected cell</dd></div>
-              <div><dt><kbd>B</kbd></dt><dd data-i18n="manual.controls.touch.drop">B / DROP — hard drop focused piece</dd></div>
-              <div><dt><kbd>START</kbd></dt><dd data-i18n="manual.controls.touch.pause">START — pause / resume</dd></div>
+              <div><dt><kbd>SELECT</kbd></dt><dd data-i18n="manual.controls.touch.focus">Select the next piece</dd></div>
+              <div><dt><kbd>D-PAD</kbd></dt><dd data-i18n="manual.controls.touch.cursor">Move the cursor</dd></div>
+              <div><dt><kbd>A</kbd></dt><dd data-i18n="manual.controls.touch.sculpt">Reshape the selected cell</dd></div>
+              <div><dt><kbd>B</kbd></dt><dd data-i18n="manual.controls.touch.drop">Drop the selected piece to the bottom</dd></div>
+              <div><dt><kbd>START</kbd></dt><dd data-i18n="manual.controls.touch.pause">Pause / resume</dd></div>
             </dl>
           </div>
 
-          <aside class="manual-operator-tip">
-            <b data-i18n="manual.controls.tip.title">OPERATOR TIP</b>
-            <p data-i18n="manual.controls.tip.copy">FOCUS is your workbench.</p>
-          </aside>
         </article>
       </div>
 
       <footer class="manual-book-footer">
         <button type="button" data-manual-previous><span aria-hidden="true">←</span> <span data-i18n="manual.nav.previous">PREVIOUS</span></button>
-        <output id="manual-page-number" aria-live="polite">01 / 03</output>
-        <button type="button" data-manual-next><span data-manual-next-label>NEXT PAGE</span> <span aria-hidden="true">→</span></button>
+        <div class="manual-page-meta">
+          <output id="manual-page-number" aria-live="polite">01 / 03</output>
+          <nav class="manual-pagination" aria-label="Manual sections" data-i18n-aria-label="manual.pagination.label">
+            <button type="button" data-manual-page-target="0"><span class="manual-pagination-dot" aria-hidden="true"></span><span data-i18n="manual.pagination.core">PLAY</span></button>
+            <button type="button" data-manual-page-target="1"><span class="manual-pagination-dot" aria-hidden="true"></span><span data-i18n="manual.pagination.lab">PRACTICE</span></button>
+            <button type="button" data-manual-page-target="2"><span class="manual-pagination-dot" aria-hidden="true"></span><span data-i18n="manual.pagination.controls">CONTROL LIST</span></button>
+          </nav>
+        </div>
+        <button type="button" data-manual-next>
+          <span class="manual-next-main"><span data-manual-next-label>NEXT PAGE</span> <span data-manual-next-icon aria-hidden="true">→</span></span>
+          <small data-manual-next-hint hidden>Close this guide and start playing.</small>
+        </button>
       </footer>
     </div>
   </dialog>
