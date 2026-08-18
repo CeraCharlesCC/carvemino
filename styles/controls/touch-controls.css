@@ -1,0 +1,551 @@
+/* ==========================================================================
+   PHYSICAL TOUCH CONTROLS — handheld deck + tablet rails
+   ========================================================================== */
+
+[data-input-hint="touch"],
+[data-input-hint="handheld"],
+[data-input-hint="tablet-rail"] {
+  display: none;
+}
+
+.game-control-surface,
+.tablet-control-rail {
+  display: none;
+}
+
+.physical-control-surface {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: contain;
+}
+
+.physical-control-surface button {
+  margin: 0;
+  border: 0;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.physical-control-surface button:focus-visible {
+  outline: 3px solid var(--moss);
+  outline-offset: 3px;
+}
+
+.physical-control-surface button.is-pressed,
+.physical-control-surface button:active {
+  color: var(--moss);
+  filter: brightness(1.28);
+  transform: translateY(3px);
+}
+
+/* Phones do not have enough vertical room for the CRT and touch deck in
+   landscape. This remains hidden on pointer-based devices and roomy tablets. */
+.orientation-guide {
+  display: none;
+}
+
+.game-control-surface {
+  --deck-dpad-size: 132px;
+  --deck-action-size: 60px;
+  --deck-action-width: 128px;
+  --deck-action-stagger: clamp(10px, 1.8vw, 16px);
+  min-width: 0;
+  height: var(--control-deck-height, 164px);
+  min-height: var(--control-deck-height, 164px);
+  margin-top: 6px;
+  padding: 8px max(8px, env(safe-area-inset-right, 0)) 10px max(8px, env(safe-area-inset-left, 0));
+  grid-template-columns:
+    var(--deck-dpad-size)
+    minmax(0, 1fr)
+    var(--deck-action-width);
+  align-items: center;
+  gap: clamp(6px, 2.2vw, 18px);
+  border: 1px solid #34362e;
+  border-radius: 4px 4px 22px 22px;
+  overflow: clip;
+  background:
+    linear-gradient(180deg, #1b1d18, #0e100d 72%),
+    var(--panel);
+  box-shadow:
+    inset 0 1px 0 #30332b,
+    inset 0 -10px 22px #0008,
+    0 10px 24px #0008;
+}
+
+.touch-dpad {
+  width: var(--deck-dpad-size);
+  height: var(--deck-dpad-size);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  justify-self: start;
+  filter: drop-shadow(0 5px 0 #050605);
+}
+
+.dpad-button,
+.dpad-center {
+  background: #282a25;
+  box-shadow: inset 0 0 0 1px #3a3c35;
+}
+
+.dpad-button {
+  min-width: 0;
+  min-height: 0;
+  font-size: 16px;
+}
+.dpad-up { grid-area: 1 / 2; border-radius: 5px 5px 0 0 !important; }
+.dpad-left { grid-area: 2 / 1; border-radius: 5px 0 0 5px !important; }
+.dpad-center { grid-area: 2 / 2; position: relative; }
+.dpad-center::after {
+  content: "";
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background: #1b1d19;
+  box-shadow: inset 0 1px 2px #000;
+}
+.dpad-right { grid-area: 2 / 3; border-radius: 0 5px 5px 0 !important; }
+.dpad-down { grid-area: 3 / 2; border-radius: 0 0 5px 5px !important; }
+
+.system-controls {
+  width: 100%;
+  align-self: center;
+  display: flex;
+  justify-content: space-between;
+  gap: clamp(4px, 1.4vw, 16px);
+}
+
+.system-controls button {
+  width: clamp(44px, 10vw, 80px);
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 4px;
+  border-radius: 18px;
+  background: #30322c;
+  box-shadow: inset 0 0 0 1px #55584e, inset 0 -3px 0 #1a1c18, 0 3px 0 #050605;
+  color: var(--wire);
+  font-size: 9px;
+  letter-spacing: .5px;
+}
+.system-controls span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.action-controls {
+  width: var(--deck-action-width);
+  min-height: calc(var(--deck-action-size) + 10px);
+  display: grid;
+  grid-template-columns: repeat(2, var(--deck-action-size));
+  justify-self: end;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
+}
+
+.action-button {
+  width: var(--deck-action-size);
+  height: var(--deck-action-size);
+  padding: 0;
+  border-radius: 50%;
+  background: #4a4930;
+  box-shadow: inset 0 0 0 2px #69674d, inset 0 -6px 0 #29291d, 0 5px 0 #050605;
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: .5px;
+}
+.action-button span {
+  display: block;
+  margin-bottom: 3px;
+  color: #e0e3d6;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.drop-button {
+  position: relative;
+  top: var(--deck-action-stagger);
+}
+
+.sculpt-button {
+  position: relative;
+  top: calc(0px - var(--deck-action-stagger));
+}
+
+.tablet-control-rail {
+  position: absolute;
+  z-index: 1;
+  top: 4px;
+  bottom: 4px;
+  width: max(131px, calc((100vw - 100%) / 2 - 4px));
+  align-items: stretch;
+  border: 1px solid #3b3d35;
+  background: linear-gradient(90deg, #11130f, #252820 48%, #11130f);
+  box-shadow: inset 0 0 18px #0008, 0 14px 32px #0008;
+}
+.tablet-control-rail-left {
+  right: calc(100% + 4px);
+  justify-content: flex-start;
+  border-radius: 30px 8px 8px 30px;
+}
+.tablet-control-rail-right {
+  left: calc(100% + 4px);
+  justify-content: flex-end;
+  border-radius: 8px 30px 30px 8px;
+}
+
+.rail-control-pod {
+  --rail-primary-size: clamp(120px, 13.5vw, 144px);
+  --rail-primary-offset: clamp(42px, 8dvh, 72px);
+  --rail-function-offset: clamp(24px, 4dvh, 40px);
+  width: min(100%, 156px);
+  height: 100%;
+  padding: max(14px, env(safe-area-inset-top, 0)) 10px max(18px, env(safe-area-inset-bottom, 0));
+  display: grid;
+  grid-template-rows:
+    12px
+    var(--rail-primary-offset)
+    var(--rail-primary-size)
+    var(--rail-function-offset)
+    minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  background: linear-gradient(180deg, #20231d 0, #141611 78%, #0d0f0c 100%);
+  box-shadow: inset 0 0 0 1px #2d3028, inset 0 -18px 24px #0007;
+}
+
+.tablet-control-rail-left .rail-control-pod {
+  border-radius: 28px 4px 4px 28px;
+}
+
+.tablet-control-rail-right .rail-control-pod {
+  border-radius: 4px 28px 28px 4px;
+}
+
+.rail-trigger {
+  width: 44px;
+  height: 12px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: #090a08;
+  box-shadow: inset 0 0 0 1px #41443b;
+}
+
+.rail-dpad {
+  grid-row: 3;
+  width: min(100%, var(--rail-primary-size));
+  aspect-ratio: 1;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  filter: drop-shadow(0 5px 0 #050605);
+}
+
+.rail-dpad-button,
+.rail-dpad-center {
+  background: #2d3029;
+  box-shadow: inset 0 0 0 1px #4c5046;
+}
+
+.rail-dpad-button {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  color: #858b7e;
+  font: 700 14px/1 Arial, sans-serif;
+}
+.rail-dpad-up { grid-area: 1 / 2; border-radius: 4px 4px 0 0; }
+.rail-dpad-left { grid-area: 2 / 1; border-radius: 4px 0 0 4px; }
+.rail-dpad-center {
+  position: relative;
+  grid-area: 2 / 2;
+}
+.rail-dpad-right { grid-area: 2 / 3; border-radius: 0 4px 4px 0; }
+.rail-dpad-down { grid-area: 3 / 2; border-radius: 0 0 4px 4px; }
+.rail-dpad-center::after {
+  content: "";
+  position: absolute;
+  inset: 34%;
+  border-radius: 50%;
+  background: #151713;
+  box-shadow: inset 0 1px 2px #000;
+}
+
+.rail-action-buttons {
+  --rail-action-size: clamp(46px, 5.2vw, 60px);
+  grid-row: 3;
+  width: 100%;
+  height: var(--rail-primary-size);
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, var(--rail-action-size));
+  grid-template-rows: repeat(2, var(--rail-action-size));
+  align-content: center;
+  justify-content: end;
+  gap: 4px;
+}
+
+.rail-action-button {
+  width: var(--rail-action-size);
+  height: var(--rail-action-size);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 50%;
+  background: #45462f;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 2px #66684e, inset 0 -5px 0 #25261b, 0 5px 0 #050605;
+}
+.rail-action-button span {
+  font: 700 19px/1 Arial, sans-serif;
+}
+.rail-action-button small {
+  margin-top: 3px;
+  color: #a9ad9f;
+  font: 700 7px/1 "Lucida Console", monospace;
+  letter-spacing: .4px;
+}
+.rail-drop-button { grid-area: 2 / 1; }
+.rail-sculpt-button { grid-area: 1 / 2; }
+
+.rail-system-controls {
+  grid-row: 5;
+  width: 100%;
+  margin: 0;
+  display: grid;
+  align-self: start;
+  justify-items: center;
+  gap: 16px;
+}
+.tablet-control-rail-right .rail-system-controls { justify-items: end; }
+
+.rail-function-button {
+  min-width: 86px;
+  min-height: 48px;
+  margin: 0;
+  padding: 7px 12px;
+  border-radius: 20px;
+  background: #30322c;
+  color: #a4a89b;
+  font: 700 9px/1.1 "Lucida Console", monospace;
+  letter-spacing: .7px;
+  text-align: center;
+  box-shadow: inset 0 0 0 1px #55584e, inset 0 -3px 0 #191b17, 0 3px 0 #050605;
+}
+.tablet-control-rail-left .rail-control-pod > .rail-function-button {
+  grid-row: 5;
+  align-self: start;
+}
+.rail-function-button span {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  place-items: center;
+  border-radius: 50%;
+  background: #171915;
+  color: var(--ink);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.rail-system-controls .rail-function-button {
+  margin-top: 0;
+}
+.rail-pause-button span {
+  width: auto;
+  padding-inline: 5px;
+  border-radius: 8px;
+  font-size: 8px;
+}
+
+
+
+/* Responsive / input-mode adjustments owned by this role. */
+
+@media (max-width: 374px) {
+  .game-control-surface {
+    --deck-dpad-size: 120px;
+    --deck-action-size: 52px;
+    --deck-action-width: 112px;
+    padding-inline: 6px;
+    gap: 4px;
+  }
+  .dpad-button { font-size: 13px; }
+  .system-controls { gap: 4px; }
+  .system-controls button {
+    width: 46px;
+    min-width: 0;
+    min-height: 40px;
+    padding-inline: 4px;
+    font-size: 8px;
+  }
+  .system-controls span { font-size: 9px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  [data-input-hint="keyboard"] { display: none; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .game-control-surface {
+    width: 100vw;
+    margin: auto 0 0 calc((100% - 100vw) / 2);
+    display: grid;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) and (min-width: 700px) {
+  .game-control-surface {
+    --deck-dpad-size: 156px;
+    --deck-action-size: 72px;
+    --deck-action-width: 154px;
+    padding-inline: max(18px, env(safe-area-inset-left, 0)) max(18px, env(safe-area-inset-right, 0));
+    gap: clamp(18px, 4vw, 36px);
+  }
+  .system-controls button {
+    width: clamp(68px, 10vw, 80px);
+    min-height: 50px;
+    font-size: 10px;
+  }
+  .system-controls span { font-size: 11px; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 899px) {
+  .game-control-surface {
+    width: 100vw;
+    margin-left: calc((100% - 100vw) / 2);
+    display: grid;
+  }
+  .game-control-surface {
+    --deck-dpad-size: 108px;
+    --deck-action-size: 54px;
+    --deck-action-width: 116px;
+    padding: 6px max(16px, env(safe-area-inset-right, 0)) 8px max(16px, env(safe-area-inset-left, 0));
+    gap: clamp(10px, 4vw, 32px);
+  }
+  .system-controls button {
+    min-width: 58px;
+    min-height: 42px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 599px) {
+  .game-control-surface {
+    width: 100vw;
+    margin-left: calc((100% - 100vw) / 2);
+    display: grid;
+  }
+  .game-control-surface {
+    --deck-dpad-size: 94px;
+    --deck-action-size: 48px;
+    --deck-action-width: 104px;
+    padding-block: 4px 6px;
+  }
+  .system-controls button {
+    min-width: 54px;
+    min-height: 38px;
+    padding: 4px 6px;
+    font-size: 8px;
+  }
+  .system-controls span { font-size: 9px; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+  .tablet-control-rail { display: flex; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 599px) {
+  .orientation-guide {
+    position: fixed;
+    z-index: 1000;
+    inset: 0;
+    padding:
+      max(18px, env(safe-area-inset-top, 0))
+      max(24px, env(safe-area-inset-right, 0))
+      max(18px, env(safe-area-inset-bottom, 0))
+      max(24px, env(safe-area-inset-left, 0));
+    display: grid;
+    place-items: center;
+    overflow: auto;
+    background:
+      repeating-linear-gradient(to bottom, transparent 0 2px, #0003 2px 4px),
+      radial-gradient(circle at 50% 48%, #1a1d17 0, #0c0e0b 58%, #070805 100%);
+  }
+  .orientation-guide-panel {
+    width: min(520px, 100%);
+    padding: 22px 28px 20px;
+    border: 1px solid #4a4d42;
+    background: #10120f;
+    box-shadow:
+      inset 0 0 0 4px #090a08,
+      inset 0 0 0 5px #2c2f28,
+      0 16px 46px #000b,
+      0 0 36px var(--glow-wide);
+    text-align: center;
+  }
+  .orientation-guide-panel .eyebrow {
+    margin-bottom: 10px;
+    font-size: 10px;
+  }
+  .orientation-guide-visual {
+    min-height: 56px;
+    margin: 0 auto 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    color: var(--moss);
+  }
+  .orientation-phone {
+    position: relative;
+    width: 38px;
+    height: 62px;
+    display: block;
+    border: 3px solid currentColor;
+    border-radius: 6px;
+    box-shadow: 0 0 14px var(--glow);
+  }
+  .orientation-phone::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    width: 9px;
+    height: 2px;
+    background: currentColor;
+    transform: translateX(-50%);
+  }
+  .orientation-phone i {
+    position: absolute;
+    inset: 10px 4px 5px;
+    border: 1px solid #4b5046;
+    background:
+      linear-gradient(135deg, transparent 45%, #9aa59218 46% 54%, transparent 55%),
+      #0a0c09;
+  }
+  .orientation-arrow {
+    font: 700 36px/1 Arial, sans-serif;
+    transform: rotate(-18deg);
+    text-shadow: 0 0 12px var(--glow);
+  }
+  .orientation-guide-panel h2 {
+    color: var(--ink);
+    font-size: clamp(16px, 3.6vw, 22px);
+    line-height: 1.35;
+    letter-spacing: 1.5px;
+  }
+  .orientation-guide-panel > p:last-child {
+    margin: 9px 0 0;
+    color: var(--moss);
+    font-size: clamp(13px, 2.8vw, 16px);
+    line-height: 1.5;
+  }
+}

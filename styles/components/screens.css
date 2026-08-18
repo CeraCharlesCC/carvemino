@@ -1,0 +1,59 @@
+/* ==========================================================================
+   SCREEN MANAGEMENT
+   ========================================================================== */
+
+.screen[hidden],
+.pause-overlay[hidden],
+.attract-card[hidden] { display: none !important; }
+
+.menu-screen {
+  height: 100%;
+  min-height: 0;
+  padding: 52px 48px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.menu-screen:not(.attract-screen) {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--arrow) transparent;
+  scrollbar-width: thin;
+}
+
+
+.eyebrow {
+  margin: 0 0 11px;
+  color: var(--moss);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.screen-heading h2 {
+  color: var(--ink);
+  font-size: 21px;
+  letter-spacing: 4px;
+  text-shadow: 2px 2px 0 #272a24;
+}
+
+/* ==========================================================================
+   TITLE / SUBSCREEN HEADINGS
+   ========================================================================== */
+
+.screen-heading { margin-bottom: 30px; }
+
+.select-game-screen { justify-content: flex-start; }
+
+
+/* Responsive / input-mode adjustments owned by this role. */
+
+@media (max-width: 700px) {
+  .menu-screen { padding: 40px 24px 30px; }
+}
+
+@media (max-width: 699px) {
+  .menu-screen { padding-top: 30px; }
+}

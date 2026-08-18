@@ -1,0 +1,257 @@
+.console-layout {
+  --cabinet-stack-chrome: 77px;
+  position: relative;
+  width: min(96vw, 716px);
+}
+
+/* ==========================================================================
+   CABINET / CRT LAYERS
+   ========================================================================== */
+
+.arcade-cabinet {
+  position: relative;
+  width: 100%;
+  padding: 18px 18px 13px;
+  border: 1px solid #34362e;
+  background: #090a08;
+  box-shadow:
+    inset 0 0 0 2px #050605,
+    inset 0 -12px 30px #0008,
+    0 22px 52px #000a,
+    0 0 70px #9aa5920b;
+}
+
+.arcade-cabinet::before,
+.arcade-cabinet::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: #2f3029;
+  pointer-events: none;
+}
+.arcade-cabinet::before { top: 8px; }
+.arcade-cabinet::after { bottom: 26px; }
+
+.crt-frame {
+  position: relative;
+  padding: 6px;
+  border: 5px solid #20221d;
+  background: #050605;
+  box-shadow:
+    inset 0 0 0 1px #3b3d34,
+    inset 0 0 14px #000,
+    0 2px 0 #31332b;
+}
+
+.crt-glass {
+  position: relative;
+  height: min(724px, calc(100dvh - 90px));
+  overflow: hidden;
+  border: 1px solid #36382f;
+  background: var(--glass);
+  box-shadow:
+    inset 0 0 46px #0009,
+    inset 10px 0 24px #0004,
+    inset -10px 0 24px #0004;
+}
+
+.cabinet-hardware {
+  height: 16px;
+  padding: 9px 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #4e5046;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+}
+.cabinet-hardware span { margin-right: auto; }
+.cabinet-hardware i {
+  width: 5px;
+  height: 5px;
+  border: 1px solid #4a4c42;
+  border-radius: 50%;
+  background: #0a0b09;
+}
+
+/* CRT effects belong to the screen glass, not the physical bezel. */
+.scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 2px,
+    #0003 2px,
+    #0003 4px
+  );
+  mix-blend-mode: multiply;
+  opacity: .34;
+}
+
+.glass-shine {
+  position: absolute;
+  z-index: 29;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(112deg, #ffffff08 0 9%, transparent 22% 100%),
+    radial-gradient(ellipse at center, transparent 56%, #0007 100%);
+}
+
+.corner-decor {
+  position: absolute;
+  z-index: 31;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  opacity: .86;
+}
+.corner-decor::before,
+.corner-decor::after {
+  content: "";
+  position: absolute;
+  background: var(--moss);
+}
+.corner-tl { top: 8px; left: 8px; }
+.corner-tl::before { top: 0; left: 0; width: 18px; height: 2px; }
+.corner-tl::after  { top: 0; left: 0; width: 2px; height: 18px; }
+.corner-tr { top: 8px; right: 8px; }
+.corner-tr::before { top: 0; right: 0; width: 18px; height: 2px; }
+.corner-tr::after  { top: 0; right: 0; width: 2px; height: 18px; }
+.corner-bl { bottom: 8px; left: 8px; }
+.corner-bl::before { bottom: 0; left: 0; width: 18px; height: 2px; }
+.corner-bl::after  { bottom: 0; left: 0; width: 2px; height: 18px; }
+.corner-br { bottom: 8px; right: 8px; }
+.corner-br::before { bottom: 0; right: 0; width: 18px; height: 2px; }
+.corner-br::after  { bottom: 0; right: 0; width: 2px; height: 18px; }
+
+
+/* Responsive / input-mode adjustments owned by this role. */
+
+@media (max-height: 820px) {
+  .console-layout { --cabinet-stack-chrome: 43px; }
+  .arcade-cabinet { padding: 8px 8px 6px; }
+  .arcade-cabinet .crt-frame {
+    padding: 4px;
+    border-width: 3px;
+  }
+  .arcade-cabinet .cabinet-hardware { display: none; }
+}
+
+@media (max-width: 700px) {
+  .console-layout { width: 100%; }
+  .arcade-cabinet {
+    width: 100%;
+    border-left: 0;
+    border-right: 0;
+  }
+}
+
+@media (max-width: 699px) {
+  .arcade-cabinet { padding-inline: 8px; }
+  .crt-frame { padding: 4px; border-width: 3px; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .console-layout {
+    --control-deck-height: 164px;
+    --control-deck-reserve: 170px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) and (max-width: 699px) {
+  .crt-glass {
+    height: min(
+      600px,
+      calc(
+        100dvh
+        - var(--control-deck-height)
+        - var(--cabinet-stack-chrome)
+        - env(safe-area-inset-top, 0)
+        - env(safe-area-inset-bottom, 0)
+      )
+    );
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) and (min-width: 700px) {
+  .console-layout {
+    --control-deck-height: 196px;
+    --control-deck-reserve: 202px;
+  }
+  .crt-glass {
+    height: min(
+      724px,
+      calc(
+        100dvh
+        - var(--control-deck-height)
+        - var(--cabinet-stack-chrome)
+        - env(safe-area-inset-top, 0)
+        - env(safe-area-inset-bottom, 0)
+      )
+    );
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 899px) {
+  .console-layout {
+    --control-deck-height: 128px;
+    --control-deck-reserve: 134px;
+  }
+  .crt-glass {
+    height: calc(
+      100dvh
+      - var(--control-deck-height)
+      - var(--cabinet-stack-chrome)
+      - env(safe-area-inset-top, 0)
+      - env(safe-area-inset-bottom, 0)
+    );
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 599px) {
+  .console-layout {
+    --control-deck-height: 108px;
+    --control-deck-reserve: 114px;
+  }
+  .console-layout[data-active-screen="game"] .crt-glass {
+    height: calc(
+      100dvh
+      - var(--control-deck-height)
+      - 24px
+      - env(safe-area-inset-top, 0)
+      - env(safe-area-inset-bottom, 0)
+    );
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+  .console-layout { width: min(calc(100% - 270px), 716px); }
+}
+
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 700px) {
+  .console-layout { --cabinet-stack-chrome: 24px; }
+  .arcade-cabinet {
+    padding: 4px;
+    border-left: 0;
+    border-right: 0;
+  }
+  .arcade-cabinet .crt-frame {
+    padding: 2px;
+    border-width: 2px;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 599px) {
+  .console-layout { visibility: hidden; }
+}

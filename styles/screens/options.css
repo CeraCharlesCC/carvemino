@@ -1,0 +1,69 @@
+/* ==========================================================================
+   OPTIONS / KEYBINDINGS
+   ========================================================================== */
+
+.options-screen { justify-content: flex-start; }
+
+.keybinding-heading,
+.keybinding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.keybinding-list { display: grid; grid-template-columns: 1fr 1fr; }
+.keybinding-row {
+  min-height: 44px;
+  border-right: 1px solid var(--line);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.keybinding-row button { min-width: 72px; }
+
+.audio-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  border-bottom: 1px solid var(--arrow);
+}
+
+.audio-setting-row {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: auto minmax(70px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-right: 1px solid var(--line);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.audio-setting-row:first-child { grid-template-columns: auto minmax(70px, 1fr); }
+.audio-setting-row:last-child { border-right: 0; }
+
+.audio-setting-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--moss);
+}
+
+.audio-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.audio-toggle input { accent-color: var(--moss); }
+
+
+/* Responsive / input-mode adjustments owned by this role. */
+
+@media (max-width: 700px) {
+  .audio-settings { grid-template-columns: 1fr; }
+  .audio-setting-row { border-right: 0; border-bottom: 1px solid var(--line); }
+  .audio-setting-row:last-child { border-bottom: 0; }
+  .keybinding-list { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,28 @@
+/* ==========================================================================
+   SHARED BUTTONS
+   ========================================================================== */
+
+.utility-button {
+  padding: 6px 10px;
+  border: 1px solid var(--arrow);
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 1px;
+  transition: color .15s, background .15s, border-color .15s;
+}
+.utility-button:hover,
+.utility-button:focus {
+  outline: 0;
+  color: var(--bg);
+  border-color: var(--moss);
+  background: var(--moss);
+}
+.binding-capture { color: var(--moss); border-color: var(--moss); }
+
+.utility-button:disabled {
+  color: #4b4d45;
+  border-color: #34362f;
+  cursor: default;
+  background: transparent;
+}

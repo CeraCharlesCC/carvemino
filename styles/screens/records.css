@@ -1,0 +1,41 @@
+/* ==========================================================================
+   RECORDS PANEL
+   ========================================================================== */
+
+
+.record-section { padding: 16px; }
+.record-section + .record-section { border-top: 1px solid var(--arrow); }
+
+.record-section h3,
+.keybinding-heading > b { font-size: 12px; letter-spacing: 2px; }
+
+.record-section h3 {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: var(--moss);
+}
+.record-section h3 span { color: var(--wire); }
+
+.record-score {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+.record-score output { color: var(--moss); font-size: 14px; }
+
+.achievement-list { display: grid; gap: 6px; }
+.achievement-item {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px;
+  padding: 7px 9px;
+  border-left: 2px solid var(--arrow);
+  color: var(--wire);
+  font-size: 11px;
+}
+.achievement-item b { font-size: 12px; letter-spacing: 1px; }
+.achievement-item.unlocked { color: var(--ink); border-color: var(--moss); }
+.achievement-item.unlocked span { color: var(--wire); }

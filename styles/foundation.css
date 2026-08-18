@@ -1,0 +1,90 @@
+/* ==========================================================================
+   CARVEMINO — modern-retro coin-op presentation (Moss / Olive / Grey palette)
+   ========================================================================== */
+
+@keyframes blink {
+  0%, 46% { opacity: 1; }
+  47%, 76% { opacity: 0; }
+  77%, 100% { opacity: 1; }
+}
+
+@keyframes selected-flash {
+  0%, 70% { opacity: 1; }
+  71%, 100% { opacity: .58; }
+}
+
+@keyframes cursor-nudge {
+  from { transform: translateX(0); }
+  to { transform: translateX(4px); }
+}
+
+@keyframes start-blink {
+  0%, 58% { opacity: 1; }
+  59%, 100% { opacity: .12; }
+}
+
+@keyframes logo-flicker {
+  0%, 4%, 7%, 100% { opacity: 1; transform: translateX(0); }
+  5% { opacity: .72; transform: translateX(2px); }
+  6% { opacity: .9; transform: translateX(-1px); }
+}
+
+@keyframes demo-cell-pulse {
+  from { filter: brightness(1); }
+  to { filter: brightness(1.65); }
+}
+
+:root {
+  color-scheme: dark;
+  font-family: "Lucida Console", "Courier New", Courier, monospace;
+  font-size: 14px;
+
+  --moss:      #9aa592;
+  --wire:      #7d8076;
+  --arrow:     #504c3f;
+  --olive:     #353217;
+  --ink:       #c8ccbe;
+  --bg:        #0b0c09;
+  --panel:     #111210;
+  --panel-2:   #161714;
+  --line:      #3a3830;
+  --glass:     #0e100d;
+  --glow:      #9aa59244;
+  --glow-wide: #9aa59218;
+
+  --accent:    var(--moss);
+  --muted:     var(--wire);
+  --field-height: 640px;
+  --drop-guide-height: 40px;
+
+  color: var(--ink);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  padding:
+    env(safe-area-inset-top, 0)
+    env(safe-area-inset-right, 0)
+    env(safe-area-inset-bottom, 0)
+    env(safe-area-inset-left, 0);
+  display: grid;
+  place-items: start center;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background:
+    radial-gradient(circle at 50% 44%, #171914 0, #0c0e0b 43%, #070805 78%),
+    var(--bg);
+}
+
+button { color: inherit; font: inherit; }
+
+
+h1, h2, h3 { margin: 0; text-transform: uppercase; }

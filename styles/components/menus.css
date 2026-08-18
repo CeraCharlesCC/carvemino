@@ -1,0 +1,116 @@
+/* ==========================================================================
+   MENU SYSTEM — sprite-like selection, no smooth app-style transitions
+   ========================================================================== */
+
+.arcade-menu {
+  display: grid;
+  gap: 2px;
+}
+
+.menu-button {
+  position: relative;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 16px 10px 38px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-right: 2px solid transparent;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: none;
+}
+
+.menu-button::after {
+  content: "";
+  position: absolute;
+  left: 38px;
+  right: 16px;
+  bottom: 0;
+  height: 1px;
+  background: #2d2f28;
+}
+
+.menu-button > span {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.menu-button b {
+  color: var(--wire);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+.menu-button:focus,
+.menu-button:hover {
+  outline: 0;
+  color: var(--moss);
+  border-color: #303328;
+  background: #151711;
+  text-shadow: 0 0 7px #9aa59238;
+}
+.menu-button:focus > span,
+.menu-button:hover > span { animation: selected-flash .72s steps(1, end) infinite; }
+.menu-button:focus b,
+.menu-button:hover b { color: var(--ink); }
+
+.menu-button:focus::before,
+.menu-button:hover::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  width: 11px;
+  height: 9px;
+  background: var(--moss);
+  clip-path: polygon(0 0, 68% 0, 100% 50%, 68% 100%, 0 100%, 24% 50%);
+  animation: cursor-nudge .34s steps(2, end) infinite alternate;
+}
+
+.menu-button:disabled {
+  color: #34362f;
+  cursor: not-allowed;
+}
+.menu-button:disabled b { color: #34362f; }
+.menu-button:disabled:hover { color: #34362f; border-color: transparent; background: transparent; text-shadow: none; }
+.menu-button:disabled:hover::before { content: none; }
+
+.mode-button { min-height: 66px; }
+.mode-button > span { font-size: 16px; }
+.back-button { min-height: 42px; margin-top: 12px; }
+.back-button > span { font-size: 12px; }
+.compact-menu { margin-top: 22px; }
+
+.menu-placeholder {
+  max-width: 520px;
+  padding: 18px;
+  border: 1px solid var(--arrow);
+  color: var(--wire);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.menu-footer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  color: #73766c;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+
+
+/* Responsive / input-mode adjustments owned by this role. */
+
+@media (hover: none) and (pointer: coarse) {
+  .menu-footer [data-input-hint="touch"] { display: inline; }
+}
