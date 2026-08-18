@@ -912,6 +912,7 @@ h1, h2, h3 { margin: 0; text-transform: uppercase; }
   gap: 7px;
   font-size: 11px;
 }
+.focus-nav-single { justify-content: center; }
 
 kbd {
   display: inline-block;
@@ -1052,6 +1053,12 @@ kbd {
 /* ==========================================================================
    PHYSICAL TOUCH CONTROLS — handheld deck + tablet rails
    ========================================================================== */
+
+[data-input-hint="touch"],
+[data-input-hint="handheld"],
+[data-input-hint="tablet-rail"] {
+  display: none;
+}
 
 .game-control-surface,
 .tablet-control-rail {
@@ -1511,7 +1518,16 @@ kbd {
   .game-header { position: sticky; top: 0; z-index: 12; }
 }
 
+@media (hover: none) and (pointer: coarse) {
+  [data-input-hint="keyboard"] { display: none; }
+  .start-button [data-input-hint="touch"] { display: block; }
+  .menu-footer [data-input-hint="touch"] { display: inline; }
+  .pause-hint[data-input-hint="touch"] { display: block; }
+}
+
 @media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .focus-nav[data-input-hint="handheld"] { display: flex; }
+
   .console-layout {
     --control-deck-height: 164px;
     --control-deck-reserve: 170px;
@@ -1579,6 +1595,8 @@ kbd {
 /* Narrow landscape touch devices fall back to the bottom deck instead of
    squeezing side rails between the cabinet and the user's hands. */
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 899px) {
+  .focus-nav[data-input-hint="handheld"] { display: flex; }
+
   .console-layout {
     --control-deck-height: 128px;
     --control-deck-reserve: 134px;
@@ -1617,6 +1635,8 @@ kbd {
 }
 
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 599px) {
+  .focus-nav[data-input-hint="handheld"] { display: flex; }
+
   .console-layout {
     --control-deck-height: 108px;
     --control-deck-reserve: 114px;
@@ -1714,6 +1734,8 @@ kbd {
 
 /* A landscape touch device with enough width and height gets controller rails. */
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
+  .focus-nav[data-input-hint="tablet-rail"] { display: flex; }
+
   .console-layout {
     width: min(calc(100% - 270px), 716px);
   }

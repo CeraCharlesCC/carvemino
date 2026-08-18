@@ -250,3 +250,20 @@ test("controller markup covers tablet rails, phone deck, and pause access", () =
   assert.match(styles, /\.rail-drop-button\s*\{\s*grid-area:\s*2\s*\/\s*1/);
   assert.match(styles, /\.rail-sculpt-button\s*\{\s*grid-area:\s*1\s*\/\s*2/);
 });
+
+test("input hints follow the visible keyboard, handheld, and tablet-rail controls", () => {
+  const markup = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(markup, /data-input-hint="keyboard">WASD \/ ARROWS SELECT/);
+  assert.match(markup, /data-input-hint="touch">D-PAD SELECT/);
+  assert.match(markup, /data-input-hint="handheld"><kbd>SELECT<\/kbd><span>CYCLE FOCUS/);
+  assert.match(markup, /data-input-hint="tablet-rail"><kbd>−<\/kbd><span>&lt; FOCUS &gt;<\/span><kbd>\+/);
+  assert.match(markup, /pause-hint" data-input-hint="keyboard">ESC RESUME/);
+  assert.match(markup, /pause-hint" data-input-hint="touch">START RESUME/);
+
+  assert.match(styles, /\[data-input-hint="touch"\],[\s\S]*?\[data-input-hint="tablet-rail"\][\s\S]*?display:\s*none/);
+  assert.match(styles, /@media\s*\(hover:\s*none\)\s*and\s*\(pointer:\s*coarse\)\s*\{[\s\S]*?\[data-input-hint="keyboard"\]\s*\{\s*display:\s*none[\s\S]*?\.menu-footer \[data-input-hint="touch"\]\s*\{\s*display:\s*inline/);
+  assert.match(styles, /orientation:\s*portrait[\s\S]*?\.focus-nav\[data-input-hint="handheld"\]\s*\{\s*display:\s*flex/);
+  assert.match(styles, /orientation:\s*landscape[\s\S]*?min-width:\s*900px[\s\S]*?min-height:\s*600px[\s\S]*?\.focus-nav\[data-input-hint="tablet-rail"\]\s*\{\s*display:\s*flex/);
+});

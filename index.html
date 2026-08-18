@@ -75,12 +75,13 @@
           </div>
 
           <button class="start-button" id="press-start" type="button" data-nav="singleplayer" aria-keyshortcuts="Enter">
-            <span>PRESS ENTER TO START</span>
+            <span data-input-hint="keyboard">PRESS ENTER TO START</span>
+            <span data-input-hint="touch">TAP OR PRESS START</span>
           </button>
           <nav class="attract-secondary" aria-label="Secondary menu">
-            <button type="button" data-nav="records" tabindex="-1" aria-keyshortcuts="R"><kbd>R</kbd> RECORDS</button>
+            <button type="button" data-nav="records" tabindex="-1" aria-keyshortcuts="R"><kbd data-input-hint="keyboard">R</kbd> RECORDS</button>
             <span aria-hidden="true">•</span>
-            <button type="button" data-nav="options" tabindex="-1" aria-keyshortcuts="O"><kbd>O</kbd> OPTIONS</button>
+            <button type="button" data-nav="options" tabindex="-1" aria-keyshortcuts="O"><kbd data-input-hint="keyboard">O</kbd> OPTIONS</button>
           </nav>
           <p class="cabinet-credit">CARVEMINO SYSTEM 94 // 1 PLAYER</p>
         </section>
@@ -91,7 +92,12 @@
             <h2>SELECT GAME</h2>
           </header>
           <nav class="arcade-menu mode-menu" id="mode-menu" aria-label="Singleplayer modes"></nav>
-          <div class="menu-footer"><span>WASD / ARROWS SELECT</span><span>ENTER START</span></div>
+          <div class="menu-footer">
+            <span data-input-hint="keyboard">WASD / ARROWS SELECT</span>
+            <span data-input-hint="keyboard">ENTER START</span>
+            <span data-input-hint="touch">D-PAD SELECT</span>
+            <span data-input-hint="touch">A / START CONFIRM · B BACK</span>
+          </div>
         </section>
 
         <section class="screen menu-screen" id="records-screen" data-screen="records" hidden>
@@ -197,7 +203,9 @@
                     <div class="resource-row"><span>CUT</span><b id="cut">-</b></div>
                     <div class="resource-row"><span>SCRAP</span><b id="scrap">0</b></div>
                     <div class="resource-row"><span>FILL</span><b id="fill-cost">2 scrap</b></div>
-                    <div class="focus-nav"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
+                    <div class="focus-nav" data-input-hint="keyboard"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
+                    <div class="focus-nav focus-nav-single" data-input-hint="handheld"><kbd>SELECT</kbd><span>CYCLE FOCUS</span></div>
+                    <div class="focus-nav" data-input-hint="tablet-rail"><kbd>−</kbd><span>&lt; FOCUS &gt;</span><kbd>+</kbd></div>
                   </section>
                 </aside>
 
@@ -234,7 +242,8 @@
                 <button class="menu-button" type="button" id="restart-game"><span>Restart</span></button>
                 <button class="menu-button" type="button" id="quit-game"><span>Quit Game</span></button>
               </nav>
-              <p class="pause-hint">ESC RESUME</p>
+              <p class="pause-hint" data-input-hint="keyboard">ESC RESUME</p>
+              <p class="pause-hint" data-input-hint="touch">START RESUME</p>
             </div>
           </div>
         </section>
