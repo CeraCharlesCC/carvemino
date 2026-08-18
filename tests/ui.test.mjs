@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { getGameInputAction } from "../src/ui/game-screen.js";
 import { getSculptAction, getTitleScreenAction } from "../src/ui/ui.js";
 
 test("title screen keyboard actions are explicit and do not use selection keys", () => {
@@ -33,4 +34,23 @@ test("sculpt action follows projected legal targets", () => {
 
   view.sculpt.carve.targets = [];
   assert.equal(getSculptAction(view, { x: 0, y: 0 }), null);
+});
+
+test("game input translation uses configured bindings with Enter as sculpt fallback", () => {
+  const bindings = {
+    focusPrevious: "KeyQ",
+    focusNext: "KeyE",
+    cursorUp: "KeyW",
+    cursorLeft: "KeyA",
+    cursorDown: "KeyS",
+    cursorRight: "KeyD",
+    sculpt: "Space",
+    hardDrop: "ArrowDown"
+  };
+
+  assert.equal(getGameInputAction("KeyQ", bindings), "focusPrevious");
+  assert.equal(getGameInputAction("ArrowDown", bindings), "hardDrop");
+  assert.equal(getGameInputAction("Space", bindings), "sculpt");
+  assert.equal(getGameInputAction("Enter", bindings), "sculpt");
+  assert.equal(getGameInputAction("KeyR", bindings), null);
 });
