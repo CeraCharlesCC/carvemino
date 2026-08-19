@@ -13,7 +13,7 @@ import {
 } from "../src/ui/game-input.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getLanStatusText } from "../src/ui/lan-lobby.js";
-import { createNavigation } from "../src/ui/navigation.js";
+import { createNavigation, getMenuButtons } from "../src/ui/navigation.js";
 import {
   claimStartupManualVisit,
   createManualDemoState,
@@ -162,6 +162,19 @@ test("multiplayer menu routes have explicit back destinations", () => {
   assert.equal(getBackScreen("records"), "menu");
   assert.equal(getBackScreen("options"), "menu");
   assert.equal(getBackScreen("missing"), null);
+});
+
+test("menu navigation ignores controls inside hidden LAN steps", () => {
+  const visibleAction = { closest: () => null };
+  const hiddenAction = { closest: () => ({ hidden: true }) };
+  const backButton = { closest: () => null };
+  const container = {
+    querySelectorAll() {
+      return [visibleAction, hiddenAction, backButton];
+    }
+  };
+
+  assert.deepEqual(getMenuButtons(container), [visibleAction, backButton]);
 });
 
 test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled", () => {

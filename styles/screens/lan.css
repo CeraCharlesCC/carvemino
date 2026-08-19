@@ -9,6 +9,32 @@
   gap: 12px;
 }
 
+:is(#lan-screen, #lan-host-screen, #lan-join-screen) .screen-heading .eyebrow {
+  font-size: 14px;
+  letter-spacing: 2.6px;
+}
+
+:is(#lan-screen, #lan-host-screen, #lan-join-screen) .screen-heading h2 {
+  font-size: 24px;
+}
+
+#lan-screen .mode-button > span {
+  font-size: 18px;
+  letter-spacing: 2.2px;
+}
+
+#lan-screen .mode-button b {
+  font-size: 14px;
+  letter-spacing: 1.2px;
+}
+
+#lan-screen .back-button > span,
+.lan-back-menu .back-button > span {
+  font-size: 15px;
+}
+
+#lan-screen .menu-footer { font-size: 13px; }
+
 .lan-step {
   display: grid;
   gap: 11px;
@@ -25,15 +51,15 @@
 .lan-step-label {
   margin: 0;
   color: var(--moss);
-  font: 700 11px/1.25 "Courier New", Courier, monospace;
-  letter-spacing: 1.6px;
+  font: 700 14px/1.3 "Courier New", Courier, monospace;
+  letter-spacing: 1.45px;
 }
 
 .lan-field {
   display: grid;
   gap: 7px;
   color: var(--wire);
-  font-size: 13px;
+  font-size: 15px;
   letter-spacing: 1.35px;
 }
 
@@ -66,7 +92,7 @@
 
 .lan-ruleset-field > span {
   color: var(--ink);
-  font-size: 14px;
+  font-size: 15px;
   letter-spacing: 1.8px;
 }
 
@@ -75,7 +101,7 @@
   padding-block: 8px;
 }
 
-.menu-button.lan-action > span { font-size: 13px; }
+.menu-button.lan-action > span { font-size: 16px; }
 
 .menu-button.lan-secondary-action {
   border-color: var(--arrow);
@@ -116,8 +142,8 @@
 .lan-wait-copy {
   margin: 0;
   color: var(--wire);
-  font: 700 10px/1.5 "Courier New", Courier, monospace;
-  letter-spacing: .8px;
+  font: 700 13px/1.55 "Courier New", Courier, monospace;
+  letter-spacing: .7px;
 }
 
 .lan-scanner {
@@ -154,8 +180,8 @@
 .lan-notice {
   margin: 0;
   color: var(--moss);
-  font: 700 11px/1.45 "Courier New", Courier, monospace;
-  letter-spacing: .9px;
+  font: 700 13px/1.5 "Courier New", Courier, monospace;
+  letter-spacing: .8px;
 }
 
 .lan-status[data-error="true"] { color: #f0b35d; }

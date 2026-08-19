@@ -38,6 +38,15 @@ export function getTitleScreenAction(code) {
   return null;
 }
 
+export function getMenuButtons(container) {
+  if (!container) return [];
+  return [...container.querySelectorAll([
+    ".menu-button:not([disabled])",
+    ".start-button:not([disabled])",
+    ".attract-secondary button:not([disabled])"
+  ].join(", "))].filter((button) => !button.closest?.("[hidden]"));
+}
+
 export function createNavigation({
   attract,
   gameScreen,
@@ -136,14 +145,6 @@ export function createNavigation({
     clearPause();
     quitGame();
     showScreen(destination);
-  }
-
-  function getMenuButtons(container) {
-    return [...container.querySelectorAll([
-      ".menu-button:not([disabled])",
-      ".start-button:not([disabled])",
-      ".attract-secondary button:not([disabled])"
-    ].join(", "))];
   }
 
   function moveMenuSelection(movingPrevious, container = screens.get(currentScreen)) {
