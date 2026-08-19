@@ -170,7 +170,7 @@ test("rules definitions reject piece rotations that cannot fit the configured bo
   tooNarrow.board.width = 3;
   assert.throws(
     () => defineRules(tooNarrow),
-    /templates\.I rotation 0 has bounds 4x1 that do not fit rules\.board 3x24/
+    /templates\.I rotation 0 has bounds 4x1 that do not fit rules\.board 3x23/
   );
 
   const tooShort = mutableCopy(CLASSIC_RULESET);

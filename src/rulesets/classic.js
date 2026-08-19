@@ -2,8 +2,8 @@ import { defineRules } from "../domain/rules.js";
 import { CARVEMINO_CELL_STYLES } from "../palette.js";
 
 export const CLASSIC_RULESET = defineRules({
-  id: "carvemino-classic-rules-v4",
-  board: { width: 10, visibleHeight: 20, hiddenHeight: 4 },
+  id: "carvemino-classic-rules-v5",
+  board: { width: 10, visibleHeight: 19, hiddenHeight: 4 },
   simulation: {
     stepsPerSecond: 60,
     lockDelayWorldTicks: 24,
