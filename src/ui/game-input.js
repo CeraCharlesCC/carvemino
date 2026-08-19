@@ -1,4 +1,5 @@
 import { GAMEPLAY_ACTIONS, GAMEPLAY_ACTION_IDS } from "../config.js";
+import { DEFAULT_INPUT_REPEAT_DELAY, DEFAULT_INPUT_REPEAT_INTERVAL } from "./input-constants.js";
 
 const GAMEPLAY_ACTION_ID_SET = new Set(GAMEPLAY_ACTIONS.map(({ id }) => id));
 const REPEATING_GAME_ACTIONS = new Set([
@@ -43,8 +44,8 @@ export function createOnScreenGameInput({
   root,
   performAction,
   vibrate = globalThis.navigator?.vibrate,
-  repeatDelay = 240,
-  repeatInterval = 85
+  repeatDelay = DEFAULT_INPUT_REPEAT_DELAY,
+  repeatInterval = DEFAULT_INPUT_REPEAT_INTERVAL
 }) {
   if (!root || typeof root.addEventListener !== "function") {
     throw new Error("on-screen game input root is required");

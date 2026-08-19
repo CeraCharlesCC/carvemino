@@ -1,5 +1,6 @@
 import { createAttract } from "./attract.js";
 import { createGameScreen } from "./game-screen.js";
+import { createGamepadInput } from "./gamepad-input.js";
 import { createOnScreenGameInput } from "./game-input.js";
 import { createLanLobby } from "./lan-lobby.js";
 import { createNavigation } from "./navigation.js";
@@ -85,14 +86,20 @@ export function createUi({
     }
   });
 
-  createOnScreenGameInput({
+  function performUiGameAction(actionId) {
+    const manualResult = startupManual?.handleGameAction(actionId);
+    return manualResult === null || manualResult === undefined
+      ? navigation.performControllerAction(actionId)
+      : manualResult;
+  }
+
+  const onScreenGameInput = createOnScreenGameInput({
     root: document.querySelector(".console-layout"),
-    performAction: (actionId) => {
-      const manualResult = startupManual?.handleGameAction(actionId);
-      return manualResult === null || manualResult === undefined
-        ? navigation.performControllerAction(actionId)
-        : manualResult;
-    }
+    performAction: performUiGameAction
+  });
+  const gamepadInput = createGamepadInput({
+    performAction: performUiGameAction,
+    performStart: () => navigation.performControllerStart()
   });
 
   startupManual = createStartupManual({
@@ -121,6 +128,10 @@ export function createUi({
     setGameMode,
     setLanSessionState: lanLobby.setSessionState,
     setLanNotice: lanLobby.setNotice,
-    showScreen: navigation.showScreen
+    showScreen: navigation.showScreen,
+    destroy() {
+      onScreenGameInput.destroy();
+      gamepadInput.destroy();
+    }
   };
 }

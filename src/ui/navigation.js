@@ -214,6 +214,23 @@ export function createNavigation({
     return false;
   }
 
+  function performControllerStart(returnFocus = pauseGameButton) {
+    const status = gameScreen.getStatus();
+    if (currentScreen !== "game") {
+      triggerHapticFeedback();
+      return activateMenuSelection(screens.get(currentScreen), currentScreen === "menu" ? pressStart : null);
+    }
+    if (status === "gameover") {
+      triggerHapticFeedback();
+      return activateMenuSelection(gameOver, playAgainButton);
+    }
+    if (!gamePaused && status !== "playing") return false;
+    triggerHapticFeedback();
+    onAudioEvent(gamePaused ? "back" : "confirm");
+    setPaused(!gamePaused, returnFocus);
+    return true;
+  }
+
   function handleMenuNavigation(event, container = screens.get(currentScreen)) {
     if (event.target?.matches?.("input, select, textarea")) return false;
     const movingPrevious = MENU_PREVIOUS_KEYS.has(event.code);
@@ -353,23 +370,7 @@ export function createNavigation({
     setPaused(true);
   });
   for (const button of controllerPauseButtons) {
-    button.addEventListener("click", () => {
-      const status = gameScreen.getStatus();
-      if (currentScreen !== "game") {
-        triggerHapticFeedback();
-        activateMenuSelection(screens.get(currentScreen), currentScreen === "menu" ? pressStart : null);
-        return;
-      }
-      if (status === "gameover") {
-        triggerHapticFeedback();
-        activateMenuSelection(gameOver, playAgainButton);
-        return;
-      }
-      if (!gamePaused && status !== "playing") return;
-      triggerHapticFeedback();
-      onAudioEvent(gamePaused ? "back" : "confirm");
-      setPaused(!gamePaused, button);
-    });
+    button.addEventListener("click", () => performControllerStart(button));
   }
   resumeGameButton.addEventListener("click", () => {
     onAudioEvent("back");
@@ -404,6 +405,7 @@ export function createNavigation({
   return {
     clearPause,
     performControllerAction,
+    performControllerStart,
     performGameAction: performControllerAction,
     showScreen
   };

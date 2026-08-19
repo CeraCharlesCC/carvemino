@@ -253,6 +253,7 @@ window.addEventListener("pagehide", () => {
     if (runtimeKind === "network" && runtime && !runtime.disposed) runtime.leave();
     else if (runtimeKind === "singleplayer" && runtime) runtime.stop();
     lanSession.reset();
+    ui?.destroy?.();
     audio.dispose();
   } finally {
     runtime = null;
