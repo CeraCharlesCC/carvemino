@@ -3,10 +3,57 @@
    ========================================================================== */
 
 [data-input-hint="touch"],
+[data-input-hint="controller"],
 [data-input-hint="handheld"],
 [data-input-hint="tablet-rail"] {
   display: none;
 }
+
+/* Runtime input-mode state overrides coarse-pointer layout fallbacks once JS
+   has observed an actual input method. Physical touch controls remain layout-
+   driven; these selectors only switch instructional copy. */
+:root[data-input-mode="keyboard"] [data-input-hint="touch"],
+:root[data-input-mode="keyboard"] [data-input-hint="controller"],
+:root[data-input-mode="keyboard"] [data-input-hint="handheld"],
+:root[data-input-mode="keyboard"] [data-input-hint="tablet-rail"],
+:root[data-input-mode="touch"] [data-input-hint="keyboard"],
+:root[data-input-mode="touch"] [data-input-hint="controller"],
+:root[data-input-mode="controller"] [data-input-hint="keyboard"],
+:root[data-input-mode="controller"] [data-input-hint="touch"],
+:root[data-input-mode="controller"] [data-input-hint="handheld"],
+:root[data-input-mode="controller"] [data-input-hint="tablet-rail"] {
+  display: none;
+}
+
+:root[data-input-mode="keyboard"] .start-button [data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .start-button [data-input-hint="touch"],
+:root[data-input-mode="controller"] .start-button [data-input-hint="controller"] { display: block; }
+
+:root[data-input-mode="keyboard"] .menu-footer [data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .menu-footer [data-input-hint="touch"],
+:root[data-input-mode="controller"] .menu-footer [data-input-hint="controller"] { display: inline; }
+
+:root[data-input-mode="keyboard"] .pause-hint[data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .pause-hint[data-input-hint="touch"],
+:root[data-input-mode="controller"] .pause-hint[data-input-hint="controller"] { display: block; }
+
+:root[data-input-mode="keyboard"] .focus-nav[data-input-hint="keyboard"],
+:root[data-input-mode="controller"] .focus-nav[data-input-hint="controller"] { display: flex; }
+
+:root[data-input-mode="keyboard"] .startup-manual .manual-inline-keys[data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .startup-manual .manual-inline-keys[data-input-hint="touch"],
+:root[data-input-mode="controller"] .startup-manual .manual-inline-keys[data-input-hint="controller"] { display: inline-flex; }
+
+:root[data-input-mode="keyboard"] .startup-manual .manual-lab-quick-list[data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .startup-manual .manual-lab-quick-list[data-input-hint="touch"],
+:root[data-input-mode="controller"] .startup-manual .manual-lab-quick-list[data-input-hint="controller"] { display: grid; }
+
+:root[data-input-mode="keyboard"] .startup-manual .manual-lab-controls[data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .startup-manual .manual-physical-pad-hint[data-input-hint="touch"],
+:root[data-input-mode="controller"] .startup-manual .manual-physical-pad-hint[data-input-hint="controller"],
+:root[data-input-mode="keyboard"] .startup-manual .manual-controls-card[data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .startup-manual .manual-controls-card[data-input-hint="touch"],
+:root[data-input-mode="controller"] .startup-manual .manual-controls-card[data-input-hint="controller"] { display: block; }
 
 .game-control-surface,
 .tablet-control-rail {

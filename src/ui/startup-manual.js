@@ -18,6 +18,17 @@ const KEY_ACTIONS = Object.freeze({
   Space: "hardDrop"
 });
 const MANUAL_GAME_ACTIONS = new Set(Object.values(KEY_ACTIONS));
+const MANUAL_CONTROLLER_PREVIOUS_ACTIONS = new Set(["cursorUp", "cursorLeft", "focusPrevious"]);
+const MANUAL_CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext"]);
+
+export function getManualControllerIntent(pageIndex, actionId) {
+  if (pageIndex === 1 && MANUAL_GAME_ACTIONS.has(actionId)) return "practice";
+  if (MANUAL_CONTROLLER_PREVIOUS_ACTIONS.has(actionId)) return "previous";
+  if (MANUAL_CONTROLLER_NEXT_ACTIONS.has(actionId)) return "next";
+  if (actionId === "sculpt") return "activate";
+  if (actionId === "hardDrop") return "back";
+  return "consume";
+}
 
 export function claimStartupManualVisit(storage) {
   if (storage === undefined) {
@@ -215,9 +226,23 @@ function fieldCellAt(state, x, y) {
   return null;
 }
 
-export function createStartupManual({ i18n, returnFocus = null, screen = null, onStart = null } = {}) {
+export function createStartupManual({
+  i18n,
+  returnFocus = null,
+  screen = null,
+  onStart = null,
+  onAudioEvent = () => {}
+} = {}) {
   const dialog = document.querySelector("#startup-manual");
-  if (!dialog) return { open() {}, close() {}, handleGameAction() { return null; } };
+  if (!dialog) {
+    return {
+      open() {},
+      close() {},
+      handleGameAction() { return null; },
+      handleControllerAction() { return null; },
+      handleControllerStart() { return null; }
+    };
+  }
 
   const pages = [...dialog.querySelectorAll("[data-manual-page]")];
   const paginationButtons = [...dialog.querySelectorAll("[data-manual-page-target]")];
@@ -363,6 +388,58 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null, o
     return true;
   }
 
+  function controllerButtons() {
+    return [...dialog.querySelectorAll("button:not([disabled])")].filter((button) => (
+      !button.hidden && !button.closest?.("[hidden]")
+    ));
+  }
+
+  function moveControllerFocus(movingPrevious) {
+    const buttons = controllerButtons();
+    if (buttons.length === 0) return false;
+    let index = buttons.indexOf(document.activeElement);
+    if (index < 0) index = movingPrevious ? 0 : -1;
+    index = (index + (movingPrevious ? -1 : 1) + buttons.length) % buttons.length;
+    buttons[index].focus();
+    onAudioEvent("select");
+    return true;
+  }
+
+  function activateControllerFocus() {
+    const buttons = controllerButtons();
+    const activeButton = buttons.includes(document.activeElement) ? document.activeElement : nextButton;
+    if (!activeButton || activeButton.disabled) return false;
+    activeButton.click();
+    return true;
+  }
+
+  function handleControllerAction(actionId) {
+    if (!dialog.open) return null;
+    const intent = getManualControllerIntent(pageIndex, actionId);
+    if (intent === "practice") {
+      perform(actionId);
+      return true;
+    }
+    if (intent === "previous") return moveControllerFocus(true);
+    if (intent === "next") return moveControllerFocus(false);
+    if (intent === "activate") return activateControllerFocus();
+    if (intent === "back") {
+      if (pageIndex > 0) previousButton.click();
+      else close();
+      return true;
+    }
+    return false;
+  }
+
+  function handleControllerStart() {
+    if (!dialog.open) return null;
+    if (pageIndex === 1) {
+      nextButton.click();
+      return true;
+    }
+    return activateControllerFocus();
+  }
+
   for (const button of dialog.querySelectorAll("[data-manual-close]")) {
     button.addEventListener("click", close);
   }
@@ -426,5 +503,5 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null, o
 
   i18n.apply(dialog);
   renderDemo();
-  return { open, close, handleGameAction };
+  return { open, close, handleGameAction, handleControllerAction, handleControllerStart };
 }

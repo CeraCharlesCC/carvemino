@@ -13,10 +13,12 @@ import {
 } from "../src/ui/game-input.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getLanStatusText } from "../src/ui/lan-lobby.js";
+import { createInputMode, getInitialInputMode } from "../src/ui/input-mode.js";
 import { createNavigation, getMenuButtons } from "../src/ui/navigation.js";
 import {
   claimStartupManualVisit,
   createManualDemoState,
+  getManualControllerIntent,
   getManualDemoTarget,
   performManualDemoAction
 } from "../src/ui/startup-manual.js";
@@ -221,6 +223,79 @@ test("title and manual input hints use medium-specific primary controls", () => 
   assert.match(html, /data-input-hint="keyboard"><kbd>ENTER<\/kbd><kbd>Z<\/kbd>/);
   assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="keyboard"[\s\S]*?<kbd>ENTER<\/kbd><small data-i18n="manual\.lab\.quick\.sculpt"/);
   assert.match(html, /data-manual-action="sculpt"[^>]*><kbd>ENTER<\/kbd>/);
+  assert.match(html, /data-input-hint="controller">PRESS START<\/span>/);
+  assert.match(html, /data-input-hint="controller">D-PAD \/ STICK SELECT · A \/ CROSS CONFIRM · B \/ CIRCLE BACK<\/span>/);
+  assert.match(html, /data-input-hint="controller"><kbd>LB<\/kbd><kbd>RB<\/kbd>/);
+  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="controller"[\s\S]*?<kbd>A \/ CROSS<\/kbd>/);
+  assert.match(html, /manual-controls-card[^>]+data-input-hint="controller"[\s\S]*?manual\.controls\.controller\.title/);
+});
+
+test("input mode initializes from pointer layout and switches on meaningful input types", () => {
+  assert.equal(getInitialInputMode(() => ({ matches: false })), "keyboard");
+  assert.equal(getInitialInputMode(() => ({ matches: true })), "touch");
+
+  const windowHandlers = new Map();
+  const documentHandlers = new Map();
+  const root = { dataset: {}, contains: (target) => target?.owner === "root" };
+  const manual = { contains: (target) => target?.owner === "manual" };
+  const documentObject = {
+    documentElement: { dataset: {} },
+    addEventListener: (type, handler) => documentHandlers.set(type, handler),
+    removeEventListener: (type) => documentHandlers.delete(type)
+  };
+  const windowObject = {
+    addEventListener: (type, handler) => windowHandlers.set(type, handler),
+    removeEventListener: (type) => windowHandlers.delete(type)
+  };
+  const inputMode = createInputMode({
+    root,
+    manual,
+    documentObject,
+    windowObject,
+    matchMedia: () => ({ matches: false })
+  });
+
+  assert.equal(inputMode.getMode(), "keyboard");
+  assert.equal(root.dataset.inputMode, "keyboard");
+  inputMode.setMode("controller");
+  assert.equal(documentObject.documentElement.dataset.inputMode, "controller");
+
+  const manualButton = { owner: "manual" };
+  documentHandlers.get("pointerdown")({
+    pointerType: "touch",
+    target: { closest: () => manualButton }
+  });
+  assert.equal(inputMode.getMode(), "touch");
+
+  inputMode.setMode("controller");
+  documentHandlers.get("pointerdown")({
+    pointerType: "mouse",
+    target: { closest: () => ({ owner: "root" }) }
+  });
+  assert.equal(inputMode.getMode(), "controller");
+  windowHandlers.get("keydown")({ code: "KeyA" });
+  assert.equal(inputMode.getMode(), "keyboard");
+
+  inputMode.destroy();
+  assert.equal(windowHandlers.size, 0);
+  assert.equal(documentHandlers.size, 0);
+});
+
+test("manual controller actions stay in the practice lab and become DOM navigation elsewhere", () => {
+  for (const actionId of ["cursorUp", "cursorLeft", "cursorDown", "cursorRight", "focusPrevious", "focusNext", "sculpt", "hardDrop"]) {
+    assert.equal(getManualControllerIntent(1, actionId), "practice", actionId);
+  }
+  assert.equal(getManualControllerIntent(0, "cursorLeft"), "previous");
+  assert.equal(getManualControllerIntent(2, "focusNext"), "next");
+  assert.equal(getManualControllerIntent(0, "sculpt"), "activate");
+  assert.equal(getManualControllerIntent(2, "hardDrop"), "back");
+});
+
+test("runtime input-mode CSS can override coarse-pointer hint fallbacks", () => {
+  const css = readFileSync(new URL("../styles/controls/touch-controls.css", import.meta.url), "utf8");
+  assert.match(css, /:root\[data-input-mode="controller"\][^{]+\[data-input-hint="keyboard"\]/);
+  assert.match(css, /:root\[data-input-mode="controller"\] \.focus-nav\[data-input-hint="controller"\]\s*\{\s*display:\s*flex/);
+  assert.match(css, /:root\[data-input-mode="controller"\] \.startup-manual \.manual-controls-card\[data-input-hint="controller"\]\s*\{\s*display:\s*block/);
 });
 
 test("title start prompt blinks by default but stops when a secondary item is selected", () => {
@@ -621,6 +696,10 @@ test("startup manual locale follows browser language with an English fallback", 
   assert.match(japanese.t("orientation.title"), /スマホ.*横持ち.*非対応/);
   assert.match(english.t("orientation.copy"), /portrait/i);
   assert.match(english.t("manual.lab.cell", { x: 2, y: 3, action: "CUT" }), /2.*3.*CUT/);
+  assert.equal(english.t("manual.controls.controller.title"), "CONTROLLER");
+  assert.equal(japanese.t("manual.controls.controller.title"), "コントローラー");
+  assert.match(english.t("manual.lab.controllerHint"), /controller/i);
+  assert.match(japanese.t("manual.lab.controllerHint"), /コントローラー/);
 });
 
 test("startup manual is automatically claimed only once per local storage", () => {

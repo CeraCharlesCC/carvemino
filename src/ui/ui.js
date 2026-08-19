@@ -2,6 +2,7 @@ import { createAttract } from "./attract.js";
 import { createGameScreen } from "./game-screen.js";
 import { createGamepadInput } from "./gamepad-input.js";
 import { createOnScreenGameInput } from "./game-input.js";
+import { createInputMode } from "./input-mode.js";
 import { createLanLobby } from "./lan-lobby.js";
 import { createNavigation } from "./navigation.js";
 import { createProfileUi } from "./profile-ui.js";
@@ -93,20 +94,37 @@ export function createUi({
       : manualResult;
   }
 
+  function performUiControllerAction(actionId) {
+    const manualResult = startupManual?.handleControllerAction(actionId);
+    return manualResult === null || manualResult === undefined
+      ? navigation.performControllerAction(actionId)
+      : manualResult;
+  }
+
+  function performUiControllerStart() {
+    const manualResult = startupManual?.handleControllerStart();
+    return manualResult === null || manualResult === undefined
+      ? navigation.performControllerStart()
+      : manualResult;
+  }
+
+  const inputMode = createInputMode();
   const onScreenGameInput = createOnScreenGameInput({
     root: document.querySelector(".console-layout"),
     performAction: performUiGameAction
   });
   const gamepadInput = createGamepadInput({
-    performAction: performUiGameAction,
-    performStart: () => navigation.performControllerStart()
+    performAction: performUiControllerAction,
+    performStart: performUiControllerStart,
+    onActivity: () => inputMode.setMode("controller")
   });
 
   startupManual = createStartupManual({
     i18n,
     returnFocus: document.querySelector("#press-start"),
     screen: document.querySelector(".crt-glass"),
-    onStart: () => navigation.showScreen("menu")
+    onStart: () => navigation.showScreen("menu"),
+    onAudioEvent
   });
 
   function setGameMode(modeId, options = {}) {
@@ -130,6 +148,7 @@ export function createUi({
     setLanNotice: lanLobby.setNotice,
     showScreen: navigation.showScreen,
     destroy() {
+      inputMode.destroy();
       onScreenGameInput.destroy();
       gamepadInput.destroy();
     }

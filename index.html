@@ -118,6 +118,7 @@
           <button class="start-button" id="press-start" type="button" data-nav="play" aria-keyshortcuts="Enter">
             <span data-input-hint="keyboard">PRESS ENTER TO START</span>
             <span data-input-hint="touch">PRESS START</span>
+            <span data-input-hint="controller">PRESS START</span>
           </button>
           <nav class="attract-secondary" aria-label="Secondary menu">
             <button type="button" data-nav="records" tabindex="-1" aria-keyshortcuts="R"><kbd data-input-hint="keyboard">R</kbd> RECORDS</button>
@@ -147,6 +148,7 @@
             <span data-input-hint="keyboard">WASD / ARROWS SELECT</span>
             <span data-input-hint="keyboard">ENTER CONFIRM · ESC BACK</span>
             <span data-input-hint="touch">D-PAD SELECT · A / START CONFIRM · B BACK</span>
+            <span data-input-hint="controller">D-PAD / STICK SELECT · A / CROSS CONFIRM · B / CIRCLE BACK</span>
           </div>
         </section>
 
@@ -164,6 +166,7 @@
             <span data-input-hint="keyboard">ENTER START</span>
             <span data-input-hint="touch">D-PAD SELECT</span>
             <span data-input-hint="touch">A / START CONFIRM · B BACK</span>
+            <span data-input-hint="controller">D-PAD / STICK SELECT · A / CROSS CONFIRM · B / CIRCLE BACK</span>
           </div>
         </section>
 
@@ -184,6 +187,7 @@
           <div class="menu-footer">
             <span data-input-hint="keyboard">ENTER CONFIRM · ESC BACK</span>
             <span data-input-hint="touch">A / START CONFIRM · B BACK</span>
+            <span data-input-hint="controller">D-PAD / STICK SELECT · A / CROSS CONFIRM · B / CIRCLE BACK</span>
           </div>
         </section>
 
@@ -205,6 +209,7 @@
           <div class="menu-footer">
             <span data-input-hint="keyboard">ENTER CONFIRM · ESC BACK</span>
             <span data-input-hint="touch">A / START CONFIRM · B BACK</span>
+            <span data-input-hint="controller">D-PAD / STICK SELECT · A / CROSS CONFIRM · B / CIRCLE BACK</span>
           </div>
         </section>
 
@@ -407,6 +412,7 @@
                     <div class="resource-row"><span data-i18n="focus.resource.scrap">SCRAP</span><b id="scrap">0</b></div>
                     <div class="resource-row"><span data-i18n="focus.resource.fill">FILL COST</span><b id="fill-cost">2 scrap</b></div>
                     <div class="focus-nav" data-input-hint="keyboard"><kbd id="focus-prev-key">Q</kbd><span>&lt; FOCUS &gt;</span><kbd id="focus-next-key">E</kbd></div>
+                    <div class="focus-nav" data-input-hint="controller"><kbd>LB</kbd><span>&lt; FOCUS &gt;</span><kbd>RB</kbd></div>
                     <div class="focus-nav focus-nav-single" data-input-hint="handheld"><kbd>SELECT</kbd><span>CYCLE FOCUS</span></div>
                     <div class="focus-nav" data-input-hint="tablet-rail"><kbd>−</kbd><span>&lt; FOCUS &gt;</span><kbd>+</kbd></div>
                   </section>
@@ -456,6 +462,7 @@
               </nav>
               <p class="pause-hint" data-input-hint="keyboard">ESC RESUME</p>
               <p class="pause-hint" data-input-hint="touch">START RESUME</p>
+              <p class="pause-hint" data-input-hint="controller">START RESUME</p>
             </div>
           </div>
         </section>
@@ -540,6 +547,7 @@
                     <b data-i18n="manual.step.focus.title">CHOOSE A PIECE</b>
                     <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>Q</kbd><kbd>E</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>SELECT</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="controller"><kbd>LB</kbd><kbd>RB</kbd></span>
                   </div>
                   <p data-i18n="manual.step.focus.copy">Switch between the falling pieces. The selected piece appears larger in FOCUS.</p>
                 </div>
@@ -551,6 +559,7 @@
                     <b data-i18n="manual.step.cursor.title">CHOOSE A CELL</b>
                     <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>WASD</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>D-PAD</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="controller"><kbd>D-PAD / STICK</kbd></span>
                   </div>
                   <p data-i18n="manual.step.cursor.copy">Move the cursor in FOCUS. Its color shows whether the cell can be changed.</p>
                 </div>
@@ -562,6 +571,7 @@
                     <b data-i18n="manual.step.sculpt.title">RESHAPE THE PIECE</b>
                     <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>ENTER</kbd><kbd>Z</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>A</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="controller"><kbd>A / CROSS</kbd></span>
                   </div>
                   <p data-i18n="manual.step.sculpt.copy">Remove a filled cell, or spend SCRAP to fill a dashed cell.</p>
                 </div>
@@ -573,6 +583,7 @@
                     <b data-i18n="manual.step.drop.title">DROP THE PIECE</b>
                     <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>SPACE</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>B</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="controller"><kbd>B / CIRCLE</kbd></span>
                   </div>
                   <p data-i18n="manual.step.drop.copy">Drop the selected piece to the bottom. Fill a complete horizontal row to clear it.</p>
                 </div>
@@ -628,6 +639,12 @@
               <span><kbd>A</kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
               <span><kbd>B</kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
             </div>
+            <div class="manual-lab-quick-list" data-input-hint="controller">
+              <span><kbd>LB / RB</kbd><small data-i18n="manual.lab.quick.focus">SELECT PIECE</small></span>
+              <span><kbd>D-PAD / STICK</kbd><small data-i18n="manual.lab.quick.cursor">MOVE</small></span>
+              <span><kbd>A / CROSS</kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
+              <span><kbd>B / CIRCLE</kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
+            </div>
           </aside>
 
           <div class="manual-lab-stage" id="manual-lab-stage" tabindex="0" aria-labelledby="manual-lab-heading">
@@ -674,6 +691,9 @@
             <p class="manual-physical-pad-hint" data-input-hint="touch" data-i18n="manual.lab.touchHint">
               Use the controls below to practice.
             </p>
+            <p class="manual-physical-pad-hint" data-input-hint="controller" data-i18n="manual.lab.controllerHint">
+              Use your controller to practice.
+            </p>
 
             <button class="manual-reset" type="button" data-manual-action="reset" data-i18n="manual.lab.reset">START OVER</button>
           </div>
@@ -704,6 +724,17 @@
               <div><dt><kbd>A</kbd></dt><dd data-i18n="manual.controls.touch.sculpt">Reshape the selected cell</dd></div>
               <div><dt><kbd>B</kbd></dt><dd data-i18n="manual.controls.touch.drop">Drop the selected piece to the bottom</dd></div>
               <div><dt><kbd>START</kbd></dt><dd data-i18n="manual.controls.touch.pause">Pause / resume</dd></div>
+            </dl>
+          </div>
+
+          <div class="manual-controls-card" data-input-hint="controller">
+            <h3 data-i18n="manual.controls.controller.title">CONTROLLER</h3>
+            <dl>
+              <div><dt><kbd>LB</kbd><kbd>RB</kbd></dt><dd data-i18n="manual.controls.controller.focus">Select the previous / next piece</dd></div>
+              <div><dt><kbd>D-PAD</kbd><kbd>STICK</kbd></dt><dd data-i18n="manual.controls.controller.cursor">Move the cursor</dd></div>
+              <div><dt><kbd>A / CROSS</kbd></dt><dd data-i18n="manual.controls.controller.sculpt">Reshape the selected cell</dd></div>
+              <div><dt><kbd>B / CIRCLE</kbd></dt><dd data-i18n="manual.controls.controller.drop">Drop the selected piece to the bottom</dd></div>
+              <div><dt><kbd>START</kbd></dt><dd data-i18n="manual.controls.controller.pause">Pause / resume</dd></div>
             </dl>
           </div>
 
