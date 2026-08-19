@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Carvemino</title>
+
+  <defs>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#141811"/>
+      <stop offset=".55" stop-color="#090b08"/>
+      <stop offset="1" stop-color="#0d100c"/>
+    </linearGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c07b5d"/>
+      <stop offset=".48" stop-color="#a56b52"/>
+      <stop offset="1" stop-color="#75483a"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dde2d6"/>
+      <stop offset=".42" stop-color="#aeb7ab"/>
+      <stop offset="1" stop-color="#68736b"/>
+    </linearGradient>
+    <clipPath id="screen-clip">
+      <rect x="8" y="8" width="48" height="48" rx="6"/>
+    </clipPath>
+  </defs>
+
+  <!-- Compact coin-op CRT cabinet. -->
+  <rect x="2" y="2" width="60" height="60" rx="10" fill="#070907"/>
+  <rect x="4.5" y="4.5" width="55" height="55" rx="8.5" fill="#252920" stroke="#4c5147" stroke-width="2.5"/>
+  <rect x="7.5" y="7.5" width="49" height="49" rx="6.5" fill="url(#glass)" stroke="#737b6b" stroke-width="1.5"/>
+
+  <g clip-path="url(#screen-clip)">
+    <!-- Subtle phosphor raster, deliberately faint enough to disappear at 16 px. -->
+    <g stroke="#a8b19f" stroke-width=".7" opacity=".12">
+      <path d="M10 17.5h44M10 25.5h44M10 33.5h44M10 41.5h44M10 49.5h44"/>
+    </g>
+
+    <!-- A soft secondary reflection makes the tool feel behind curved glass. -->
+    <path d="M13 14l27 25" fill="none" stroke="#a4ad99" stroke-width="6" stroke-linecap="round" opacity=".055"/>
+
+    <!-- L mino in the focus window; the lower-left cell has just been carved away. -->
+    <g stroke="#293027" stroke-width="1">
+      <rect x="38" y="30" width="8" height="8" rx=".6" fill="#84957a"/>
+      <rect x="46" y="30" width="8" height="8" rx=".6" fill="#718365"/>
+      <rect x="46" y="38" width="8" height="8" rx=".6" fill="#718365"/>
+      <rect x="46" y="46" width="8" height="8" rx=".6" fill="#718365"/>
+    </g>
+    <g opacity=".22" stroke="#eef1e5" stroke-width=".7">
+      <path d="M39.5 31.5h5M47.5 31.5h5M47.5 39.5h5M47.5 47.5h5"/>
+    </g>
+
+    <!-- The carved cell has become scrap rather than another locked-in block. -->
+    <g transform="rotate(-7 35 47)">
+      <rect x="31.5" y="43.5" width="7" height="7" rx=".7" fill="#4f827a" stroke="#26302b" stroke-width="1"/>
+      <path d="M33 45h4" stroke="#9fc1b7" stroke-width=".7" opacity=".45"/>
+    </g>
+
+    <!-- Chisel: warm turned-wood handle, ferrule, then a broad beveled steel edge. -->
+    <g transform="translate(7.7 10.2) rotate(42)">
+      <!-- Contact shadow, mostly visible at 48 px and up. -->
+      <path d="M1 5.2h17c3.2 0 5.2-.6 7-2.1l5.5.4L42.5 4.8h4" fill="none" stroke="#020302" stroke-width="2.2" stroke-linecap="round" opacity=".55" transform="translate(.7 1.2)"/>
+
+      <!-- Turned wooden handle. -->
+      <path d="M-1-3.6Q-.7-5 1.8-5.4L16-5Q20-4.8 23.3-3.1V3.1Q20 4.8 16 5l-14.2.4Q-.7 5-1 3.6Q-2.1 0-1-3.6Z" fill="url(#wood)" stroke="#45352d" stroke-width="1"/>
+      <path d="M2.2-4.4Q4.2 0 2.2 4.4M15-4.2Q17 0 15 4.2" fill="none" stroke="#d28c69" stroke-width=".65" opacity=".5"/>
+      <path d="M-.2-3.5Q-1.3 0-.2 3.5" fill="none" stroke="#e1a181" stroke-width=".7" opacity=".55"/>
+
+      <!-- Ferrule and neck. -->
+      <path d="M22.5-3.8h5.8v7.6h-5.8z" fill="#7f8d83" stroke="#d1d7cc" stroke-width=".8"/>
+      <path d="M22.8 2.45h5.2v1.05h-5.2z" fill="#607d92" opacity=".78"/>
+      <path d="M28.3-2.8h3v5.6h-3z" fill="#707b72" stroke="#4c574e" stroke-width=".7"/>
+      <path d="M23.6-2.8v5.6" stroke="#c7cec2" stroke-width=".65" opacity=".68"/>
+
+      <!-- Flat chisel blade and visible ground bevel. -->
+      <path d="M31.1-3 42-3.8h4.5v7.6H42l-10.9-.8Z" fill="url(#steel)" stroke="#515b52" stroke-width=".9" stroke-linejoin="round"/>
+      <path d="M41.3-3.75 46.5-3.8v7.6l-5.2-.05 2.25-3.75Z" fill="#c8cec2" opacity=".62"/>
+      <path d="M32.2-2.12 41.6-2.78" stroke="#f1f5e6" stroke-width=".6" opacity=".55"/>
+      <path d="M46.5-3.8v7.6" stroke="#f1f5e6" stroke-width="1.05"/>
+    </g>
+
+    <!-- Chips/glow at the cut point. -->
+    <path d="M40.8 39.2l2.3-.8.2 1.9z" fill="#d98b43"/>
+    <rect x="39.8" y="41.7" width="2.1" height="2.1" rx=".3" fill="#b38251"/>
+    <rect x="43.2" y="41" width="1.15" height="1.15" fill="#d98b43" opacity=".8"/>
+
+    <!-- A restrained glass catch-light passes over every object. -->
+    <path d="M11 12Q30 7.5 52 11" fill="none" stroke="#eef1e5" stroke-width="1.1" opacity=".085"/>
+  </g>
+</svg>

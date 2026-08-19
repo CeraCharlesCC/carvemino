@@ -35,8 +35,8 @@ jobs:
       - name: Stage site
         run: |
           mkdir _site
-          cp index.html _site/
-          cp -R src styles _site/
+          cp index.html favicon.svg manifest.webmanifest og-image.png sw.js _site/
+          cp -R icons src styles _site/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

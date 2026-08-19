@@ -239,6 +239,14 @@ ui = createUi({
 ui.setProfile(profile.getSnapshot());
 ui.showScreen("menu");
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(new URL("../sw.js", import.meta.url)).catch((error) => {
+      console.warn("Carvemino service worker registration failed:", error);
+    });
+  }, { once: true });
+}
+
 window.addEventListener("pagehide", () => {
   networkQuitInProgress = true;
   try {
