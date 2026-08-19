@@ -92,7 +92,7 @@ const MESSAGES = Object.freeze({
   }),
   ja: Object.freeze({
     "menu.manual": "MANUAL",
-    "pause.howToPlay": "遊び方を見る",
+    "pause.howToPlay": "How to Play",
     "focus.resource.cut": "CUT 残り",
     "focus.resource.scrap": "SCRAP 所持",
     "focus.resource.fill": "FILL コスト",
