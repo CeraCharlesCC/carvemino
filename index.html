@@ -571,7 +571,7 @@
                     <b data-i18n="manual.step.sculpt.title">RESHAPE THE PIECE</b>
                     <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>ENTER</kbd><kbd>Z</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>A</kbd></span>
-                    <span class="manual-inline-keys" data-input-hint="controller"><kbd>A / CROSS</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="controller"><kbd data-controller-game-action="sculpt">RIGHT FACE</kbd></span>
                   </div>
                   <p data-i18n="manual.step.sculpt.copy">Remove a filled cell, or spend SCRAP to fill a dashed cell.</p>
                 </div>
@@ -583,7 +583,7 @@
                     <b data-i18n="manual.step.drop.title">DROP THE PIECE</b>
                     <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>SPACE</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>B</kbd></span>
-                    <span class="manual-inline-keys" data-input-hint="controller"><kbd>B / CIRCLE</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="controller"><kbd data-controller-game-action="hardDrop">BOTTOM FACE</kbd></span>
                   </div>
                   <p data-i18n="manual.step.drop.copy">Drop the selected piece to the bottom. Fill a complete horizontal row to clear it.</p>
                 </div>
@@ -642,8 +642,8 @@
             <div class="manual-lab-quick-list" data-input-hint="controller">
               <span><kbd>LB / RB</kbd><small data-i18n="manual.lab.quick.focus">SELECT PIECE</small></span>
               <span><kbd>D-PAD / STICK</kbd><small data-i18n="manual.lab.quick.cursor">MOVE</small></span>
-              <span><kbd>A / CROSS</kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
-              <span><kbd>B / CIRCLE</kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
+              <span><kbd data-controller-game-action="sculpt">RIGHT FACE</kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
+              <span><kbd data-controller-game-action="hardDrop">BOTTOM FACE</kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
             </div>
           </aside>
 
@@ -732,8 +732,8 @@
             <dl>
               <div><dt><kbd>LB</kbd><kbd>RB</kbd></dt><dd data-i18n="manual.controls.controller.focus">Select the previous / next piece</dd></div>
               <div><dt><kbd>D-PAD</kbd><kbd>STICK</kbd></dt><dd data-i18n="manual.controls.controller.cursor">Move the cursor</dd></div>
-              <div><dt><kbd>A / CROSS</kbd></dt><dd data-i18n="manual.controls.controller.sculpt">Reshape the selected cell</dd></div>
-              <div><dt><kbd>B / CIRCLE</kbd></dt><dd data-i18n="manual.controls.controller.drop">Drop the selected piece to the bottom</dd></div>
+              <div><dt><kbd data-controller-game-action="sculpt">RIGHT FACE</kbd></dt><dd data-i18n="manual.controls.controller.sculpt">Reshape the selected cell</dd></div>
+              <div><dt><kbd data-controller-game-action="hardDrop">BOTTOM FACE</kbd></dt><dd data-i18n="manual.controls.controller.drop">Drop the selected piece to the bottom</dd></div>
               <div><dt><kbd>START</kbd></dt><dd data-i18n="manual.controls.controller.pause">Pause / resume</dd></div>
             </dl>
           </div>

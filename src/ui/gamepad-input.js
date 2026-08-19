@@ -4,14 +4,41 @@ import { DEFAULT_INPUT_REPEAT_DELAY, DEFAULT_INPUT_REPEAT_INTERVAL } from "./inp
 export const GAMEPAD_START_ACTION = "controllerStart";
 export const DEFAULT_GAMEPAD_PRESS_THRESHOLD = 0.6;
 export const DEFAULT_GAMEPAD_RELEASE_THRESHOLD = 0.4;
+export const GAMEPAD_CONTROLLER_TYPES = Object.freeze({
+  generic: "generic",
+  nintendo: "nintendo",
+  xbox: "xbox",
+  playstation: "playstation"
+});
 
 const BUTTON_BINDINGS = Object.freeze([
-  Object.freeze({ button: 0, actionId: GAMEPLAY_ACTION_IDS.sculpt }),
-  Object.freeze({ button: 1, actionId: GAMEPLAY_ACTION_IDS.hardDrop }),
+  // The standard mapping normalizes these by physical position, not printed label:
+  // button 0 is the bottom face button and button 1 is the right face button.
+  Object.freeze({ button: 0, actionId: GAMEPLAY_ACTION_IDS.hardDrop }),
+  Object.freeze({ button: 1, actionId: GAMEPLAY_ACTION_IDS.sculpt }),
   Object.freeze({ button: 4, actionId: GAMEPLAY_ACTION_IDS.focusPrevious }),
   Object.freeze({ button: 5, actionId: GAMEPLAY_ACTION_IDS.focusNext }),
   Object.freeze({ button: 9, actionId: GAMEPAD_START_ACTION })
 ]);
+
+const FACE_BUTTON_LABELS = Object.freeze({
+  [GAMEPAD_CONTROLLER_TYPES.generic]: Object.freeze({
+    [GAMEPLAY_ACTION_IDS.sculpt]: "RIGHT FACE",
+    [GAMEPLAY_ACTION_IDS.hardDrop]: "BOTTOM FACE"
+  }),
+  [GAMEPAD_CONTROLLER_TYPES.nintendo]: Object.freeze({
+    [GAMEPLAY_ACTION_IDS.sculpt]: "A",
+    [GAMEPLAY_ACTION_IDS.hardDrop]: "B"
+  }),
+  [GAMEPAD_CONTROLLER_TYPES.xbox]: Object.freeze({
+    [GAMEPLAY_ACTION_IDS.sculpt]: "B",
+    [GAMEPLAY_ACTION_IDS.hardDrop]: "A"
+  }),
+  [GAMEPAD_CONTROLLER_TYPES.playstation]: Object.freeze({
+    [GAMEPLAY_ACTION_IDS.sculpt]: "CIRCLE",
+    [GAMEPLAY_ACTION_IDS.hardDrop]: "CROSS"
+  })
+});
 
 const DIRECTION_BINDINGS = Object.freeze([
   Object.freeze({ name: "up", button: 12, actionId: GAMEPLAY_ACTION_IDS.cursorUp }),
@@ -41,6 +68,29 @@ function axisDirections(value, previousNegative, previousPositive, pressThreshol
 
 function gamepadKey(gamepad) {
   return `${gamepad.index}:${gamepad.id || ""}`;
+}
+
+export function getGamepadControllerType(gamepadOrId) {
+  const id = String(typeof gamepadOrId === "string" ? gamepadOrId : gamepadOrId?.id || "").toLowerCase();
+  if (/nintendo|switch|joy[- ]?con|057e/.test(id)) return GAMEPAD_CONTROLLER_TYPES.nintendo;
+  if (/playstation|dualsense|dualshock|sony|054c/.test(id)) return GAMEPAD_CONTROLLER_TYPES.playstation;
+  if (/xbox|xinput|microsoft|045e/.test(id)) return GAMEPAD_CONTROLLER_TYPES.xbox;
+  return GAMEPAD_CONTROLLER_TYPES.generic;
+}
+
+export function getGamepadFaceButtonLabels(controllerType = GAMEPAD_CONTROLLER_TYPES.generic) {
+  return FACE_BUTTON_LABELS[controllerType] || FACE_BUTTON_LABELS[GAMEPAD_CONTROLLER_TYPES.generic];
+}
+
+export function mapPhysicalFaceActionForMenu(actionId, controllerType = GAMEPAD_CONTROLLER_TYPES.generic) {
+  // Nintendo keeps A on the right and B on the bottom, so the gameplay mapping
+  // already doubles as the familiar A-confirm/B-back menu layout. Xbox,
+  // PlayStation, and unknown standard pads put their confirm button on the
+  // bottom face position, so swap only the two face-button actions in menus.
+  if (controllerType === GAMEPAD_CONTROLLER_TYPES.nintendo) return actionId;
+  if (actionId === GAMEPLAY_ACTION_IDS.hardDrop) return GAMEPLAY_ACTION_IDS.sculpt;
+  if (actionId === GAMEPLAY_ACTION_IDS.sculpt) return GAMEPLAY_ACTION_IDS.hardDrop;
+  return actionId;
 }
 
 export function isStandardGamepad(gamepad) {

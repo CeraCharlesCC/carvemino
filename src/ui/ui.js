@@ -1,6 +1,11 @@
 import { createAttract } from "./attract.js";
 import { createGameScreen } from "./game-screen.js";
-import { createGamepadInput } from "./gamepad-input.js";
+import {
+  GAMEPAD_CONTROLLER_TYPES,
+  createGamepadInput,
+  getGamepadControllerType,
+  getGamepadFaceButtonLabels
+} from "./gamepad-input.js";
 import { createOnScreenGameInput } from "./game-input.js";
 import { createInputMode } from "./input-mode.js";
 import { createLanLobby } from "./lan-lobby.js";
@@ -39,6 +44,7 @@ export function createUi({
 }) {
   let navigation = null;
   let startupManual = null;
+  let activeControllerType = GAMEPAD_CONTROLLER_TYPES.generic;
   const i18n = createI18n();
   i18n.apply();
   const attract = createAttract();
@@ -95,9 +101,10 @@ export function createUi({
   }
 
   function performUiControllerAction(actionId) {
-    const manualResult = startupManual?.handleControllerAction(actionId);
+    const options = { controllerType: activeControllerType, physicalFace: true };
+    const manualResult = startupManual?.handleControllerAction(actionId, options);
     return manualResult === null || manualResult === undefined
-      ? navigation.performControllerAction(actionId)
+      ? navigation.performControllerAction(actionId, options)
       : manualResult;
   }
 
@@ -109,6 +116,16 @@ export function createUi({
   }
 
   const inputMode = createInputMode();
+
+  function updateControllerFaceHints(controllerType) {
+    const labels = getGamepadFaceButtonLabels(controllerType);
+    for (const [actionId, label] of Object.entries(labels)) {
+      for (const element of document.querySelectorAll(`[data-controller-game-action="${actionId}"]`)) {
+        element.textContent = label;
+      }
+    }
+  }
+
   const onScreenGameInput = createOnScreenGameInput({
     root: document.querySelector(".console-layout"),
     performAction: performUiGameAction
@@ -116,7 +133,11 @@ export function createUi({
   const gamepadInput = createGamepadInput({
     performAction: performUiControllerAction,
     performStart: performUiControllerStart,
-    onActivity: () => inputMode.setMode("controller")
+    onActivity: (gamepad) => {
+      activeControllerType = getGamepadControllerType(gamepad);
+      updateControllerFaceHints(activeControllerType);
+      inputMode.setMode("controller");
+    }
   });
 
   startupManual = createStartupManual({

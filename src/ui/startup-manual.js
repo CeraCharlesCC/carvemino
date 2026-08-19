@@ -1,4 +1,5 @@
 import { STARTUP_MANUAL_STORAGE_KEY } from "../config.js";
+import { mapPhysicalFaceActionForMenu } from "./gamepad-input.js";
 
 const FIELD_WIDTH = 8;
 const FIELD_HEIGHT = 7;
@@ -21,8 +22,9 @@ const MANUAL_GAME_ACTIONS = new Set(Object.values(KEY_ACTIONS));
 const MANUAL_CONTROLLER_PREVIOUS_ACTIONS = new Set(["cursorUp", "cursorLeft", "focusPrevious"]);
 const MANUAL_CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext"]);
 
-export function getManualControllerIntent(pageIndex, actionId) {
+export function getManualControllerIntent(pageIndex, actionId, { controllerType, physicalFace = false } = {}) {
   if (pageIndex === 1 && MANUAL_GAME_ACTIONS.has(actionId)) return "practice";
+  if (physicalFace) actionId = mapPhysicalFaceActionForMenu(actionId, controllerType);
   if (MANUAL_CONTROLLER_PREVIOUS_ACTIONS.has(actionId)) return "previous";
   if (MANUAL_CONTROLLER_NEXT_ACTIONS.has(actionId)) return "next";
   if (actionId === "sculpt") return "activate";
@@ -413,9 +415,9 @@ export function createStartupManual({
     return true;
   }
 
-  function handleControllerAction(actionId) {
+  function handleControllerAction(actionId, options) {
     if (!dialog.open) return null;
-    const intent = getManualControllerIntent(pageIndex, actionId);
+    const intent = getManualControllerIntent(pageIndex, actionId, options);
     if (intent === "practice") {
       perform(actionId);
       return true;

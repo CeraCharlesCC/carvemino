@@ -1,4 +1,5 @@
 import { triggerHapticFeedback } from "./game-input.js";
+import { mapPhysicalFaceActionForMenu } from "./gamepad-input.js";
 
 const MENU_PREVIOUS_KEYS = new Set(["ArrowUp", "ArrowLeft", "KeyW", "KeyA"]);
 const MENU_NEXT_KEYS = new Set(["ArrowDown", "ArrowRight", "KeyS", "KeyD"]);
@@ -188,10 +189,12 @@ export function createNavigation({
     return true;
   }
 
-  function performControllerAction(actionId) {
+  function performControllerAction(actionId, { controllerType, physicalFace = false } = {}) {
     if (currentScreen === "game" && !gamePaused && gameScreen.getStatus() === "playing") {
       return gameScreen.performAction(actionId);
     }
+
+    if (physicalFace) actionId = mapPhysicalFaceActionForMenu(actionId, controllerType);
 
     const menuContainer = currentScreen === "game"
       ? (gamePaused ? pauseOverlay : gameOver)

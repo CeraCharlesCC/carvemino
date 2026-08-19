@@ -3,10 +3,14 @@ import test from "node:test";
 
 import { GAMEPLAY_ACTION_IDS } from "../src/config.js";
 import {
+  GAMEPAD_CONTROLLER_TYPES,
   GAMEPAD_START_ACTION,
   createGamepadActionTracker,
   createGamepadInput,
+  getGamepadControllerType,
+  getGamepadFaceButtonLabels,
   isStandardGamepad,
+  mapPhysicalFaceActionForMenu,
   normalizeStandardGamepad
 } from "../src/ui/gamepad-input.js";
 
@@ -80,12 +84,12 @@ test("Gamepad API support is optional and non-standard pads are ignored", () => 
   input.destroy();
 });
 
-test("button actions fire on the pressed edge and can fire again after release", () => {
+test("standard face buttons follow physical position and fire on pressed edges", () => {
   const tracker = createGamepadActionTracker();
   assert.deepEqual(tracker.update(makeGamepad(), 0).actions, []);
 
   let result = tracker.update(makeGamepad({ pressed: [0] }), 1);
-  assert.deepEqual(result.actions, [GAMEPLAY_ACTION_IDS.sculpt]);
+  assert.deepEqual(result.actions, [GAMEPLAY_ACTION_IDS.hardDrop]);
   assert.equal(result.meaningful, true);
 
   result = tracker.update(makeGamepad({ pressed: [0] }), 2);
@@ -95,7 +99,47 @@ test("button actions fire on the pressed edge and can fire again after release",
   assert.deepEqual(tracker.update(makeGamepad(), 3).actions, []);
   assert.deepEqual(
     tracker.update(makeGamepad({ pressed: [0] }), 4).actions,
+    [GAMEPLAY_ACTION_IDS.hardDrop]
+  );
+
+  tracker.update(makeGamepad(), 5);
+  assert.deepEqual(
+    tracker.update(makeGamepad({ pressed: [1] }), 6).actions,
     [GAMEPLAY_ACTION_IDS.sculpt]
+  );
+});
+
+test("controller families provide face labels and conventional menu semantics", () => {
+  assert.equal(getGamepadControllerType("Nintendo Switch Pro Controller"), GAMEPAD_CONTROLLER_TYPES.nintendo);
+  assert.equal(getGamepadControllerType("Xbox Wireless Controller"), GAMEPAD_CONTROLLER_TYPES.xbox);
+  assert.equal(getGamepadControllerType("DualSense Wireless Controller"), GAMEPAD_CONTROLLER_TYPES.playstation);
+  assert.equal(getGamepadControllerType("STANDARD GAMEPAD Vendor: 054c Product: 09cc"), GAMEPAD_CONTROLLER_TYPES.playstation);
+  assert.equal(getGamepadControllerType("mystery pad"), GAMEPAD_CONTROLLER_TYPES.generic);
+
+  assert.deepEqual(getGamepadFaceButtonLabels(GAMEPAD_CONTROLLER_TYPES.nintendo), {
+    sculpt: "A",
+    hardDrop: "B"
+  });
+  assert.deepEqual(getGamepadFaceButtonLabels(GAMEPAD_CONTROLLER_TYPES.xbox), {
+    sculpt: "B",
+    hardDrop: "A"
+  });
+  assert.deepEqual(getGamepadFaceButtonLabels(GAMEPAD_CONTROLLER_TYPES.playstation), {
+    sculpt: "CIRCLE",
+    hardDrop: "CROSS"
+  });
+
+  assert.equal(
+    mapPhysicalFaceActionForMenu(GAMEPLAY_ACTION_IDS.hardDrop, GAMEPAD_CONTROLLER_TYPES.nintendo),
+    GAMEPLAY_ACTION_IDS.hardDrop
+  );
+  assert.equal(
+    mapPhysicalFaceActionForMenu(GAMEPLAY_ACTION_IDS.hardDrop, GAMEPAD_CONTROLLER_TYPES.xbox),
+    GAMEPLAY_ACTION_IDS.sculpt
+  );
+  assert.equal(
+    mapPhysicalFaceActionForMenu(GAMEPLAY_ACTION_IDS.sculpt, GAMEPAD_CONTROLLER_TYPES.playstation),
+    GAMEPLAY_ACTION_IDS.hardDrop
   );
 });
 
@@ -188,12 +232,12 @@ test("adapter tolerates sparse snapshots and switches to the most recently activ
 
   pads = [makeGamepad({ index: 0, pressed: [0] }), null, makeGamepad({ index: 2 })];
   frames.run(10);
-  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.sculpt]);
+  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop]);
   assert.deepEqual(input.getActiveGamepad(), { index: 0, id: "pad-0" });
 
   pads = [makeGamepad({ index: 0, pressed: [0] }), null, makeGamepad({ index: 2, pressed: [1] })];
   frames.run(20);
-  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.sculpt, GAMEPLAY_ACTION_IDS.hardDrop]);
+  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop, GAMEPLAY_ACTION_IDS.sculpt]);
   assert.deepEqual(input.getActiveGamepad(), { index: 2, id: "pad-2" });
 
   input.destroy();
@@ -220,7 +264,7 @@ test("unmapped standard-button activity can take over the active controller with
   pads = [makeGamepad({ index: 0 }), makeGamepad({ index: 1, pressed: [2] })];
   frames.run(2);
 
-  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.sculpt]);
+  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop]);
   assert.deepEqual(input.getActiveGamepad(), { index: 1, id: "pad-1" });
   assert.deepEqual(activity, [{ index: 0, id: "pad-0" }, { index: 1, id: "pad-1" }]);
   input.destroy();
@@ -250,7 +294,7 @@ test("connection alone does not dispatch held input and disconnect clears the ac
   frames.run(2);
   pads = [makeGamepad({ index: 0, pressed: [0] })];
   frames.run(3);
-  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.sculpt]);
+  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop]);
   assert.deepEqual(input.getActiveGamepad(), { index: 0, id: "pad-0" });
 
   const disconnected = pads[0];
@@ -283,11 +327,11 @@ test("a first press delivered with gamepadconnected is not swallowed", () => {
   const connected = makeGamepad({ pressed: [0] });
   pads = [connected];
   windowObject.dispatch("gamepadconnected", { gamepad: connected });
-  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.sculpt]);
+  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop]);
   assert.deepEqual(input.getActiveGamepad(), { index: 0, id: "pad-0" });
 
   frames.run(11);
-  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.sculpt]);
+  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop]);
   input.destroy();
 });
 
@@ -323,7 +367,7 @@ test("polling suspends while hidden and rescans without replaying held input on 
   frames.run(52);
   pads = [makeGamepad({ pressed: [0] })];
   frames.run(53);
-  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.sculpt]);
+  assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop]);
   input.destroy();
 });
 

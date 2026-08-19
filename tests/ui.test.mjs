@@ -226,7 +226,8 @@ test("title and manual input hints use medium-specific primary controls", () => 
   assert.match(html, /data-input-hint="controller">PRESS START<\/span>/);
   assert.match(html, /data-input-hint="controller">D-PAD \/ STICK SELECT · A \/ CROSS CONFIRM · B \/ CIRCLE BACK<\/span>/);
   assert.match(html, /data-input-hint="controller"><kbd>LB<\/kbd><kbd>RB<\/kbd>/);
-  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="controller"[\s\S]*?<kbd>A \/ CROSS<\/kbd>/);
+  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="controller"[\s\S]*?<kbd data-controller-game-action="sculpt">RIGHT FACE<\/kbd>/);
+  assert.match(html, /data-controller-game-action="hardDrop">BOTTOM FACE<\/kbd>/);
   assert.match(html, /manual-controls-card[^>]+data-input-hint="controller"[\s\S]*?manual\.controls\.controller\.title/);
 });
 
@@ -289,6 +290,14 @@ test("manual controller actions stay in the practice lab and become DOM navigati
   assert.equal(getManualControllerIntent(2, "focusNext"), "next");
   assert.equal(getManualControllerIntent(0, "sculpt"), "activate");
   assert.equal(getManualControllerIntent(2, "hardDrop"), "back");
+  assert.equal(getManualControllerIntent(0, "hardDrop", {
+    controllerType: "xbox",
+    physicalFace: true
+  }), "activate");
+  assert.equal(getManualControllerIntent(0, "hardDrop", {
+    controllerType: "nintendo",
+    physicalFace: true
+  }), "back");
 });
 
 test("runtime input-mode CSS can override coarse-pointer hint fallbacks", () => {
@@ -366,7 +375,11 @@ test("leaving the game screen clears a multiplayer match menu before the next ma
 
     navigation.showScreen("game");
     assert.equal(navigation.performControllerAction("focusNext"), true);
-    assert.deepEqual(performedActions, ["focusNext"]);
+    assert.equal(navigation.performControllerAction("hardDrop", {
+      controllerType: "xbox",
+      physicalFace: true
+    }), true);
+    assert.deepEqual(performedActions, ["focusNext", "hardDrop"]);
   } finally {
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
@@ -377,7 +390,7 @@ test("leaving the game screen clears a multiplayer match menu before the next ma
   }
 });
 
-test("controller A confirms menu selection and B follows menu back routing", () => {
+test("controller-family face buttons preserve familiar menu confirm/back routing", () => {
   const previousDocument = globalThis.document;
   const previousWindow = globalThis.window;
   const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
@@ -418,10 +431,31 @@ test("controller A confirms menu selection and B follows menu back routing", () 
 
     navigation.showScreen("lan");
     dom.document.activeElement = menuAction;
-    assert.equal(navigation.performControllerAction("sculpt"), true);
+    assert.equal(navigation.performControllerAction("hardDrop", {
+      controllerType: "xbox",
+      physicalFace: true
+    }), true);
     assert.equal(activations, 1);
 
-    assert.equal(navigation.performControllerAction("hardDrop"), true);
+    assert.equal(navigation.performControllerAction("sculpt", {
+      controllerType: "xbox",
+      physicalFace: true
+    }), true);
+    assert.equal(dom.screensByName.get("multiplayer").hidden, false);
+    assert.equal(dom.screensByName.get("lan").hidden, true);
+
+    navigation.showScreen("lan");
+    dom.document.activeElement = menuAction;
+    assert.equal(navigation.performControllerAction("sculpt", {
+      controllerType: "nintendo",
+      physicalFace: true
+    }), true);
+    assert.equal(activations, 2);
+
+    assert.equal(navigation.performControllerAction("hardDrop", {
+      controllerType: "nintendo",
+      physicalFace: true
+    }), true);
     assert.equal(dom.screensByName.get("multiplayer").hidden, false);
     assert.equal(dom.screensByName.get("lan").hidden, true);
   } finally {
