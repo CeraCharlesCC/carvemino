@@ -215,12 +215,12 @@
   gap: 3px;
 }
 .manual-inline-keys kbd {
-  padding: 4px 6px;
+  padding: 5px 7px;
   border-color: #615a46;
   border-bottom-width: 2px;
   background: #d9ceb3;
   color: #403a2d;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -328,11 +328,11 @@
   gap: 7px;
 }
 .manual-lab-quick-list kbd {
-  padding: 6px 8px;
+  padding: 7px 9px;
   border-color: #655e49;
   background: #d4c8aa;
   color: #3f392c;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
 }
 .manual-lab-quick-list small {
@@ -537,15 +537,15 @@
 .manual-focus-keys button,
 .manual-action-keys button,
 .manual-dpad button {
-  min-width: 44px;
-  min-height: 38px;
-  padding: 4px 7px;
+  min-width: 46px;
+  min-height: 40px;
+  padding: 5px 8px;
   border: 1px solid #4f4a3a;
   color: #302d23;
   background: #e6dcc4;
   box-shadow: 2px 2px 0 #746b52;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .manual-focus-keys button:active,
@@ -559,7 +559,7 @@
 .manual-action-keys small {
   display: block;
   margin-top: 3px;
-  font-size: 12px;
+  font-size: 13px;
   letter-spacing: .05em;
 }
 
@@ -628,13 +628,13 @@
 .manual-controls-card dd { margin: 0; color: #4f4939; font-size: 16px; line-height: 1.5; }
 
 .manual-controls-card kbd {
-  min-width: 28px;
-  padding: 4px 6px;
+  min-width: 30px;
+  padding: 5px 7px;
   border: 1px solid #4e4939;
   border-bottom-width: 3px;
   border-radius: 2px;
   background: #ded3b8;
-  font-size: 14px;
+  font-size: 15px;
   text-align: center;
 }
 
@@ -823,7 +823,7 @@
   .manual-steps li { grid-template-columns: 34px 1fr; gap: 8px; padding: 5px 0; }
   .manual-step-number { width: 30px; height: 30px; font-size: 11px; }
   .manual-step-title-row > b { font-size: 15px; }
-  .manual-inline-keys kbd { font-size: 12px; }
+  .manual-inline-keys kbd { font-size: 13px; }
   .manual-steps p,
   .manual-focus-note p { font-size: 14px; }
   .manual-focus-note ul { font-size: 13px; }
@@ -833,8 +833,8 @@
   .manual-lab-quick-card > strong { margin-bottom: 6px; font-size: 13px; }
   .manual-lab-quick-list { gap: 5px; }
   .manual-lab-quick-list > span { min-height: 34px; gap: 4px; }
-  .manual-lab-quick-list kbd { padding: 4px 5px; font-size: 12px; }
-  .manual-lab-quick-list small { font-size: 11px; }
+  .manual-lab-quick-list kbd { padding: 5px 6px; font-size: 13px; }
+  .manual-lab-quick-list small { font-size: 12px; }
   .manual-mini-console {
     padding: 7px;
     grid-template-columns: minmax(118px, 1fr) 28px minmax(118px, 1fr);
@@ -849,11 +849,12 @@
   .manual-keyboard-pad { gap: 6px; }
   .manual-dpad { grid-template-columns: repeat(3, 32px); grid-template-rows: repeat(3, 26px); }
   .manual-focus-keys button,
-  .manual-action-keys button { min-width: 38px; min-height: 32px; font-size: 13px; }
+  .manual-action-keys button { min-width: 40px; min-height: 34px; font-size: 14px; }
   .manual-action-keys button:first-child { min-width: 54px; }
   .manual-controls-card { padding: 9px 11px; }
   .manual-controls-card dl > div { min-height: 34px; grid-template-columns: 115px 1fr; gap: 8px; }
   .manual-controls-card dd { font-size: 14px; }
+  .manual-controls-card kbd { font-size: 14px; }
   .manual-book-footer {
     min-height: 50px;
     margin-inline: 13px;

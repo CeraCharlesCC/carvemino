@@ -177,14 +177,14 @@
 
 kbd {
   display: inline-block;
-  padding: 4px 6px;
+  padding: 5px 7px;
   border: 1px solid var(--arrow);
   border-bottom: 2px solid var(--arrow);
   border-radius: 2px;
   background: var(--olive);
   color: var(--moss);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 

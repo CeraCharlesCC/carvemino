@@ -99,7 +99,7 @@ export function createUi({
     i18n,
     returnFocus: document.querySelector("#press-start"),
     screen: document.querySelector(".crt-glass"),
-    onStart: () => document.querySelector("#press-start")?.click()
+    onStart: () => navigation.showScreen("menu")
   });
 
   function setGameMode(modeId, options = {}) {

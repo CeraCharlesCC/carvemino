@@ -26,7 +26,7 @@ const MESSAGES = Object.freeze({
     "manual.focus-note.dashed": "Dashed cells can be added with FILL for 2 SCRAP.",
     "manual.focus-note.resource": "CUT shows edits left. SCRAP shows available material.",
     "manual.page.lab.title": "2. PRACTICE",
-    "manual.page.lab.lead": "Practice selecting, reshaping, and dropping pieces here. This does not affect your game.",
+    "manual.page.lab.lead": "Practice selecting, reshaping, and dropping pieces here.",
     "manual.lab.quick.title": "CONTROLS",
     "manual.lab.quick.focus": "SELECT PIECE",
     "manual.lab.quick.cursor": "MOVE",
@@ -87,8 +87,7 @@ const MESSAGES = Object.freeze({
     "manual.nav.next": "NEXT PAGE",
     "manual.nav.done": "START GAME",
     "manual.nav.close": "CLOSE MANUAL",
-    "manual.nav.doneHint": "Close this guide and continue to game select.",
-    "manual.nav.closeHint": "Return to where you opened the manual."
+    "manual.nav.doneHint": "Close this guide and continue from the title screen."
   }),
   ja: Object.freeze({
     "menu.manual": "MANUAL",
@@ -117,7 +116,7 @@ const MESSAGES = Object.freeze({
     "manual.focus-note.dashed": "点線のマス：素材を2使って埋められます（FILL）。",
     "manual.focus-note.resource": "CUT は残り加工回数、SCRAP は使える素材数です。",
     "manual.page.lab.title": "2. 操作を練習",
-    "manual.page.lab.lead": "ここでは、ピースの選択・加工・落下を練習できます。ゲームには影響しません。",
+    "manual.page.lab.lead": "ここでは、ピースの選択・加工・落下を実際に操作して練習できます。",
     "manual.lab.quick.title": "操作キー",
     "manual.lab.quick.focus": "ピース選択",
     "manual.lab.quick.cursor": "マス移動",
@@ -178,8 +177,7 @@ const MESSAGES = Object.freeze({
     "manual.nav.next": "次のページ",
     "manual.nav.done": "ゲームを始める",
     "manual.nav.close": "マニュアルを閉じる",
-    "manual.nav.doneHint": "ガイドを閉じて、ゲーム選択へ進みます。",
-    "manual.nav.closeHint": "マニュアルを開いた画面へ戻ります。"
+    "manual.nav.doneHint": "ガイドを閉じて、タイトル画面から続けます。"
   })
 });
 

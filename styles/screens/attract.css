@@ -201,7 +201,7 @@
   padding: 10px 18px 8px;
   border: 0;
   background: transparent;
-  color: var(--ink);
+  color: #73766c;
   cursor: pointer;
   text-align: center;
 }
@@ -212,8 +212,10 @@
   text-shadow: 0 0 9px #9aa59245;
   animation: start-blink 1.05s steps(1, end) infinite;
 }
+.start-button [data-input-hint="touch"] { display: none; }
 .start-button:hover,
 .start-button:focus { outline: 0; color: var(--moss); }
+#menu-screen:focus-within .start-button:not(:focus) span { animation: none; }
 
 .attract-secondary {
   display: flex;
@@ -223,23 +225,27 @@
 }
 .attract-secondary { margin-top: 8px; }
 .attract-secondary button {
-  padding: 5px 3px;
+  padding: 6px 5px;
   border: 0;
   background: transparent;
   color: var(--wire);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 700;
   letter-spacing: 1px;
 }
 .attract-secondary button:hover,
 .attract-secondary button:focus {
   outline: 0;
-  color: var(--moss);
+  color: var(--ink);
+  background: #20241b;
+  box-shadow: 0 0 0 2px var(--moss), inset 0 0 10px #9aa59224;
+  text-shadow: 0 0 8px #9aa59266;
 }
 .attract-secondary kbd {
-  padding: 2px 3px;
+  padding: 3px 4px;
   border-bottom-width: 1px;
-  font-size: 9px;
+  font-size: 11px;
 }
 .attract-secondary > span { color: #62655c; font-size: 10px; }
 
@@ -288,6 +294,7 @@
 }
 
 @media (hover: none) and (pointer: coarse) {
+  .start-button [data-input-hint="keyboard"] { display: none; }
   .start-button [data-input-hint="touch"] { display: block; }
 }
 

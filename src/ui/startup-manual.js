@@ -323,10 +323,8 @@ export function createStartupManual({ i18n, returnFocus = null, screen = null, o
       : "manual.nav.next");
     if (nextIcon) nextIcon.textContent = isLastPage ? "▶" : "→";
     if (nextHint) {
-      nextHint.hidden = !isLastPage;
-      if (isLastPage) {
-        nextHint.textContent = i18n.t(isStartupCompletion ? "manual.nav.doneHint" : "manual.nav.closeHint");
-      }
+      nextHint.hidden = !(isLastPage && isStartupCompletion);
+      if (isLastPage && isStartupCompletion) nextHint.textContent = i18n.t("manual.nav.doneHint");
     }
     paginationButtons.forEach((button) => {
       const isCurrent = Number(button.dataset.manualPageTarget) === pageIndex;

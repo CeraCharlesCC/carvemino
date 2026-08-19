@@ -203,6 +203,21 @@ test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled
   assert.doesNotMatch(html, /<textarea[^>]+id="lan-(?:host|join)-/i);
 });
 
+test("title and manual input hints use medium-specific primary controls", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /data-input-hint="keyboard">PRESS ENTER TO START<\/span>/);
+  assert.match(html, /data-input-hint="touch">PRESS START<\/span>/);
+  assert.match(html, /data-input-hint="keyboard"><kbd>ENTER<\/kbd><kbd>Z<\/kbd>/);
+  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="keyboard"[\s\S]*?<kbd>ENTER<\/kbd><small data-i18n="manual\.lab\.quick\.sculpt"/);
+  assert.match(html, /data-manual-action="sculpt"[^>]*><kbd>ENTER<\/kbd>/);
+});
+
+test("title start prompt blinks by default but stops when a secondary item is selected", () => {
+  const css = readFileSync(new URL("../styles/screens/attract.css", import.meta.url), "utf8");
+  assert.match(css, /\.start-button span\s*\{[^}]*animation:\s*start-blink 1\.05s steps\(1, end\) infinite;/s);
+  assert.match(css, /#menu-screen:focus-within \.start-button:not\(:focus\) span\s*\{\s*animation:\s*none;/);
+});
+
 test("multiplayer menus never pause one peer and exit back to LAN", () => {
   assert.equal(shouldPauseGameSimulation({ kind: "singleplayer" }), true);
   assert.equal(shouldPauseGameSimulation({ kind: "multiplayer" }), false);
