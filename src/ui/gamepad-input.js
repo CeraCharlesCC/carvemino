@@ -1,9 +1,9 @@
 import { GAMEPLAY_ACTION_IDS } from "../config.js";
 import { DEFAULT_INPUT_REPEAT_DELAY, DEFAULT_INPUT_REPEAT_INTERVAL } from "./input-constants.js";
 
-export const GAMEPAD_START_ACTION = "controllerStart";
-export const DEFAULT_GAMEPAD_PRESS_THRESHOLD = 0.6;
-export const DEFAULT_GAMEPAD_RELEASE_THRESHOLD = 0.4;
+const GAMEPAD_START_ACTION = "controllerStart";
+const DEFAULT_GAMEPAD_PRESS_THRESHOLD = 0.6;
+const DEFAULT_GAMEPAD_RELEASE_THRESHOLD = 0.4;
 export const GAMEPAD_CONTROLLER_TYPES = Object.freeze({
   generic: "generic",
   nintendo: "nintendo",
@@ -93,11 +93,11 @@ export function mapPhysicalFaceActionForMenu(actionId, controllerType = GAMEPAD_
   return actionId;
 }
 
-export function isStandardGamepad(gamepad) {
+function isStandardGamepad(gamepad) {
   return Boolean(gamepad && gamepad.connected !== false && gamepad.mapping === "standard");
 }
 
-export function normalizeStandardGamepad(gamepad, previous = null, {
+function normalizeStandardGamepad(gamepad, previous = null, {
   pressThreshold = DEFAULT_GAMEPAD_PRESS_THRESHOLD,
   releaseThreshold = DEFAULT_GAMEPAD_RELEASE_THRESHOLD
 } = {}) {

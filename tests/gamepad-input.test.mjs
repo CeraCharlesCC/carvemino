@@ -4,14 +4,11 @@ import test from "node:test";
 import { GAMEPLAY_ACTION_IDS } from "../src/config.js";
 import {
   GAMEPAD_CONTROLLER_TYPES,
-  GAMEPAD_START_ACTION,
   createGamepadActionTracker,
   createGamepadInput,
   getGamepadControllerType,
   getGamepadFaceButtonLabels,
-  isStandardGamepad,
-  mapPhysicalFaceActionForMenu,
-  normalizeStandardGamepad
+  mapPhysicalFaceActionForMenu
 } from "../src/ui/gamepad-input.js";
 
 function makeGamepad({
@@ -70,9 +67,10 @@ function createFrameHarness() {
 }
 
 test("Gamepad API support is optional and non-standard pads are ignored", () => {
-  assert.equal(isStandardGamepad(makeGamepad()), true);
-  assert.equal(isStandardGamepad(makeGamepad({ mapping: "" })), false);
-  assert.equal(normalizeStandardGamepad(makeGamepad({ mapping: "xinput" })), null);
+  const tracker = createGamepadActionTracker();
+  assert.notEqual(tracker.update(makeGamepad()).snapshot, null);
+  assert.equal(tracker.update(makeGamepad({ mapping: "" })).snapshot, null);
+  assert.equal(tracker.update(makeGamepad({ mapping: "xinput" })).snapshot, null);
 
   const input = createGamepadInput({
     navigatorObject: {},
@@ -374,7 +372,7 @@ test("polling suspends while hidden and rescans without replaying held input on 
 test("Start is routed separately and fires once per press", () => {
   let pads = [makeGamepad()];
   const frames = createFrameHarness();
-  const starts = [];
+  let starts = 0;
   const actions = [];
   const input = createGamepadInput({
     navigatorObject: { getGamepads: () => pads },
@@ -384,19 +382,19 @@ test("Start is routed separately and fires once per press", () => {
     cancelFrame: (id) => frames.cancel(id),
     now: () => 0,
     performAction: (actionId) => actions.push(actionId),
-    performStart: () => starts.push(GAMEPAD_START_ACTION)
+    performStart: () => { starts += 1; }
   });
 
   pads = [makeGamepad({ pressed: [9] })];
   frames.run(1);
   frames.run(2);
-  assert.deepEqual(starts, [GAMEPAD_START_ACTION]);
+  assert.equal(starts, 1);
   assert.deepEqual(actions, []);
 
   pads = [makeGamepad()];
   frames.run(3);
   pads = [makeGamepad({ pressed: [9] })];
   frames.run(4);
-  assert.deepEqual(starts, [GAMEPAD_START_ACTION, GAMEPAD_START_ACTION]);
+  assert.equal(starts, 2);
   input.destroy();
 });

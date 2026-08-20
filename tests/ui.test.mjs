@@ -3,19 +3,27 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { createI18n, resolveLocale } from "../src/i18n.js";
-import { getGameInputAction } from "../src/ui/game-screen.js";
 import {
   createOnScreenGameInput,
   formatKeyLabel,
+  getGameInputAction,
   getOnScreenGameAction,
   isGameplayActionId,
   isRepeatingGameAction,
   triggerHapticFeedback
 } from "../src/ui/game-input.js";
+import { getSculptAction, getVersusEventLabel, getVersusResultLabel } from "../src/ui/game-screen-model.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getLanStatusText } from "../src/ui/lan-lobby.js";
 import { createInputMode, getInitialInputMode } from "../src/ui/input-mode.js";
-import { createNavigation, getMenuButtons } from "../src/ui/navigation.js";
+import { createNavigation } from "../src/ui/navigation.js";
+import {
+  getBackScreen,
+  getGameExitScreen,
+  getMenuButtons,
+  getTitleScreenAction,
+  shouldPauseGameSimulation
+} from "../src/ui/navigation-model.js";
 import {
   claimStartupManualVisit,
   createManualDemoState,
@@ -23,15 +31,6 @@ import {
   getManualDemoTarget,
   performManualDemoAction
 } from "../src/ui/startup-manual.js";
-import {
-  getBackScreen,
-  getGameExitScreen,
-  getSculptAction,
-  getTitleScreenAction,
-  getVersusEventLabel,
-  getVersusResultLabel,
-  shouldPauseGameSimulation
-} from "../src/ui/ui.js";
 
 function createPointerControl(actionId) {
   const pressed = new Set();

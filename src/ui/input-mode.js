@@ -1,4 +1,4 @@
-export const INPUT_MODES = Object.freeze({
+const INPUT_MODES = Object.freeze({
   keyboard: "keyboard",
   touch: "touch",
   controller: "controller"

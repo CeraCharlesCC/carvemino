@@ -14,14 +14,6 @@ import { createProfileUi } from "./profile-ui.js";
 import { claimStartupManualVisit, createStartupManual } from "./startup-manual.js";
 import { createI18n } from "../i18n.js";
 
-export { getSculptAction, getVersusEventLabel, getVersusResultLabel } from "./game-screen.js";
-export {
-  getBackScreen,
-  getGameExitScreen,
-  getTitleScreenAction,
-  shouldPauseGameSimulation
-} from "./navigation.js";
-
 export function createUi({
   modes,
   lanModes = [],

@@ -1,5 +1,12 @@
 import { triggerHapticFeedback } from "./game-input.js";
 import { mapPhysicalFaceActionForMenu } from "./gamepad-input.js";
+import {
+  getBackScreen,
+  getGameExitScreen,
+  getMenuButtons,
+  getTitleScreenAction,
+  shouldPauseGameSimulation
+} from "./navigation-model.js";
 
 const MENU_PREVIOUS_KEYS = new Set(["ArrowUp", "ArrowLeft", "KeyW", "KeyA"]);
 const MENU_NEXT_KEYS = new Set(["ArrowDown", "ArrowRight", "KeyS", "KeyD"]);
@@ -7,46 +14,6 @@ const NON_REPEATING_UI_KEYS = new Set(["Enter", "Space", "Escape", "KeyR", "KeyO
 
 const CONTROLLER_PREVIOUS_ACTIONS = new Set(["cursorUp", "cursorLeft", "focusPrevious"]);
 const CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext"]);
-
-export const SCREEN_BACK_DESTINATIONS = Object.freeze({
-  play: "menu",
-  singleplayer: "play",
-  multiplayer: "play",
-  lan: "multiplayer",
-  "lan-host": "lan",
-  "lan-join": "lan",
-  records: "menu",
-  options: "menu"
-});
-
-export function getBackScreen(screenName) {
-  return SCREEN_BACK_DESTINATIONS[screenName] || null;
-}
-
-export function shouldPauseGameSimulation(gameContext) {
-  return gameContext?.kind !== "multiplayer";
-}
-
-export function getGameExitScreen(gameContext) {
-  return gameContext?.kind === "multiplayer" ? "lan" : "singleplayer";
-}
-
-export function getTitleScreenAction(code) {
-  if (code === "Enter") return "start";
-  if (code === "KeyR") return "records";
-  if (code === "KeyH") return "manual";
-  if (code === "KeyO") return "options";
-  return null;
-}
-
-export function getMenuButtons(container) {
-  if (!container) return [];
-  return [...container.querySelectorAll([
-    ".menu-button:not([disabled])",
-    ".start-button:not([disabled])",
-    ".attract-secondary button:not([disabled])"
-  ].join(", "))].filter((button) => !button.closest?.("[hidden]"));
-}
 
 export function createNavigation({
   attract,
