@@ -1,35 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { SINGLEPLAYER_CATALOG } from "../src/app/catalog.js";
-import {
-  LAN_MULTIPLAYER_CATALOG,
-  MULTIPLAYER_CATALOG,
-  getMultiplayerMode,
-  isMultiplayerModeId
-} from "../src/app/multiplayer-catalog.js";
+import { SINGLEPLAYER_CATALOG, VERSUS_CATALOG } from "../src/app/catalog.js";
 
-test("multiplayer catalog pairs each VS ruleset with its versus policy", () => {
-  assert.deepEqual(MULTIPLAYER_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
-  for (const mode of MULTIPLAYER_CATALOG) {
+test("versus catalog derives each mode from the shared base registry", () => {
+  assert.deepEqual(VERSUS_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
+  for (const mode of VERSUS_CATALOG) {
+    const singleplayer = SINGLEPLAYER_CATALOG.find((candidate) => candidate.id === mode.id);
+    assert.ok(singleplayer);
     assert.equal(Object.isFrozen(mode), true);
     assert.equal(Object.isFrozen(mode.rules), true);
     assert.equal(Object.isFrozen(mode.policy), true);
     assert.equal(mode.policy.kind, "versus");
+    assert.equal(mode.rules, singleplayer.rules);
+    assert.equal(mode.name, `${singleplayer.name} VS`);
     assert.match(mode.rules.id, new RegExp(mode.id));
     assert.match(mode.policy.id, new RegExp(mode.id));
   }
 });
 
-test("multiplayer catalog is distinct from single-player profile modes", () => {
-  assert.notEqual(MULTIPLAYER_CATALOG, SINGLEPLAYER_CATALOG);
-  assert.equal(getMultiplayerMode("classic"), MULTIPLAYER_CATALOG[0]);
-  assert.equal(isMultiplayerModeId("carver"), true);
-  assert.equal(isMultiplayerModeId("missing"), false);
-  assert.throws(() => getMultiplayerMode("missing"), /Unknown multiplayer mode/);
-});
-
-test("LAN promotes both Classic VS and Carver VS through the shared multiplayer catalog", () => {
-  assert.deepEqual(LAN_MULTIPLAYER_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
-  assert.equal(Object.isFrozen(LAN_MULTIPLAYER_CATALOG), true);
+test("single-player and versus presentations keep their intended ordering and copy", () => {
+  assert.deepEqual(SINGLEPLAYER_CATALOG.map((mode) => mode.id), ["carver", "classic"]);
+  assert.deepEqual(VERSUS_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
+  assert.notEqual(VERSUS_CATALOG, SINGLEPLAYER_CATALOG);
+  assert.equal(VERSUS_CATALOG[0].description, "Classic rules with line-clear attacks and garbage cancellation.");
+  assert.equal(SINGLEPLAYER_CATALOG[0].description, "Chunky polyominoes, a taller dig site, and twice the carving budget.");
 });

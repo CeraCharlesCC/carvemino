@@ -1,6 +1,5 @@
-import { SINGLEPLAYER_CATALOG, getSingleplayerMode } from "./app/catalog.js";
 import { LanSession } from "./app/lan-session.js";
-import { LAN_MULTIPLAYER_CATALOG } from "./app/multiplayer-catalog.js";
+import { SINGLEPLAYER_CATALOG, VERSUS_CATALOG, getSingleplayerMode } from "./app/catalog.js";
 import { NetworkMatchRuntime } from "./app/network-match-runtime.js";
 import { createProfileStore } from "./app/profile.js";
 import { GameRuntime } from "./app/runtime.js";
@@ -141,7 +140,7 @@ function startNetworkMatch(context) {
 }
 
 const lanSession = new LanSession({
-  modes: LAN_MULTIPLAYER_CATALOG,
+  modes: VERSUS_CATALOG,
   onStateChange(snapshot) {
     ui?.setLanSessionState(snapshot);
   },
@@ -178,7 +177,7 @@ function quitGame() {
 
 ui = createUi({
   modes: SINGLEPLAYER_CATALOG.map(({ id, name, description }) => ({ id, name, description })),
-  lanModes: LAN_MULTIPLAYER_CATALOG.map(({ id, name, description }) => ({ id, name, description })),
+  lanModes: VERSUS_CATALOG.map(({ id, name, description }) => ({ id, name, description })),
   sendCommand(command) {
     if (runtime) runtime.command(command);
   },

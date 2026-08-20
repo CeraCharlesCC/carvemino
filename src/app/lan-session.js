@@ -1,7 +1,7 @@
 import { WebRtcPeerTransport } from "../adapters/webrtc.js";
 import { createMatch } from "../domain/match.js";
-import { LAN_MULTIPLAYER_CATALOG } from "./multiplayer-catalog.js";
-import { createMessage, validateMessage } from "./protocol.js";
+import { VERSUS_CATALOG } from "./catalog.js";
+import { createMessage } from "./protocol.js";
 
 const TERMINAL_TRANSPORT_STATES = new Set([
   "closed",
@@ -40,7 +40,7 @@ function modeForConfiguration(modes, rulesetId, policyId) {
 
 export class LanSession {
   constructor({
-    modes = LAN_MULTIPLAYER_CATALOG,
+    modes = VERSUS_CATALOG,
     transportFactory = (options) => new WebRtcPeerTransport(options),
     randomUint32 = defaultRandomUint32,
     onStateChange = () => {},

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { LanSession } from "../src/app/lan-session.js";
-import { LAN_MULTIPLAYER_CATALOG } from "../src/app/multiplayer-catalog.js";
+import { VERSUS_CATALOG } from "../src/app/catalog.js";
 import { hashMatch } from "../src/domain/match.js";
 
 class FakeLanTransport {
@@ -99,13 +99,13 @@ test("LAN host/join signaling completes hello/ready/match-start with identical m
   const hostMatches = [];
   const clientMatches = [];
   const host = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([1, 2, 77]),
     onMatchReady: (context) => hostMatches.push(context)
   });
   const client = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([9]),
     onMatchReady: (context) => clientMatches.push(context)
@@ -141,13 +141,13 @@ test("Carver VS uses the same LAN hello/ready/match-start path as Classic VS", a
   const hostMatches = [];
   const clientMatches = [];
   const host = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([11, 12, 99]),
     onMatchReady: (context) => hostMatches.push(context)
   });
   const client = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([19]),
     onMatchReady: (context) => clientMatches.push(context)
@@ -170,7 +170,7 @@ test("LAN signaling failure releases the peer and leaves the host flow reusable"
   const network = new FakeLanNetwork();
   const errors = [];
   const host = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([1, 2]),
     onError: (error) => errors.push(error)
@@ -194,7 +194,7 @@ test("cancelled LAN signaling cannot publish a stale offer into a later session"
     resolveOffer = resolve;
   });
   const session = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: () => transport,
     randomUint32: sequence([1])
   });
@@ -212,7 +212,7 @@ test("cancelled LAN signaling cannot publish a stale offer into a later session"
 test("LAN lobby treats direct ICE failure as terminal and releases the peer", async () => {
   const network = new FakeLanNetwork();
   const session = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([1])
   });
@@ -227,12 +227,12 @@ test("LAN lobby treats direct ICE failure as terminal and releases the peer", as
 test("finished LAN sessions ignore late peer messages", async () => {
   const network = new FakeLanNetwork();
   const host = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([1, 2, 77])
   });
   const client = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([9])
   });
@@ -252,7 +252,7 @@ test("finished LAN sessions ignore late peer messages", async () => {
 test("repeated LAN host cancel paths release handlers and transports", async () => {
   const network = new FakeLanNetwork();
   const session = new LanSession({
-    modes: LAN_MULTIPLAYER_CATALOG,
+    modes: VERSUS_CATALOG,
     transportFactory: network.create,
     randomUint32: sequence([1, 2, 3])
   });
