@@ -1,42 +1,23 @@
 import { mix32 } from "./policy-utils.js";
+import { defineCodec, shape as s } from "../../codec.js";
 
-const POLICY_STATE_KEYS = Object.freeze(["nextGarbageSequence", "pendingAttacks"]);
-const PENDING_ATTACK_KEYS = Object.freeze(["sourcePlayerId", "rows"]);
-
-function assertNonEmptyString(value, name) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-}
-
-function assertNonNegativeInteger(value, name) {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${name} must be an integer >= 0`);
-  }
-}
-
-function assertPositiveInteger(value, name) {
-  if (!Number.isSafeInteger(value) || value < 1) {
-    throw new Error(`${name} must be an integer >= 1`);
-  }
-}
-
-function assertPlainObject(value, name) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-}
-
-function assertExactKeys(value, expectedKeys, name) {
-  assertPlainObject(value, name);
-  const expected = new Set(expectedKeys);
-  for (const key of Object.keys(value)) {
-    if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`);
-  }
-  for (const key of expectedKeys) {
-    if (!Object.hasOwn(value, key)) throw new Error(`${name}.${key} is required`);
-  }
-}
+const nonEmptyString = s.string({ nonEmpty: true });
+const nonNegativeInteger = s.integer({ minimum: 0 });
+const positiveInteger = s.integer({ minimum: 1 });
+const pendingAttackShape = s.object({
+  sourcePlayerId: nonEmptyString,
+  rows: positiveInteger
+});
+const POLICY_STATE_CODEC = defineCodec(s.object({
+  nextGarbageSequence: positiveInteger,
+  pendingAttacks: s.array(pendingAttackShape)
+}));
+const VERSUS_POLICY_CODEC = defineCodec(s.object({
+  id: nonEmptyString,
+  lineClearAttackRows: s.array(nonNegativeInteger, { minimumLength: 1 }),
+  garbageWarningWorldTicks: nonNegativeInteger,
+  cancellation: s.optional(s.boolean())
+}));
 
 function generatedGarbageSequence(id, matchId) {
   const prefix = `${matchId}:g`;
@@ -64,49 +45,31 @@ function highestReservedGarbageSequence(context) {
 }
 
 function copyPolicyState(state, context, attackTable) {
-  assertExactKeys(state, POLICY_STATE_KEYS, "versus policy state");
-  assertPositiveInteger(state.nextGarbageSequence, "versus policy state.nextGarbageSequence");
-  if (state.nextGarbageSequence >= Number.MAX_SAFE_INTEGER) {
+  const copy = POLICY_STATE_CODEC.parse(state, "versus policy state");
+  if (copy.nextGarbageSequence >= Number.MAX_SAFE_INTEGER) {
     throw new Error("versus policy state.nextGarbageSequence is too large to advance safely");
   }
   const highestReservedSequence = highestReservedGarbageSequence(context);
-  if (state.nextGarbageSequence <= highestReservedSequence) {
+  if (copy.nextGarbageSequence <= highestReservedSequence) {
     throw new Error(
       `versus policy state.nextGarbageSequence must be greater than reserved garbage sequence ${highestReservedSequence}`
     );
   }
-  if (!Array.isArray(state.pendingAttacks)) {
-    throw new Error("versus policy state.pendingAttacks must be an array");
-  }
   const playerIds = context?.playerIds || [];
-  const pendingAttacks = Array.from(state.pendingAttacks, (attack, index) => {
+  copy.pendingAttacks.forEach((attack, index) => {
     const path = `versus policy state.pendingAttacks[${index}]`;
-    assertExactKeys(attack, PENDING_ATTACK_KEYS, path);
-    assertNonEmptyString(attack.sourcePlayerId, `${path}.sourcePlayerId`);
     if (!playerIds.includes(attack.sourcePlayerId)) {
       throw new Error(`${path}.sourcePlayerId must identify a match player`);
     }
-    assertPositiveInteger(attack.rows, `${path}.rows`);
     if (!attackTable.includes(attack.rows)) {
       throw new Error(`${path}.rows is not produced by this versus policy`);
     }
-    return { sourcePlayerId: attack.sourcePlayerId, rows: attack.rows };
   });
-  return {
-    nextGarbageSequence: state.nextGarbageSequence,
-    pendingAttacks
-  };
+  return copy;
 }
 
 function normalizeAttackTable(lineClearAttackRows) {
-  if (!Array.isArray(lineClearAttackRows) || lineClearAttackRows.length === 0) {
-    throw new Error("lineClearAttackRows must be a non-empty array");
-  }
-  const table = lineClearAttackRows.map((rows, index) => {
-    assertNonNegativeInteger(rows, `lineClearAttackRows[${index}]`);
-    return rows;
-  });
-  return Object.freeze(table);
+  return Object.freeze([...lineClearAttackRows]);
 }
 
 function attackRowsForLineClear(table, count) {
@@ -187,16 +150,14 @@ function resolvePendingAttacks(context, policy) {
   }
 }
 
-export function defineVersusPolicy({
-  id,
-  lineClearAttackRows,
-  garbageWarningWorldTicks,
-  cancellation = true
-}) {
-  assertNonEmptyString(id, "versus policy id");
+export function defineVersusPolicy(definition) {
+  const {
+    id,
+    lineClearAttackRows,
+    garbageWarningWorldTicks,
+    cancellation = true
+  } = VERSUS_POLICY_CODEC.parse(definition, "versus policy");
   const attackTable = normalizeAttackTable(lineClearAttackRows);
-  assertNonNegativeInteger(garbageWarningWorldTicks, "garbageWarningWorldTicks");
-  if (typeof cancellation !== "boolean") throw new Error("cancellation must be a boolean");
 
   const policy = {
     id,

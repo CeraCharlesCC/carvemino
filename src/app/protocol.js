@@ -1,3 +1,5 @@
+import { defineCodec, shape as s } from "../codec.js";
+
 export const PROTOCOL_VERSION = 3;
 
 export const PROTOCOL_LIMITS = Object.freeze({
@@ -24,226 +26,129 @@ const MESSAGE_TYPES = new Set([
   "pong",
   "resync-request"
 ]);
-
-const ENVELOPE_KEYS = Object.freeze(["v", "type", "seq", "matchTick", "payload"]);
-const ENVELOPE_REQUIRED_KEYS = Object.freeze(["v", "type", "payload"]);
 const TICKED_MESSAGE_TYPES = new Set(["input", "input-frame", "match-hash", "match-snapshot"]);
 const SEQUENCED_MESSAGE_TYPES = new Set([...TICKED_MESSAGE_TYPES, "leave"]);
 const MONOTONIC_TICK_TYPES = new Set(["input", "input-frame", "match-hash"]);
 const UINT32_MAX = 0xffffffff;
-const GAMEPLAY_COMMAND_TYPES = new Set([
-  "FOCUS_PREVIOUS",
-  "FOCUS_NEXT",
-  "SCULPT",
-  "HARD_DROP_FOCUSED"
-]);
 
-function isPlainObject(value) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
+const idShape = (maximumLength = PROTOCOL_LIMITS.maxPlayerIdLength) => s.string({
+  nonEmpty: true,
+  maximumLength
+});
+const playerIdShape = idShape();
+const uint32Shape = s.integer({ minimum: 0, maximum: UINT32_MAX });
+const sequenceShape = s.integer({ minimum: 0, maximum: PROTOCOL_LIMITS.maxSequence });
+const matchTickShape = s.integer({ minimum: 0, maximum: PROTOCOL_LIMITS.maxMatchTick });
+const playerIdsShape = s.refine(
+  s.array(playerIdShape, { exactLength: 2, entryLabel: "player ids" }),
+  (playerIds, path) => {
+    if (new Set(playerIds).size !== playerIds.length) {
+      throw new Error(`${path} must contain unique player ids`);
+    }
+  }
+);
+const PLAYER_IDS_CODEC = defineCodec(playerIdsShape);
 
-function assertPlainObject(value, path) {
-  if (!isPlainObject(value)) throw new Error(`${path} must be an object`);
-}
+const gameplayCommandShape = s.discriminatedUnion("type", {
+  FOCUS_PREVIOUS: s.object({ type: s.literal("FOCUS_PREVIOUS") }),
+  FOCUS_NEXT: s.object({ type: s.literal("FOCUS_NEXT") }),
+  SCULPT: s.object({
+    type: s.literal("SCULPT"),
+    pieceId: idShape(PROTOCOL_LIMITS.maxPieceIdLength),
+    x: s.integer({
+      minimum: -PROTOCOL_LIMITS.maxSculptCoordinateMagnitude,
+      maximum: PROTOCOL_LIMITS.maxSculptCoordinateMagnitude
+    }),
+    y: s.integer({
+      minimum: -PROTOCOL_LIMITS.maxSculptCoordinateMagnitude,
+      maximum: PROTOCOL_LIMITS.maxSculptCoordinateMagnitude
+    })
+  }),
+  HARD_DROP_FOCUSED: s.object({ type: s.literal("HARD_DROP_FOCUSED") })
+}, {
+  unsupportedMessage: (path, type) => `${path}.type is invalid: ${String(type)}`
+});
+const GAMEPLAY_COMMAND_CODEC = defineCodec(gameplayCommandShape);
+const commandArrayShape = s.array(gameplayCommandShape, {
+  maximumLength: PROTOCOL_LIMITS.maxCommandsPerPlayerTick
+});
+const commandsByPlayerShape = s.record(commandArrayShape, {
+  key: playerIdShape,
+  exactEntries: 2,
+  entryLabel: "players"
+});
 
-function assertExactKeys(value, keys, path, requiredKeys = keys) {
-  assertPlainObject(value, path);
-  const allowed = new Set(keys);
-  for (const key of Object.keys(value)) {
-    if (!allowed.has(key)) throw new Error(`${path}.${key} is not supported`);
-  }
-  for (const key of requiredKeys) {
-    if (!Object.hasOwn(value, key)) throw new Error(`${path}.${key} is required`);
-  }
-}
-
-function assertRequiredKeys(value, keys, path) {
-  assertPlainObject(value, path);
-  for (const key of keys) {
-    if (!Object.hasOwn(value, key)) throw new Error(`${path}.${key} is required`);
-  }
-}
-
-function assertSafeInteger(value, path, { minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER } = {}) {
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new Error(`${path} must be an integer between ${minimum} and ${maximum}`);
-  }
-}
-
-function assertId(value, path, maximumLength = PROTOCOL_LIMITS.maxPlayerIdLength) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${path} must be a non-empty string`);
-  }
-  if (value.length > maximumLength) {
-    throw new Error(`${path} exceeds ${maximumLength} characters`);
-  }
-}
-
-function assertPlayerIds(value, path, { exactLength = null } = {}) {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`${path} must be a non-empty array`);
-  }
-  if (exactLength !== null && value.length !== exactLength) {
-    throw new Error(`${path} must contain exactly ${exactLength} player ids`);
-  }
-  const ids = new Set();
-  for (const [index, playerId] of value.entries()) {
-    assertId(playerId, `${path}[${index}]`);
-    if (ids.has(playerId)) throw new Error(`${path} must contain unique player ids`);
-    ids.add(playerId);
-  }
-}
-
-function assertHash(value, path) {
-  if (typeof value !== "string" || !/^[0-9a-f]{8}$/.test(value)) {
+const hashShape = s.refine(s.string(), (value, path) => {
+  if (!/^[0-9a-f]{8}$/.test(value)) {
     throw new Error(`${path} must be an 8-character lowercase hexadecimal hash`);
   }
-}
+});
 
-function assertJsonSize(value, path, maximumLength) {
+const matchSnapshotSummaryShape = s.refine(s.object({
+  matchId: idShape(),
+  seed: uint32Shape,
+  matchTick: matchTickShape,
+  rulesetId: idShape(),
+  policyId: idShape(),
+  playerIds: playerIdsShape
+}, { allowUnknown: true }), (snapshot, path) => {
   let text;
   try {
-    text = JSON.stringify(value);
+    text = JSON.stringify(snapshot);
   } catch (error) {
     throw new Error(`${path} must be JSON-serializable`, { cause: error });
   }
   if (typeof text !== "string") throw new Error(`${path} must be JSON-serializable`);
-  if (text.length > maximumLength) {
-    throw new Error(`${path} exceeds ${maximumLength} characters`);
+  if (text.length > PROTOCOL_LIMITS.maxSnapshotLength) {
+    throw new Error(`${path} exceeds ${PROTOCOL_LIMITS.maxSnapshotLength} characters`);
   }
-}
+});
 
-function validateGameplayCommandAtPath(command, path) {
-  assertPlainObject(command, path);
-  if (!GAMEPLAY_COMMAND_TYPES.has(command.type)) {
-    throw new Error(`${path}.type is invalid: ${String(command.type)}`);
-  }
+const PAYLOAD_CODECS = Object.freeze({
+  hello: defineCodec(s.object({
+    playerId: playerIdShape,
+    rulesetId: idShape(),
+    policyId: idShape()
+  })),
+  ready: defineCodec(s.object({ playerId: playerIdShape })),
+  "match-start": defineCodec(s.object({
+    matchId: idShape(),
+    seed: uint32Shape,
+    rulesetId: idShape(),
+    policyId: idShape(),
+    playerIds: playerIdsShape
+  })),
+  input: defineCodec(s.object({
+    playerId: playerIdShape,
+    commands: commandArrayShape
+  })),
+  "input-frame": defineCodec(s.object({ commandsByPlayer: commandsByPlayerShape })),
+  "match-hash": defineCodec(s.object({ hash: hashShape })),
+  "match-snapshot": defineCodec(s.object({ snapshot: matchSnapshotSummaryShape })),
+  leave: defineCodec(s.object({ playerId: playerIdShape })),
+  ping: defineCodec(s.object({ nonce: uint32Shape })),
+  pong: defineCodec(s.object({ nonce: uint32Shape })),
+  "resync-request": defineCodec(s.object({ playerId: playerIdShape }))
+});
 
-  if (command.type === "SCULPT") {
-    assertExactKeys(command, ["type", "pieceId", "x", "y"], path);
-    assertId(command.pieceId, `${path}.pieceId`, PROTOCOL_LIMITS.maxPieceIdLength);
-    const limit = PROTOCOL_LIMITS.maxSculptCoordinateMagnitude;
-    assertSafeInteger(command.x, `${path}.x`, { minimum: -limit, maximum: limit });
-    assertSafeInteger(command.y, `${path}.y`, { minimum: -limit, maximum: limit });
-    return;
-  }
-
-  assertExactKeys(command, ["type"], path);
-}
+const MESSAGE_ENVELOPE_CODEC = defineCodec(s.object({
+  v: s.integer(),
+  type: s.string({ nonEmpty: true }),
+  seq: s.optional(s.unknown()),
+  matchTick: s.optional(s.unknown()),
+  payload: s.unknown()
+}));
+const MESSAGE_FIELDS_CODEC = defineCodec(s.object({
+  seq: s.optional(s.unknown()),
+  matchTick: s.optional(s.unknown())
+}));
+const SEQUENCE_CODEC = defineCodec(sequenceShape);
+const MATCH_TICK_CODEC = defineCodec(matchTickShape);
 
 export function validateGameplayCommand(command) {
-  validateGameplayCommandAtPath(command, "Gameplay command");
+  GAMEPLAY_COMMAND_CODEC.assert(command, "Gameplay command");
   return command;
 }
-
-function validateCommandArray(commands, path) {
-  if (!Array.isArray(commands)) throw new Error(`${path} must be an array`);
-  if (commands.length > PROTOCOL_LIMITS.maxCommandsPerPlayerTick) {
-    throw new Error(`${path} may contain at most ${PROTOCOL_LIMITS.maxCommandsPerPlayerTick} commands`);
-  }
-  for (const [index, command] of commands.entries()) {
-    validateGameplayCommandAtPath(command, `${path}[${index}]`);
-  }
-}
-
-function validateHello(payload) {
-  assertExactKeys(payload, ["playerId", "rulesetId", "policyId"], "Protocol hello payload");
-  assertId(payload.playerId, "Protocol hello payload.playerId");
-  assertId(payload.rulesetId, "Protocol hello payload.rulesetId");
-  assertId(payload.policyId, "Protocol hello payload.policyId");
-}
-
-function validateReady(payload) {
-  assertExactKeys(payload, ["playerId"], "Protocol ready payload");
-  assertId(payload.playerId, "Protocol ready payload.playerId");
-}
-
-function validateMatchStart(payload) {
-  assertExactKeys(
-    payload,
-    ["matchId", "seed", "rulesetId", "policyId", "playerIds"],
-    "Protocol match-start payload"
-  );
-  assertId(payload.matchId, "Protocol match-start payload.matchId");
-  assertSafeInteger(payload.seed, "Protocol match-start payload.seed", { minimum: 0, maximum: UINT32_MAX });
-  assertId(payload.rulesetId, "Protocol match-start payload.rulesetId");
-  assertId(payload.policyId, "Protocol match-start payload.policyId");
-  assertPlayerIds(payload.playerIds, "Protocol match-start payload.playerIds", { exactLength: 2 });
-}
-
-function validateInput(payload) {
-  assertExactKeys(payload, ["playerId", "commands"], "Protocol input payload");
-  assertId(payload.playerId, "Protocol input payload.playerId");
-  validateCommandArray(payload.commands, "Protocol input payload.commands");
-}
-
-function validateInputFrame(payload) {
-  assertExactKeys(payload, ["commandsByPlayer"], "Protocol input-frame payload");
-  assertPlainObject(payload.commandsByPlayer, "Protocol input-frame payload.commandsByPlayer");
-  const playerIds = Object.keys(payload.commandsByPlayer);
-  if (playerIds.length !== 2) {
-    throw new Error("Protocol input-frame payload.commandsByPlayer must contain exactly 2 players");
-  }
-  for (const playerId of playerIds) {
-    assertId(playerId, "Protocol input-frame payload player id");
-    validateCommandArray(
-      payload.commandsByPlayer[playerId],
-      `Protocol input-frame payload.commandsByPlayer.${playerId}`
-    );
-  }
-}
-
-function validateMatchHash(payload) {
-  assertExactKeys(payload, ["hash"], "Protocol match-hash payload");
-  assertHash(payload.hash, "Protocol match-hash payload.hash");
-}
-
-function validateMatchSnapshot(payload) {
-  assertExactKeys(payload, ["snapshot"], "Protocol match-snapshot payload");
-  const path = "Protocol match-snapshot payload.snapshot";
-  assertRequiredKeys(payload.snapshot, ["matchId", "seed", "matchTick", "rulesetId", "policyId", "playerIds"], path);
-  assertId(payload.snapshot.matchId, `${path}.matchId`);
-  assertSafeInteger(payload.snapshot.seed, `${path}.seed`, { minimum: 0, maximum: UINT32_MAX });
-  assertSafeInteger(payload.snapshot.matchTick, `${path}.matchTick`, {
-    minimum: 0,
-    maximum: PROTOCOL_LIMITS.maxMatchTick
-  });
-  assertId(payload.snapshot.rulesetId, `${path}.rulesetId`);
-  assertId(payload.snapshot.policyId, `${path}.policyId`);
-  assertPlayerIds(payload.snapshot.playerIds, `${path}.playerIds`, { exactLength: 2 });
-  assertJsonSize(payload.snapshot, path, PROTOCOL_LIMITS.maxSnapshotLength);
-}
-
-function validateLeave(payload) {
-  assertExactKeys(payload, ["playerId"], "Protocol leave payload");
-  assertId(payload.playerId, "Protocol leave payload.playerId");
-}
-
-function validatePingPong(payload, type) {
-  assertExactKeys(payload, ["nonce"], `Protocol ${type} payload`);
-  assertSafeInteger(payload.nonce, `Protocol ${type} payload.nonce`, { minimum: 0, maximum: UINT32_MAX });
-}
-
-function validateResyncRequest(payload) {
-  assertExactKeys(payload, ["playerId"], "Protocol resync-request payload");
-  assertId(payload.playerId, "Protocol resync-request payload.playerId");
-}
-
-const PAYLOAD_VALIDATORS = Object.freeze({
-  hello: validateHello,
-  ready: validateReady,
-  "match-start": validateMatchStart,
-  input: validateInput,
-  "input-frame": validateInputFrame,
-  "match-hash": validateMatchHash,
-  "match-snapshot": validateMatchSnapshot,
-  leave: validateLeave,
-  ping: (payload) => validatePingPong(payload, "ping"),
-  pong: (payload) => validatePingPong(payload, "pong"),
-  "resync-request": validateResyncRequest
-});
 
 function assertSameRoster(actual, expected, path) {
   if (actual.length !== expected.length || actual.some((playerId, index) => playerId !== expected[index])) {
@@ -286,35 +191,35 @@ function validateRosterRouting(message, playerIds) {
 
 function normalizeRoster(playerIds) {
   if (playerIds === undefined || playerIds === null) return null;
-  assertPlayerIds(playerIds, "Protocol negotiated playerIds", { exactLength: 2 });
-  return Object.freeze([...playerIds]);
+  return Object.freeze(PLAYER_IDS_CODEC.parse(playerIds, "Protocol negotiated playerIds"));
 }
 
 export function createMessage(type, payload, fields = {}) {
   if (!MESSAGE_TYPES.has(type)) throw new Error(`Unknown protocol message type: ${type}`);
-  assertExactKeys(fields, ["seq", "matchTick"], "Protocol message fields", []);
+  const normalizedFields = MESSAGE_FIELDS_CODEC.parse(fields, "Protocol message fields");
+  if (normalizedFields.seq !== undefined) SEQUENCE_CODEC.assert(normalizedFields.seq, "Protocol seq");
+  if (normalizedFields.matchTick !== undefined) {
+    MATCH_TICK_CODEC.assert(normalizedFields.matchTick, "Protocol matchTick");
+  }
   const message = {
     v: PROTOCOL_VERSION,
     type,
-    ...fields,
+    ...normalizedFields,
     payload
   };
-  return validateMessage(message);
+  validateMessage(message);
+  return MESSAGE_ENVELOPE_CODEC.parse(message, "Protocol message");
 }
 
 export function validateMessage(message, { playerIds = null } = {}) {
-  assertExactKeys(message, ENVELOPE_KEYS, "Protocol message", ENVELOPE_REQUIRED_KEYS);
+  MESSAGE_ENVELOPE_CODEC.assert(message, "Protocol message");
+  if (message.seq !== undefined) SEQUENCE_CODEC.assert(message.seq, "Protocol seq");
+  if (message.matchTick !== undefined) MATCH_TICK_CODEC.assert(message.matchTick, "Protocol matchTick");
   if (message.v !== PROTOCOL_VERSION) {
     throw new Error(`Unsupported protocol version: ${message.v}`);
   }
   if (!MESSAGE_TYPES.has(message.type)) {
     throw new Error(`Unknown protocol message type: ${message.type}`);
-  }
-  if (message.seq !== undefined) {
-    assertSafeInteger(message.seq, "Protocol seq", { minimum: 0, maximum: PROTOCOL_LIMITS.maxSequence });
-  }
-  if (message.matchTick !== undefined) {
-    assertSafeInteger(message.matchTick, "Protocol matchTick", { minimum: 0, maximum: PROTOCOL_LIMITS.maxMatchTick });
   }
   if (SEQUENCED_MESSAGE_TYPES.has(message.type) && message.seq === undefined) {
     throw new Error(`Protocol ${message.type} message.seq is required`);
@@ -323,7 +228,7 @@ export function validateMessage(message, { playerIds = null } = {}) {
     throw new Error(`Protocol ${message.type} message.matchTick is required`);
   }
 
-  PAYLOAD_VALIDATORS[message.type](message.payload);
+  PAYLOAD_CODECS[message.type].assert(message.payload, `Protocol ${message.type} payload`);
   if (message.type === "match-snapshot" && message.payload.snapshot.matchTick !== message.matchTick) {
     throw new Error("Protocol match-snapshot matchTick must match payload.snapshot.matchTick");
   }
@@ -369,7 +274,7 @@ export function createProtocolStreamValidator({ playerIds = null } = {}) {
 
 export function encodeMessage(message) {
   validateMessage(message);
-  return JSON.stringify(message);
+  return MESSAGE_ENVELOPE_CODEC.stringify(message, "Protocol message");
 }
 
 export function decodeMessage(text, options = {}) {
@@ -377,5 +282,6 @@ export function decodeMessage(text, options = {}) {
   if (text.length > PROTOCOL_LIMITS.maxTextLength) {
     throw new Error(`Protocol data exceeds ${PROTOCOL_LIMITS.maxTextLength} characters`);
   }
-  return validateMessage(JSON.parse(text), options);
+  const message = MESSAGE_ENVELOPE_CODEC.parse(JSON.parse(text), "Protocol message");
+  return validateMessage(message, options);
 }

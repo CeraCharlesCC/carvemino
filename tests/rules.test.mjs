@@ -90,6 +90,36 @@ test("rules definitions reject invalid semantic values", () => {
   );
 });
 
+test("progression uses mutually exclusive discriminated gravity and spawn models", () => {
+  assert.equal(CLASSIC_RULESET.progression.gravity.type, "curve");
+  assert.equal(CLASSIC_RULESET.progression.spawn.type, "curve");
+  assert.equal(CARVER_RULESET.progression.gravity.type, "curve");
+  assert.equal(CARVER_RULESET.progression.spawn.type, "linear");
+
+  for (const rules of [CLASSIC_RULESET, CARVER_RULESET]) {
+    assert.equal(Object.hasOwn(rules.progression, "gravityStartWorldTicks"), false);
+    assert.equal(Object.hasOwn(rules.progression, "gravityStepWorldTicks"), false);
+    assert.equal(Object.hasOwn(rules.progression, "gravityMinimumWorldTicks"), false);
+    assert.equal(Object.hasOwn(rules.progression, "spawnStartWorldTicks"), false);
+    assert.equal(Object.hasOwn(rules.progression, "spawnStepWorldTicks"), false);
+    assert.equal(Object.hasOwn(rules.progression, "spawnMinimumWorldTicks"), false);
+  }
+
+  const impossibleGravity = mutableCopy(CLASSIC_RULESET);
+  impossibleGravity.progression.gravity.step = 1;
+  assert.throws(
+    () => defineRules(impossibleGravity),
+    /rules\.progression\.gravity\.step is not a supported field/
+  );
+
+  const impossibleSpawn = mutableCopy(CARVER_RULESET);
+  impossibleSpawn.progression.spawn.points = [{ level: 1, worldTicks: 480 }];
+  assert.throws(
+    () => defineRules(impossibleSpawn),
+    /rules\.progression\.spawn\.points is not a supported field/
+  );
+});
+
 test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () => {
   const seconds = (level) => spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, level) / 60;
 
@@ -120,7 +150,7 @@ test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () =
 
 test("gravity follows each ruleset's configured curve and floor", () => {
   for (const rules of [CLASSIC_RULESET, CARVER_RULESET]) {
-    const points = rules.progression.gravityCurve.points;
+    const points = rules.progression.gravity.points;
 
     for (const point of points) {
       assert.equal(
@@ -148,7 +178,7 @@ test("gravity follows each ruleset's configured curve and floor", () => {
     const lastPoint = points.at(-1);
     assert.equal(
       gravityIntervalWorldTicksForLevel(rules, lastPoint.level + 21),
-      rules.progression.gravityMinimumWorldTicks,
+      lastPoint.worldTicks,
       "levels beyond the curve endpoint must stay at the configured floor"
     );
 
@@ -157,7 +187,7 @@ test("gravity follows each ruleset's configured curve and floor", () => {
       const current = gravityIntervalWorldTicksForLevel(rules, level);
       assert(current <= previous, `gravity interval must not increase at level ${level}`);
       assert(
-        current >= rules.progression.gravityMinimumWorldTicks,
+        current >= lastPoint.worldTicks,
         `gravity interval must respect its floor at level ${level}`
       );
       previous = current;

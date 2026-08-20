@@ -43,6 +43,7 @@ test("match snapshot round trip preserves the complete deterministic hash", () =
   const snapshot = snapshotMatch(match);
   const wireCopy = clone(snapshot);
 
+  assert.equal(Object.hasOwn(match, "version"), false, "live matches must not carry snapshot version metadata");
   assert.deepEqual(snapshot.playerIds, ["host", "joiner"]);
   assert.equal(snapshot.players.length, 2);
   assert.deepEqual(snapshot.policyState, {
@@ -60,6 +61,7 @@ test("match snapshot round trip preserves the complete deterministic hash", () =
   assert.equal(hashMatch(match), beforeHash, "snapshot mutations must not leak into live state");
 
   const restored = restoreMatch(wireCopy, { rules, policy });
+  assert.equal(Object.hasOwn(restored, "version"), false, "restored matches must not gain live version metadata");
   assert.equal(hashMatch(restored), beforeHash);
   assert.deepEqual(snapshotMatch(restored), wireCopy);
   wireCopy.policyState.pendingAttacks[0].rows = 4;
@@ -85,7 +87,7 @@ test("match snapshots require explicit policy state serialization hooks", () => 
     policy
   });
 
-  assert.throws(() => snapshotMatch(match), /snapshotState must be a function/);
+  assert.throws(() => snapshotMatch(match), /snapshotState is required/);
 });
 
 test("createMatch enforces identifiers that can be represented by match snapshots", () => {

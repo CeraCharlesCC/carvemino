@@ -523,12 +523,8 @@ test("an ordinary gravity landing reaches pending lock without pulse alignment",
   const rules = makeTestRules({
     simulation: { lockDelayWorldTicks: 4, operationGraceSteps: 3 },
     progression: {
-      gravityStartWorldTicks: 2,
-      gravityStepWorldTicks: 0,
-      gravityMinimumWorldTicks: 2,
-      spawnStartWorldTicks: 1000,
-      spawnStepWorldTicks: 0,
-      spawnMinimumWorldTicks: 1000
+      gravity: { type: "linear", start: 2, step: 0, min: 2 },
+      spawn: { type: "linear", start: 1000, step: 0, min: 1000 }
     }
   });
   const game = createGame({ seed: 26, rules });
@@ -738,7 +734,11 @@ test("snapshot round trip preserves deterministic hash", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 4, rules });
   for (let i = 0; i < 120; i += 1) stepGame(game, [], rules);
-  const restored = restoreGame(snapshotGame(game));
+  const snapshot = snapshotGame(game);
+  const restored = restoreGame(snapshot);
+  assert.equal(Object.hasOwn(game, "schemaVersion"), false, "live state must not carry snapshot metadata");
+  assert.equal(Number.isInteger(snapshot.schemaVersion), true, "snapshots retain their boundary schema version");
+  assert.equal(Object.hasOwn(restored, "schemaVersion"), false, "restored live state strips snapshot metadata");
   assert.equal(hashGameState(restored), hashGameState(game));
   assertGameState(restored);
 });

@@ -1,100 +1,89 @@
-const RULE_KEYS = Object.freeze([
-  "id",
-  "board",
-  "simulation",
-  "sculpting",
-  "progression",
-  "scoring",
-  "pieces",
-  "presentation"
-]);
+import { defineCodec, shape as s } from "../codec.js";
 
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
+const rulesObject = (fields) => s.object(fields, { unsupportedMessage: "is not a supported field" });
+const nonEmptyString = s.string({ nonEmpty: true });
+const nonNegativeInteger = s.integer({ minimum: 0 });
+const positiveInteger = s.integer({ minimum: 1 });
+const byteInteger = s.integer({ minimum: 1, maximum: 255 });
+const coordinate = s.integer();
+const cell = s.tuple([coordinate, coordinate]);
+const gravityPoint = rulesObject({ level: positiveInteger, worldTicks: positiveInteger });
 
-function assertPlainObject(value, path) {
-  if (!isPlainObject(value)) throw new Error(`${path} must be an object`);
-}
+const gravityProgression = s.discriminatedUnion("type", {
+  linear: rulesObject({
+    type: s.literal("linear"),
+    start: positiveInteger,
+    step: nonNegativeInteger,
+    min: positiveInteger
+  }),
+  curve: rulesObject({
+    type: s.literal("curve"),
+    points: s.array(gravityPoint, { minimumLength: 2 })
+  })
+});
 
-function assertExactKeys(value, expectedKeys, path, optionalKeys = []) {
-  assertPlainObject(value, path);
-  const expected = new Set([...expectedKeys, ...optionalKeys]);
-  for (const key of Object.keys(value)) {
-    if (!expected.has(key)) throw new Error(`${path}.${key} is not a supported field`);
-  }
-  for (const key of expectedKeys) {
-    if (!Object.hasOwn(value, key)) throw new Error(`${path}.${key} is required`);
-  }
-}
+const spawnProgression = s.discriminatedUnion("type", {
+  linear: rulesObject({
+    type: s.literal("linear"),
+    start: nonNegativeInteger,
+    step: nonNegativeInteger,
+    min: positiveInteger
+  }),
+  curve: rulesObject({
+    type: s.literal("curve"),
+    start: nonNegativeInteger,
+    min: positiveInteger,
+    endLevel: s.integer({ minimum: 2 }),
+    easeOutExponentMilli: s.integer({ minimum: 1000 })
+  })
+});
 
-function assertNonEmptyString(value, path) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${path} must be a non-empty string`);
-  }
-}
+const pieceTemplate = rulesObject({
+  cells: s.array(cell, { minimumLength: 1 }),
+  rotations: s.array(s.integer({ minimum: 0, maximum: 3 }), { minimumLength: 1 }),
+  cellValue: byteInteger
+});
 
-function assertInteger(value, path, { minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER } = {}) {
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    const range = maximum < Number.MAX_SAFE_INTEGER
-      ? ` between ${minimum} and ${maximum}`
-      : ` >= ${minimum}`;
-    throw new Error(`${path} must be an integer${range}`);
-  }
-}
-
-function assertNumberTable(value, path) {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Error(`${path} must be a non-empty array`);
-  }
-  value.forEach((entry, index) => assertInteger(entry, `${path}[${index}]`, { minimum: 0 }));
-}
-
-function validateGravityCurve(curve, progression) {
-  assertExactKeys(curve, ["points"], "rules.progression.gravityCurve");
-  if (!Array.isArray(curve.points) || curve.points.length < 2) {
-    throw new Error("rules.progression.gravityCurve.points must contain at least 2 points");
-  }
-
-  let previousLevel = 0;
-  let previousWorldTicks = Number.MAX_SAFE_INTEGER;
-  curve.points.forEach((point, index) => {
-    const path = `rules.progression.gravityCurve.points[${index}]`;
-    assertExactKeys(point, ["level", "worldTicks"], path);
-    assertInteger(point.level, `${path}.level`, { minimum: 1 });
-    assertInteger(point.worldTicks, `${path}.worldTicks`, { minimum: 1 });
-    if (point.level <= previousLevel) {
-      throw new Error(`${path}.level must be greater than the previous point's level`);
-    }
-    if (point.worldTicks > previousWorldTicks) {
-      throw new Error(`${path}.worldTicks must not exceed the previous point's worldTicks`);
-    }
-    previousLevel = point.level;
-    previousWorldTicks = point.worldTicks;
-  });
-
-  const first = curve.points[0];
-  const last = curve.points[curve.points.length - 1];
-  if (first.level !== 1 || first.worldTicks !== progression.gravityStartWorldTicks) {
-    throw new Error("rules.progression.gravityCurve must start at level 1 with gravityStartWorldTicks");
-  }
-  if (last.worldTicks !== progression.gravityMinimumWorldTicks) {
-    throw new Error("rules.progression.gravityCurve must end at gravityMinimumWorldTicks");
-  }
-}
-
-function assertCellStyle(style, path) {
-  assertExactKeys(style, ["fill"], path);
-  assertNonEmptyString(style.fill, `${path}.fill`);
-}
-
-function cloneValue(value) {
-  if (Array.isArray(value)) return value.map(cloneValue);
-  if (isPlainObject(value)) {
-    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneValue(entry)]));
-  }
-  return value;
-}
+const RULES_CODEC = defineCodec(rulesObject({
+  id: nonEmptyString,
+  board: rulesObject({
+    width: positiveInteger,
+    visibleHeight: positiveInteger,
+    hiddenHeight: nonNegativeInteger
+  }),
+  simulation: rulesObject({
+    stepsPerSecond: positiveInteger,
+    lockDelayWorldTicks: nonNegativeInteger,
+    operationGraceSteps: nonNegativeInteger,
+    focusGraceSteps: nonNegativeInteger,
+    dropCoverageHistoryLength: positiveInteger,
+    dropPositionSampleCount: positiveInteger
+  }),
+  sculpting: rulesObject({
+    carveLimit: nonNegativeInteger,
+    minimumCells: positiveInteger,
+    scrapPerCarve: nonNegativeInteger,
+    fillCost: nonNegativeInteger
+  }),
+  progression: rulesObject({
+    linesPerLevel: positiveInteger,
+    gravity: gravityProgression,
+    spawn: spawnProgression,
+    dropQueueDepth: positiveInteger
+  }),
+  scoring: rulesObject({
+    lineClear: s.array(nonNegativeInteger, { minimumLength: 1 }),
+    carve: nonNegativeInteger,
+    fill: nonNegativeInteger
+  }),
+  pieces: rulesObject({
+    garbageCellValue: byteInteger,
+    templates: s.record(pieceTemplate, { key: nonEmptyString, minimumEntries: 1 })
+  }),
+  presentation: rulesObject({
+    cellStyles: s.record(rulesObject({ fill: nonEmptyString }))
+  })
+}));
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -104,133 +93,49 @@ function deepFreeze(value) {
 
 function validatePieceTemplate(templateId, template) {
   const path = `rules.pieces.templates.${templateId}`;
-  assertNonEmptyString(templateId, "piece template id");
-  assertExactKeys(template, ["cells", "rotations", "cellValue"], path);
-
-  if (!Array.isArray(template.cells) || template.cells.length === 0) {
-    throw new Error(`${path}.cells must be a non-empty array`);
-  }
   const cells = new Set();
-  template.cells.forEach((cell, index) => {
-    if (!Array.isArray(cell) || cell.length !== 2) {
-      throw new Error(`${path}.cells[${index}] must be an [x, y] pair`);
-    }
-    assertInteger(cell[0], `${path}.cells[${index}][0]`);
-    assertInteger(cell[1], `${path}.cells[${index}][1]`);
+  template.cells.forEach((cell) => {
     const key = `${cell[0]},${cell[1]}`;
     if (cells.has(key)) throw new Error(`${path}.cells contains duplicate cell ${key}`);
     cells.add(key);
   });
 
-  if (!Array.isArray(template.rotations) || template.rotations.length === 0) {
-    throw new Error(`${path}.rotations must be a non-empty array`);
-  }
   const rotations = new Set();
-  template.rotations.forEach((rotation, index) => {
-    assertInteger(rotation, `${path}.rotations[${index}]`, { minimum: 0, maximum: 3 });
+  template.rotations.forEach((rotation) => {
     if (rotations.has(rotation)) throw new Error(`${path}.rotations contains duplicate rotation ${rotation}`);
     rotations.add(rotation);
   });
-
-  assertInteger(template.cellValue, `${path}.cellValue`, { minimum: 1, maximum: 255 });
 }
 
 function validateRules(rules) {
-  assertExactKeys(rules, RULE_KEYS, "rules");
-  assertNonEmptyString(rules.id, "rules.id");
-
-  assertExactKeys(rules.board, ["width", "visibleHeight", "hiddenHeight"], "rules.board");
-  assertInteger(rules.board.width, "rules.board.width", { minimum: 1 });
-  assertInteger(rules.board.visibleHeight, "rules.board.visibleHeight", { minimum: 1 });
-  assertInteger(rules.board.hiddenHeight, "rules.board.hiddenHeight", { minimum: 0 });
-
-  assertExactKeys(
-    rules.simulation,
-    [
-      "stepsPerSecond",
-      "lockDelayWorldTicks",
-      "operationGraceSteps",
-      "focusGraceSteps",
-      "dropCoverageHistoryLength",
-      "dropPositionSampleCount"
-    ],
-    "rules.simulation"
-  );
-  assertInteger(rules.simulation.stepsPerSecond, "rules.simulation.stepsPerSecond", { minimum: 1 });
-  assertInteger(rules.simulation.lockDelayWorldTicks, "rules.simulation.lockDelayWorldTicks", { minimum: 0 });
-  assertInteger(rules.simulation.operationGraceSteps, "rules.simulation.operationGraceSteps", { minimum: 0 });
-  assertInteger(rules.simulation.focusGraceSteps, "rules.simulation.focusGraceSteps", { minimum: 0 });
-  assertInteger(
-    rules.simulation.dropCoverageHistoryLength,
-    "rules.simulation.dropCoverageHistoryLength",
-    { minimum: 1 }
-  );
-  assertInteger(
-    rules.simulation.dropPositionSampleCount,
-    "rules.simulation.dropPositionSampleCount",
-    { minimum: 1 }
-  );
-
-  assertExactKeys(
-    rules.sculpting,
-    ["carveLimit", "minimumCells", "scrapPerCarve", "fillCost"],
-    "rules.sculpting"
-  );
-  assertInteger(rules.sculpting.carveLimit, "rules.sculpting.carveLimit", { minimum: 0 });
-  assertInteger(rules.sculpting.minimumCells, "rules.sculpting.minimumCells", { minimum: 1 });
-  assertInteger(rules.sculpting.scrapPerCarve, "rules.sculpting.scrapPerCarve", { minimum: 0 });
-  assertInteger(rules.sculpting.fillCost, "rules.sculpting.fillCost", { minimum: 0 });
-
-  assertExactKeys(
-    rules.progression,
-    [
-      "linesPerLevel",
-      "gravityStartWorldTicks",
-      "gravityStepWorldTicks",
-      "gravityMinimumWorldTicks",
-      "spawnStartWorldTicks",
-      "spawnStepWorldTicks",
-      "spawnMinimumWorldTicks",
-      "dropQueueDepth"
-    ],
-    "rules.progression",
-    ["gravityCurve", "spawnCurve"]
-  );
-  assertInteger(rules.progression.linesPerLevel, "rules.progression.linesPerLevel", { minimum: 1 });
-  assertInteger(rules.progression.gravityStartWorldTicks, "rules.progression.gravityStartWorldTicks", { minimum: 1 });
-  assertInteger(rules.progression.gravityStepWorldTicks, "rules.progression.gravityStepWorldTicks", { minimum: 0 });
-  assertInteger(rules.progression.gravityMinimumWorldTicks, "rules.progression.gravityMinimumWorldTicks", { minimum: 1 });
-  assertInteger(rules.progression.spawnStartWorldTicks, "rules.progression.spawnStartWorldTicks", { minimum: 0 });
-  assertInteger(rules.progression.spawnStepWorldTicks, "rules.progression.spawnStepWorldTicks", { minimum: 0 });
-  assertInteger(rules.progression.spawnMinimumWorldTicks, "rules.progression.spawnMinimumWorldTicks", { minimum: 1 });
-  assertInteger(rules.progression.dropQueueDepth, "rules.progression.dropQueueDepth", { minimum: 1 });
-  if (rules.progression.gravityCurve !== undefined) {
-    validateGravityCurve(rules.progression.gravityCurve, rules.progression);
-  }
-  if (rules.progression.spawnCurve !== undefined) {
-    assertExactKeys(
-      rules.progression.spawnCurve,
-      ["endLevel", "easeOutExponentMilli"],
-      "rules.progression.spawnCurve"
-    );
-    assertInteger(rules.progression.spawnCurve.endLevel, "rules.progression.spawnCurve.endLevel", { minimum: 2 });
-    assertInteger(
-      rules.progression.spawnCurve.easeOutExponentMilli,
-      "rules.progression.spawnCurve.easeOutExponentMilli",
-      { minimum: 1000 }
-    );
+  const gravity = rules.progression.gravity;
+  if (gravity.type === "curve") {
+    let previousLevel = 0;
+    let previousWorldTicks = Number.MAX_SAFE_INTEGER;
+    gravity.points.forEach((point, index) => {
+      const path = `rules.progression.gravity.points[${index}]`;
+      if (point.level <= previousLevel) {
+        throw new Error(`${path}.level must be greater than the previous point's level`);
+      }
+      if (point.worldTicks > previousWorldTicks) {
+        throw new Error(`${path}.worldTicks must not exceed the previous point's worldTicks`);
+      }
+      previousLevel = point.level;
+      previousWorldTicks = point.worldTicks;
+    });
+    if (gravity.points[0].level !== 1) {
+      throw new Error("rules.progression.gravity.points must start at level 1");
+    }
+  } else if (gravity.min > gravity.start) {
+    throw new Error("rules.progression.gravity.min must not exceed gravity.start");
   }
 
-  assertExactKeys(rules.scoring, ["lineClear", "carve", "fill"], "rules.scoring");
-  assertNumberTable(rules.scoring.lineClear, "rules.scoring.lineClear");
-  assertInteger(rules.scoring.carve, "rules.scoring.carve", { minimum: 0 });
-  assertInteger(rules.scoring.fill, "rules.scoring.fill", { minimum: 0 });
+  const spawn = rules.progression.spawn;
+  if (spawn.min > spawn.start) {
+    throw new Error("rules.progression.spawn.min must not exceed spawn.start");
+  }
 
-  assertExactKeys(rules.pieces, ["garbageCellValue", "templates"], "rules.pieces");
-  assertInteger(rules.pieces.garbageCellValue, "rules.pieces.garbageCellValue", { minimum: 1, maximum: 255 });
-  assertPlainObject(rules.pieces.templates, "rules.pieces.templates");
   const templates = Object.entries(rules.pieces.templates);
-  if (templates.length === 0) throw new Error("rules.pieces.templates must contain at least one template");
   for (const [templateId, template] of templates) validatePieceTemplate(templateId, template);
 
   const boardHeight = rules.board.visibleHeight + rules.board.hiddenHeight;
@@ -247,9 +152,7 @@ function validateRules(rules) {
     }
   }
 
-  assertExactKeys(rules.presentation, ["cellStyles"], "rules.presentation");
-  assertPlainObject(rules.presentation.cellStyles, "rules.presentation.cellStyles");
-  for (const [cellValue, style] of Object.entries(rules.presentation.cellStyles)) {
+  for (const cellValue of Object.keys(rules.presentation.cellStyles)) {
     const numericValue = Number(cellValue);
     if (!Number.isInteger(numericValue)
         || numericValue < 1
@@ -257,7 +160,6 @@ function validateRules(rules) {
         || String(numericValue) !== cellValue) {
       throw new Error(`rules.presentation.cellStyles.${cellValue} must use an integer cell value between 1 and 255`);
     }
-    assertCellStyle(style, `rules.presentation.cellStyles.${cellValue}`);
   }
 
   const styledCellValues = new Set([
@@ -272,8 +174,7 @@ function validateRules(rules) {
 }
 
 export function defineRules(definition) {
-  if (!isPlainObject(definition)) throw new Error("rules definition must be an object");
-  const rules = cloneValue(definition);
+  const rules = RULES_CODEC.parse(definition, "rules");
   validateRules(rules);
   return deepFreeze(rules);
 }
@@ -333,9 +234,9 @@ export function getTemplateBounds(rules, templateId, rotation) {
 }
 
 export function gravityIntervalWorldTicksForLevel(rules, level) {
-  const p = rules.progression;
-  if (p.gravityCurve) {
-    const points = p.gravityCurve.points;
+  const gravity = rules.progression.gravity;
+  if (gravity.type === "curve") {
+    const points = gravity.points;
     const normalizedLevel = Math.max(1, level);
     for (let index = 1; index < points.length; index += 1) {
       const upper = points[index];
@@ -344,28 +245,27 @@ export function gravityIntervalWorldTicksForLevel(rules, level) {
       const progress = (normalizedLevel - lower.level) / (upper.level - lower.level);
       return Math.ceil(lower.worldTicks + (upper.worldTicks - lower.worldTicks) * progress);
     }
-    return p.gravityMinimumWorldTicks;
+    return points[points.length - 1].worldTicks;
   }
   return Math.max(
-    p.gravityMinimumWorldTicks,
-    p.gravityStartWorldTicks - (level - 1) * p.gravityStepWorldTicks
+    gravity.min,
+    gravity.start - (level - 1) * gravity.step
   );
 }
 
 export function spawnIntervalWorldTicksForLevel(rules, level) {
-  const p = rules.progression;
-  if (p.spawnCurve) {
-    const clampedLevel = Math.max(1, Math.min(p.spawnCurve.endLevel, level));
-    const t = (clampedLevel - 1) / (p.spawnCurve.endLevel - 1);
-    const exponent = p.spawnCurve.easeOutExponentMilli / 1000;
+  const spawn = rules.progression.spawn;
+  if (spawn.type === "curve") {
+    const clampedLevel = Math.max(1, Math.min(spawn.endLevel, level));
+    const t = (clampedLevel - 1) / (spawn.endLevel - 1);
+    const exponent = spawn.easeOutExponentMilli / 1000;
     const progress = 1 - Math.pow(1 - t, exponent);
-    const curvedTicks = p.spawnStartWorldTicks
-      + (p.spawnMinimumWorldTicks - p.spawnStartWorldTicks) * progress;
-    return Math.max(p.spawnMinimumWorldTicks, Math.ceil(curvedTicks));
+    const curvedTicks = spawn.start + (spawn.min - spawn.start) * progress;
+    return Math.max(spawn.min, Math.ceil(curvedTicks));
   }
   return Math.max(
-    p.spawnMinimumWorldTicks,
-    p.spawnStartWorldTicks - (level - 1) * p.spawnStepWorldTicks
+    spawn.min,
+    spawn.start - (level - 1) * spawn.step
   );
 }
 

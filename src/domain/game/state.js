@@ -14,34 +14,9 @@ import {
   getTemplateCells,
   getTemplateRotations
 } from "../rules.js";
+import { defineCodec, shape as s } from "../../codec.js";
 
 const GAME_SCHEMA_VERSION = 4;
-const RANDOM_STREAM_KEYS = Object.freeze(["pieces", "rotations", "drops"]);
-const BOARD_KEYS = Object.freeze(["width", "height", "visibleHeight", "hiddenHeight", "cells"]);
-const DROP_PLAN_KEYS = Object.freeze(["pieceId", "templateId", "rotation", "x", "spawnAtWorldTick"]);
-const DROP_COVERAGE_KEYS = Object.freeze(["templateId", "rotation", "x"]);
-const PIECE_KEYS = Object.freeze([
-  "id",
-  "templateId",
-  "rotation",
-  "cellValue",
-  "x",
-  "y",
-  "cells",
-  "carved",
-  "carveLimit",
-  "restingWorldTicks",
-  "pendingLock",
-  "spawnIndex",
-  "committed"
-]);
-const GARBAGE_PACKET_KEYS = Object.freeze([
-  "id",
-  "sourcePlayerId",
-  "rows",
-  "applyAtWorldTick",
-  "seed"
-]);
 const GAME_OVER_REASONS = new Set([
   "spawn-blocked",
   "garbage-topout",
@@ -49,12 +24,87 @@ const GAME_OVER_REASONS = new Set([
   "lock-topout"
 ]);
 const UINT32_MAX = 0xffffffff;
+const nonEmptyString = s.string({ nonEmpty: true });
+const integer = s.integer();
+const nonNegativeInteger = s.integer({ minimum: 0 });
+const positiveInteger = s.integer({ minimum: 1 });
+const byte = s.integer({ minimum: 0, maximum: 255 });
+const uint32 = s.integer({ minimum: 0, maximum: UINT32_MAX });
+const cellShape = s.object({ x: integer, y: integer });
+const templatePlacementFields = {
+  templateId: nonEmptyString,
+  rotation: s.integer({ minimum: 0, maximum: 3 }),
+  x: integer
+};
+const dropPlanShape = s.object({
+  pieceId: nonEmptyString,
+  ...templatePlacementFields,
+  spawnAtWorldTick: nonNegativeInteger
+});
+const dropCoverageShape = s.object({ ...templatePlacementFields });
+const pieceShape = s.object({
+  id: nonEmptyString,
+  templateId: nonEmptyString,
+  rotation: s.integer({ minimum: 0, maximum: 3 }),
+  cellValue: s.integer({ minimum: 1, maximum: 255 }),
+  x: integer,
+  y: integer,
+  cells: s.array(cellShape, { minimumLength: 1 }),
+  carved: nonNegativeInteger,
+  carveLimit: nonNegativeInteger,
+  restingWorldTicks: nonNegativeInteger,
+  pendingLock: s.boolean(),
+  spawnIndex: positiveInteger,
+  committed: s.boolean()
+});
+const garbagePacketShape = s.object({
+  id: nonEmptyString,
+  sourcePlayerId: s.nullable(nonEmptyString),
+  rows: positiveInteger,
+  applyAtWorldTick: nonNegativeInteger,
+  seed: uint32
+});
+const randomStreamShape = s.object({ state: s.integer({ minimum: 1, maximum: UINT32_MAX }) });
+const GAME_SNAPSHOT_CODEC = defineCodec(s.object({
+  schemaVersion: s.integer(),
+  rulesetId: nonEmptyString,
+  worldTick: nonNegativeInteger,
+  stepTick: nonNegativeInteger,
+  worldHoldSteps: nonNegativeInteger,
+  lastFocusHoldWorldTick: integer,
+  board: s.object({
+    width: positiveInteger,
+    height: positiveInteger,
+    visibleHeight: positiveInteger,
+    hiddenHeight: nonNegativeInteger,
+    cells: s.array(byte)
+  }),
+  activePieces: s.array(pieceShape),
+  focusedPieceId: s.nullable(nonEmptyString),
+  dropQueue: s.array(dropPlanShape),
+  dropCoverageHistory: s.array(dropCoverageShape),
+  incomingGarbage: s.array(garbagePacketShape),
+  appliedGarbageIds: s.array(nonEmptyString),
+  scrap: nonNegativeInteger,
+  score: nonNegativeInteger,
+  totalLines: nonNegativeInteger,
+  level: positiveInteger,
+  status: s.enum(["playing", "gameover"]),
+  gameOverReason: s.nullable(s.enum(GAME_OVER_REASONS)),
+  nextPieceId: positiveInteger,
+  nextSpawnIndex: positiveInteger,
+  nextScheduledSpawnWorldTick: s.nullable(nonNegativeInteger),
+  random: s.object({
+    pieces: randomStreamShape,
+    rotations: randomStreamShape,
+    drops: randomStreamShape
+  })
+}));
 
 export function createGameState({ seed = 1, rules }) {
   if (!rules) throw new Error("rules are required");
   const boardHeight = rules.board.visibleHeight + rules.board.hiddenHeight;
   const state = {
-    schemaVersion: GAME_SCHEMA_VERSION,
     rulesetId: rules.id,
     worldTick: 0,
     stepTick: 0,
@@ -181,111 +231,15 @@ export function createGameViewState(state, rules) {
 }
 
 export function snapshotGameState(state) {
-  return {
-    schemaVersion: state.schemaVersion,
-    rulesetId: state.rulesetId,
-    worldTick: state.worldTick,
-    stepTick: state.stepTick,
-    worldHoldSteps: state.worldHoldSteps,
-    lastFocusHoldWorldTick: state.lastFocusHoldWorldTick,
+  return GAME_SNAPSHOT_CODEC.parse({
+    ...state,
+    schemaVersion: GAME_SCHEMA_VERSION,
     board: {
-      width: state.board.width,
-      height: state.board.height,
-      visibleHeight: state.board.visibleHeight,
-      hiddenHeight: state.board.hiddenHeight,
+      ...state.board,
       cells: Array.from(state.board.cells)
     },
-    activePieces: state.activePieces.map(clonePiece),
-    focusedPieceId: state.focusedPieceId,
-    dropQueue: state.dropQueue.map((plan) => ({ ...plan })),
-    dropCoverageHistory: state.dropCoverageHistory.map((plan) => ({ ...plan })),
-    incomingGarbage: state.incomingGarbage.map((packet) => ({ ...packet })),
-    appliedGarbageIds: [...state.appliedGarbageIds],
-    scrap: state.scrap,
-    score: state.score,
-    totalLines: state.totalLines,
-    level: state.level,
-    status: state.status,
-    gameOverReason: state.gameOverReason,
-    nextPieceId: state.nextPieceId,
-    nextSpawnIndex: state.nextSpawnIndex,
-    nextScheduledSpawnWorldTick: state.nextScheduledSpawnWorldTick,
-    random: {
-      pieces: { ...state.random.pieces },
-      rotations: { ...state.random.rotations },
-      drops: { ...state.random.drops }
-    }
-  };
-}
-
-const CURRENT_SNAPSHOT_KEYS = Object.freeze([
-  "schemaVersion",
-  "rulesetId",
-  "worldTick",
-  "stepTick",
-  "worldHoldSteps",
-  "lastFocusHoldWorldTick",
-  "board",
-  "activePieces",
-  "focusedPieceId",
-  "dropQueue",
-  "dropCoverageHistory",
-  "incomingGarbage",
-  "appliedGarbageIds",
-  "scrap",
-  "score",
-  "totalLines",
-  "level",
-  "status",
-  "gameOverReason",
-  "nextPieceId",
-  "nextSpawnIndex",
-  "nextScheduledSpawnWorldTick",
-  "random"
-]);
-
-function isPlainObject(value) {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function assertPlainObject(value, path) {
-  if (!isPlainObject(value)) throw new Error(`${path} must be an object`);
-}
-
-function assertExactKeys(value, keys, path) {
-  assertPlainObject(value, path);
-  const expected = new Set(keys);
-  for (const key of Object.keys(value)) {
-    if (!expected.has(key)) throw new Error(`${path}.${key} is not supported`);
-  }
-  for (const key of keys) {
-    if (!Object.hasOwn(value, key)) throw new Error(`${path}.${key} is required`);
-  }
-}
-
-function assertSafeInteger(value, path, { minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER } = {}) {
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new Error(`${path} must be an integer between ${minimum} and ${maximum}`);
-  }
-}
-
-function assertBoolean(value, path) {
-  if (typeof value !== "boolean") throw new Error(`${path} must be a boolean`);
-}
-
-function assertNonEmptyString(value, path) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${path} must be a non-empty string`);
-  }
-}
-
-function assertArray(value, path, maximumLength = Number.MAX_SAFE_INTEGER) {
-  if (!Array.isArray(value)) throw new Error(`${path} must be an array`);
-  if (value.length > maximumLength) {
-    throw new Error(`${path} must contain at most ${maximumLength} entries`);
-  }
+    activePieces: state.activePieces.map(clonePiece)
+  }, "snapshot");
 }
 
 function allowedBoardCellValues(rules) {
@@ -297,13 +251,7 @@ function allowedBoardCellValues(rules) {
 }
 
 function assertBoardSnapshot(board, rules) {
-  assertExactKeys(board, BOARD_KEYS, "snapshot.board");
   const expectedHeight = rules.board.visibleHeight + rules.board.hiddenHeight;
-  assertSafeInteger(board.width, "snapshot.board.width", { minimum: 1 });
-  assertSafeInteger(board.height, "snapshot.board.height", { minimum: 1 });
-  assertSafeInteger(board.visibleHeight, "snapshot.board.visibleHeight", { minimum: 1 });
-  assertSafeInteger(board.hiddenHeight, "snapshot.board.hiddenHeight", { minimum: 0 });
-
   if (board.width !== rules.board.width) {
     throw new Error(`snapshot.board.width must match ruleset width ${rules.board.width}`);
   }
@@ -316,14 +264,11 @@ function assertBoardSnapshot(board, rules) {
   if (board.height !== expectedHeight || board.height !== board.visibleHeight + board.hiddenHeight) {
     throw new Error(`snapshot.board.height must match ruleset height ${expectedHeight}`);
   }
-
-  assertArray(board.cells, "snapshot.board.cells", board.width * board.height);
   if (board.cells.length !== board.width * board.height) {
     throw new Error(`snapshot.board.cells must contain exactly ${board.width * board.height} cells`);
   }
   const allowed = allowedBoardCellValues(rules);
   for (const [index, value] of board.cells.entries()) {
-    assertSafeInteger(value, `snapshot.board.cells[${index}]`, { minimum: 0, maximum: 255 });
     if (!allowed.has(value)) {
       throw new Error(`snapshot.board.cells[${index}] contains unsupported cell value ${value}`);
     }
@@ -331,135 +276,83 @@ function assertBoardSnapshot(board, rules) {
 }
 
 function assertTemplatePlacement(plan, path, rules) {
-  assertNonEmptyString(plan.templateId, `${path}.templateId`);
   if (!Object.hasOwn(rules.pieces.templates, plan.templateId)) {
     throw new Error(`${path}.templateId is unknown: ${plan.templateId}`);
   }
-  assertSafeInteger(plan.rotation, `${path}.rotation`, { minimum: 0, maximum: 3 });
   if (!getTemplateRotations(rules, plan.templateId).includes(plan.rotation)) {
     throw new Error(`${path}.rotation is not allowed for template ${plan.templateId}`);
   }
   const bounds = getTemplateBounds(rules, plan.templateId, plan.rotation);
-  assertSafeInteger(plan.x, `${path}.x`, {
-    minimum: 0,
-    maximum: rules.board.width - bounds.width
-  });
-}
-
-function assertDropPlan(plan, path, rules) {
-  assertExactKeys(plan, DROP_PLAN_KEYS, path);
-  assertNonEmptyString(plan.pieceId, `${path}.pieceId`);
-  assertTemplatePlacement(plan, path, rules);
-  assertSafeInteger(plan.spawnAtWorldTick, `${path}.spawnAtWorldTick`, { minimum: 0 });
-}
-
-function assertDropCoverage(plan, path, rules) {
-  assertExactKeys(plan, DROP_COVERAGE_KEYS, path);
-  assertTemplatePlacement(plan, path, rules);
+  const maximumX = rules.board.width - bounds.width;
+  if (plan.x < 0 || plan.x > maximumX) {
+    throw new Error(`${path}.x must be an integer between 0 and ${maximumX}`);
+  }
 }
 
 function assertPieceSnapshot(piece, path, rules, boardCellCount) {
-  assertExactKeys(piece, PIECE_KEYS, path);
-  assertNonEmptyString(piece.id, `${path}.id`);
-  assertNonEmptyString(piece.templateId, `${path}.templateId`);
   if (!Object.hasOwn(rules.pieces.templates, piece.templateId)) {
     throw new Error(`${path}.templateId is unknown: ${piece.templateId}`);
   }
-  assertSafeInteger(piece.rotation, `${path}.rotation`, { minimum: 0, maximum: 3 });
   if (!getTemplateRotations(rules, piece.templateId).includes(piece.rotation)) {
     throw new Error(`${path}.rotation is not allowed for template ${piece.templateId}`);
   }
-  assertSafeInteger(piece.cellValue, `${path}.cellValue`, { minimum: 1, maximum: 255 });
   if (piece.cellValue !== getTemplateCellValue(rules, piece.templateId)) {
     throw new Error(`${path}.cellValue does not match template ${piece.templateId}`);
   }
-  assertSafeInteger(piece.x, `${path}.x`);
-  assertSafeInteger(piece.y, `${path}.y`);
-  assertArray(piece.cells, `${path}.cells`, boardCellCount);
-  if (piece.cells.length === 0) throw new Error(`${path}.cells must not be empty`);
-  for (const [cellIndex, cell] of piece.cells.entries()) {
-    const cellPath = `${path}.cells[${cellIndex}]`;
-    assertExactKeys(cell, ["x", "y"], cellPath);
-    assertSafeInteger(cell.x, `${cellPath}.x`);
-    assertSafeInteger(cell.y, `${cellPath}.y`);
+  if (piece.cells.length > boardCellCount) {
+    throw new Error(`${path}.cells must contain at most ${boardCellCount} entries`);
   }
-  assertSafeInteger(piece.carved, `${path}.carved`, { minimum: 0 });
-  assertSafeInteger(piece.carveLimit, `${path}.carveLimit`, { minimum: 0 });
   if (piece.carveLimit !== rules.sculpting.carveLimit) {
     throw new Error(`${path}.carveLimit must match ruleset carve limit ${rules.sculpting.carveLimit}`);
   }
   if (piece.carved > piece.carveLimit) throw new Error(`${path}.carved exceeds carveLimit`);
-  assertSafeInteger(piece.restingWorldTicks, `${path}.restingWorldTicks`, {
-    minimum: 0,
-    maximum: rules.simulation.lockDelayWorldTicks
-  });
-  assertBoolean(piece.pendingLock, `${path}.pendingLock`);
-  assertSafeInteger(piece.spawnIndex, `${path}.spawnIndex`, { minimum: 1 });
-  assertBoolean(piece.committed, `${path}.committed`);
-}
-
-function assertGarbagePacket(packet, path) {
-  assertExactKeys(packet, GARBAGE_PACKET_KEYS, path);
-  assertNonEmptyString(packet.id, `${path}.id`);
-  if (packet.sourcePlayerId !== null) assertNonEmptyString(packet.sourcePlayerId, `${path}.sourcePlayerId`);
-  assertSafeInteger(packet.rows, `${path}.rows`, { minimum: 1 });
-  assertSafeInteger(packet.applyAtWorldTick, `${path}.applyAtWorldTick`, { minimum: 0 });
-  assertSafeInteger(packet.seed, `${path}.seed`, { minimum: 0, maximum: UINT32_MAX });
+  if (piece.restingWorldTicks > rules.simulation.lockDelayWorldTicks) {
+    throw new Error(
+      `${path}.restingWorldTicks must be an integer between 0 and ${rules.simulation.lockDelayWorldTicks}`
+    );
+  }
 }
 
 function assertStatusFields(snapshot) {
-  if (snapshot.status !== "playing" && snapshot.status !== "gameover") {
-    throw new Error("snapshot.status must be playing or gameover");
-  }
   if (snapshot.status === "playing") {
     if (snapshot.gameOverReason !== null) {
       throw new Error("snapshot.gameOverReason must be null while playing");
     }
     return;
   }
-  if (!GAME_OVER_REASONS.has(snapshot.gameOverReason)) {
-    throw new Error(`snapshot.gameOverReason is invalid: ${String(snapshot.gameOverReason)}`);
-  }
-}
-
-function assertRandomStreams(random) {
-  assertExactKeys(random, RANDOM_STREAM_KEYS, "snapshot.random");
-  for (const stream of RANDOM_STREAM_KEYS) {
-    const path = `snapshot.random.${stream}`;
-    assertExactKeys(random[stream], ["state"], path);
-    assertSafeInteger(random[stream].state, `${path}.state`, { minimum: 1, maximum: UINT32_MAX });
+  if (snapshot.gameOverReason === null) {
+    throw new Error("snapshot.gameOverReason must identify why the game ended");
   }
 }
 
 function assertCurrentSnapshot(snapshot, rules) {
-  assertExactKeys(snapshot, CURRENT_SNAPSHOT_KEYS, "snapshot");
-  if (snapshot.schemaVersion !== GAME_SCHEMA_VERSION) {
-    throw new Error(`Unsupported game snapshot schema: ${snapshot.schemaVersion}`);
+  const decoded = GAME_SNAPSHOT_CODEC.parse(snapshot, "snapshot");
+  if (decoded.schemaVersion !== GAME_SCHEMA_VERSION) {
+    throw new Error(`Unsupported game snapshot schema: ${decoded.schemaVersion}`);
   }
-  assertNonEmptyString(snapshot.rulesetId, "snapshot.rulesetId");
-  if (snapshot.rulesetId !== rules.id) {
+  if (decoded.rulesetId !== rules.id) {
     throw new Error(`snapshot.rulesetId must match ruleset ${rules.id}`);
   }
+  const maximumHoldSteps = Math.max(rules.simulation.operationGraceSteps, rules.simulation.focusGraceSteps);
+  if (decoded.worldHoldSteps > maximumHoldSteps) {
+    throw new Error(`snapshot.worldHoldSteps must be an integer between 0 and ${maximumHoldSteps}`);
+  }
+  if (decoded.lastFocusHoldWorldTick < -1 || decoded.lastFocusHoldWorldTick > decoded.worldTick) {
+    throw new Error(
+      `snapshot.lastFocusHoldWorldTick must be an integer between -1 and ${decoded.worldTick}`
+    );
+  }
+  assertBoardSnapshot(decoded.board, rules);
 
-  assertSafeInteger(snapshot.worldTick, "snapshot.worldTick", { minimum: 0 });
-  assertSafeInteger(snapshot.stepTick, "snapshot.stepTick", { minimum: 0 });
-  assertSafeInteger(snapshot.worldHoldSteps, "snapshot.worldHoldSteps", {
-    minimum: 0,
-    maximum: Math.max(rules.simulation.operationGraceSteps, rules.simulation.focusGraceSteps)
-  });
-  assertSafeInteger(snapshot.lastFocusHoldWorldTick, "snapshot.lastFocusHoldWorldTick", {
-    minimum: -1,
-    maximum: snapshot.worldTick
-  });
-  assertBoardSnapshot(snapshot.board, rules);
-
-  const boardCellCount = snapshot.board.width * snapshot.board.height;
-  assertArray(snapshot.activePieces, "snapshot.activePieces", boardCellCount);
+  const boardCellCount = decoded.board.width * decoded.board.height;
+  if (decoded.activePieces.length > boardCellCount) {
+    throw new Error(`snapshot.activePieces must contain at most ${boardCellCount} entries`);
+  }
   const pieceIds = new Set();
   const spawnIndexes = new Set();
   let highestReservedPieceNumber = 0n;
   let highestReservedSpawnIndex = 0;
-  for (const [index, piece] of snapshot.activePieces.entries()) {
+  for (const [index, piece] of decoded.activePieces.entries()) {
     const path = `snapshot.activePieces[${index}]`;
     assertPieceSnapshot(piece, path, rules, boardCellCount);
     if (pieceIds.has(piece.id)) throw new Error(`${path}.id duplicates piece id ${piece.id}`);
@@ -475,18 +368,19 @@ function assertCurrentSnapshot(snapshot, rules) {
     highestReservedSpawnIndex = Math.max(highestReservedSpawnIndex, piece.spawnIndex);
   }
 
-  if (snapshot.focusedPieceId !== null) {
-    assertNonEmptyString(snapshot.focusedPieceId, "snapshot.focusedPieceId");
-    const focused = snapshot.activePieces.find((piece) => piece.id === snapshot.focusedPieceId);
+  if (decoded.focusedPieceId !== null) {
+    const focused = decoded.activePieces.find((piece) => piece.id === decoded.focusedPieceId);
     if (!focused) throw new Error("snapshot.focusedPieceId must identify an active piece");
     if (focused.committed) throw new Error("snapshot.focusedPieceId cannot identify a committed piece");
   }
 
-  assertArray(snapshot.dropQueue, "snapshot.dropQueue", rules.progression.dropQueueDepth);
+  if (decoded.dropQueue.length > rules.progression.dropQueueDepth) {
+    throw new Error(`snapshot.dropQueue must contain at most ${rules.progression.dropQueueDepth} entries`);
+  }
   let previousSpawnTick = -1;
-  for (const [index, plan] of snapshot.dropQueue.entries()) {
+  for (const [index, plan] of decoded.dropQueue.entries()) {
     const path = `snapshot.dropQueue[${index}]`;
-    assertDropPlan(plan, path, rules);
+    assertTemplatePlacement(plan, path, rules);
     if (pieceIds.has(plan.pieceId)) throw new Error(`${path}.pieceId duplicates piece id ${plan.pieceId}`);
     pieceIds.add(plan.pieceId);
     const pieceNumber = parseGeneratedPieceNumber(plan.pieceId);
@@ -499,79 +393,58 @@ function assertCurrentSnapshot(snapshot, rules) {
     previousSpawnTick = plan.spawnAtWorldTick;
   }
 
-  assertArray(
-    snapshot.dropCoverageHistory,
-    "snapshot.dropCoverageHistory",
-    rules.simulation.dropCoverageHistoryLength
-  );
-  for (const [index, plan] of snapshot.dropCoverageHistory.entries()) {
-    assertDropCoverage(plan, `snapshot.dropCoverageHistory[${index}]`, rules);
+  if (decoded.dropCoverageHistory.length > rules.simulation.dropCoverageHistoryLength) {
+    throw new Error(
+      `snapshot.dropCoverageHistory must contain at most ${rules.simulation.dropCoverageHistoryLength} entries`
+    );
+  }
+  for (const [index, plan] of decoded.dropCoverageHistory.entries()) {
+    assertTemplatePlacement(plan, `snapshot.dropCoverageHistory[${index}]`, rules);
   }
 
-  assertArray(snapshot.incomingGarbage, "snapshot.incomingGarbage");
   const garbageIds = new Set();
-  for (const [index, packet] of snapshot.incomingGarbage.entries()) {
+  for (const [index, packet] of decoded.incomingGarbage.entries()) {
     const path = `snapshot.incomingGarbage[${index}]`;
-    assertGarbagePacket(packet, path);
     if (garbageIds.has(packet.id)) throw new Error(`${path}.id duplicates garbage id ${packet.id}`);
     garbageIds.add(packet.id);
   }
 
-  assertArray(snapshot.appliedGarbageIds, "snapshot.appliedGarbageIds");
   const appliedIds = new Set();
-  for (const [index, id] of snapshot.appliedGarbageIds.entries()) {
-    assertNonEmptyString(id, `snapshot.appliedGarbageIds[${index}]`);
+  for (const id of decoded.appliedGarbageIds) {
     if (appliedIds.has(id)) throw new Error(`snapshot.appliedGarbageIds contains duplicate id ${id}`);
     if (garbageIds.has(id)) throw new Error(`garbage id ${id} cannot be both incoming and applied`);
     appliedIds.add(id);
   }
 
-  assertSafeInteger(snapshot.scrap, "snapshot.scrap", { minimum: 0 });
-  assertSafeInteger(snapshot.score, "snapshot.score", { minimum: 0 });
-  assertSafeInteger(snapshot.totalLines, "snapshot.totalLines", { minimum: 0 });
-  assertSafeInteger(snapshot.level, "snapshot.level", { minimum: 1 });
-  const expectedLevel = 1 + Math.floor(snapshot.totalLines / rules.progression.linesPerLevel);
-  if (snapshot.level !== expectedLevel) {
-    throw new Error(`snapshot.level must be ${expectedLevel} for ${snapshot.totalLines} total lines`);
+  const expectedLevel = 1 + Math.floor(decoded.totalLines / rules.progression.linesPerLevel);
+  if (decoded.level !== expectedLevel) {
+    throw new Error(`snapshot.level must be ${expectedLevel} for ${decoded.totalLines} total lines`);
   }
-  assertStatusFields(snapshot);
-  assertSafeInteger(snapshot.nextPieceId, "snapshot.nextPieceId", { minimum: 1 });
-  assertSafeInteger(snapshot.nextSpawnIndex, "snapshot.nextSpawnIndex", { minimum: 1 });
-  if (BigInt(snapshot.nextPieceId) <= highestReservedPieceNumber) {
+  assertStatusFields(decoded);
+  if (BigInt(decoded.nextPieceId) <= highestReservedPieceNumber) {
     throw new Error(
       `snapshot.nextPieceId must be greater than reserved piece id p${highestReservedPieceNumber}`
     );
   }
-  if (snapshot.nextSpawnIndex <= highestReservedSpawnIndex) {
+  if (decoded.nextSpawnIndex <= highestReservedSpawnIndex) {
     throw new Error(
       `snapshot.nextSpawnIndex must be greater than reserved spawn index ${highestReservedSpawnIndex}`
     );
   }
-  if (snapshot.nextScheduledSpawnWorldTick !== null) {
-    assertSafeInteger(snapshot.nextScheduledSpawnWorldTick, "snapshot.nextScheduledSpawnWorldTick", { minimum: 0 });
-  }
-  assertRandomStreams(snapshot.random);
+  return decoded;
 }
 
 export function restoreGameState(snapshot, rules) {
   if (!rules) throw new Error("rules are required to restore game state");
-  assertCurrentSnapshot(snapshot, rules);
+  const decoded = assertCurrentSnapshot(snapshot, rules);
+  const { schemaVersion: _schemaVersion, ...liveState } = decoded;
   const state = {
-    ...snapshot,
+    ...liveState,
     board: {
-      ...snapshot.board,
-      cells: Uint8Array.from(snapshot.board.cells)
+      ...decoded.board,
+      cells: Uint8Array.from(decoded.board.cells)
     },
-    activePieces: snapshot.activePieces.map(clonePiece),
-    dropQueue: snapshot.dropQueue.map((plan) => ({ ...plan })),
-    dropCoverageHistory: snapshot.dropCoverageHistory.map((plan) => ({ ...plan })),
-    incomingGarbage: snapshot.incomingGarbage.map((packet) => ({ ...packet })),
-    appliedGarbageIds: [...snapshot.appliedGarbageIds],
-    random: {
-      pieces: { ...snapshot.random.pieces },
-      rotations: { ...snapshot.random.rotations },
-      drops: { ...snapshot.random.drops }
-    }
+    activePieces: decoded.activePieces.map(clonePiece)
   };
   assertGameState(state);
   return state;

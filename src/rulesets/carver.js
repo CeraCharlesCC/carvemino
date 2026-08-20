@@ -15,10 +15,8 @@ export const CARVER_RULESET = defineRules({
   sculpting: { carveLimit: 3, minimumCells: 3, scrapPerCarve: 1, fillCost: 2 },
   progression: {
     linesPerLevel: 4,
-    gravityStartWorldTicks: 24,
-    gravityStepWorldTicks: 2,
-    gravityMinimumWorldTicks: 6,
-    gravityCurve: {
+    gravity: {
+      type: "curve",
       points: [
         { level: 1, worldTicks: 24 },
         { level: 2, worldTicks: 22 },
@@ -37,9 +35,7 @@ export const CARVER_RULESET = defineRules({
         { level: 99, worldTicks: 6 }
       ]
     },
-    spawnStartWorldTicks: 540,
-    spawnStepWorldTicks: 60,
-    spawnMinimumWorldTicks: 90,
+    spawn: { type: "linear", start: 540, step: 60, min: 90 },
     dropQueueDepth: 2
   },
   scoring: { lineClear: [0, 140, 380, 700, 1200, 1800], carve: 8, fill: 12 },

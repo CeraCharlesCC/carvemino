@@ -1,35 +1,18 @@
 import { mix32 } from "./policy-utils.js";
+import { defineCodec, shape as s } from "../../codec.js";
 
-const POLICY_STATE_KEYS = Object.freeze(["nextWave"]);
-
-function assertNonEmptyString(value, name) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-}
-
-function assertIntegerAtLeast(value, minimum, name) {
-  if (!Number.isSafeInteger(value) || value < minimum) {
-    throw new Error(`${name} must be an integer >= ${minimum}`);
-  }
-}
-
-function assertPlainObject(value, name) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-}
-
-function assertExactKeys(value, expectedKeys, name) {
-  assertPlainObject(value, name);
-  const expected = new Set(expectedKeys);
-  for (const key of Object.keys(value)) {
-    if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`);
-  }
-  for (const key of expectedKeys) {
-    if (!Object.hasOwn(value, key)) throw new Error(`${name}.${key} is required`);
-  }
-}
+const nonEmptyString = s.string({ nonEmpty: true });
+const nonNegativeInteger = s.integer({ minimum: 0 });
+const positiveInteger = s.integer({ minimum: 1 });
+const POLICY_STATE_CODEC = defineCodec(s.object({ nextWave: positiveInteger }));
+const SURVIVAL_POLICY_CODEC = defineCodec(s.object({
+  id: nonEmptyString,
+  garbageWarningWorldTicks: nonNegativeInteger,
+  firstWaveMatchTick: nonNegativeInteger,
+  waveIntervalMatchTicks: positiveInteger,
+  rowsPerWaveStepMatchTicks: positiveInteger,
+  maximumRowsPerWave: positiveInteger
+}));
 
 function expectedNextWave(policy, matchTick) {
   if (matchTick <= policy.firstWaveMatchTick) return 1;
@@ -43,16 +26,15 @@ function expectedNextWave(policy, matchTick) {
 }
 
 function copyPolicyState(state, context, policy) {
-  assertExactKeys(state, POLICY_STATE_KEYS, "survival policy state");
-  assertIntegerAtLeast(state.nextWave, 1, "survival policy state.nextWave");
-  if (state.nextWave >= Number.MAX_SAFE_INTEGER) {
+  const copy = POLICY_STATE_CODEC.parse(state, "survival policy state");
+  if (copy.nextWave >= Number.MAX_SAFE_INTEGER) {
     throw new Error("survival policy state.nextWave is too large to advance safely");
   }
   const nextWave = expectedNextWave(policy, context.matchTick);
-  if (state.nextWave !== nextWave) {
+  if (copy.nextWave !== nextWave) {
     throw new Error(`survival policy state.nextWave must be ${nextWave} at matchTick ${context.matchTick}`);
   }
-  return { nextWave: state.nextWave };
+  return copy;
 }
 
 function rowsForWave(policy, matchTick) {
@@ -90,20 +72,15 @@ function queueWave(context, policy) {
   }
 }
 
-export function defineSurvivalPolicy({
-  id,
-  garbageWarningWorldTicks,
-  firstWaveMatchTick,
-  waveIntervalMatchTicks,
-  rowsPerWaveStepMatchTicks,
-  maximumRowsPerWave
-}) {
-  assertNonEmptyString(id, "survival policy id");
-  assertIntegerAtLeast(garbageWarningWorldTicks, 0, "garbageWarningWorldTicks");
-  assertIntegerAtLeast(firstWaveMatchTick, 0, "firstWaveMatchTick");
-  assertIntegerAtLeast(waveIntervalMatchTicks, 1, "waveIntervalMatchTicks");
-  assertIntegerAtLeast(rowsPerWaveStepMatchTicks, 1, "rowsPerWaveStepMatchTicks");
-  assertIntegerAtLeast(maximumRowsPerWave, 1, "maximumRowsPerWave");
+export function defineSurvivalPolicy(definition) {
+  const {
+    id,
+    garbageWarningWorldTicks,
+    firstWaveMatchTick,
+    waveIntervalMatchTicks,
+    rowsPerWaveStepMatchTicks,
+    maximumRowsPerWave
+  } = SURVIVAL_POLICY_CODEC.parse(definition, "survival policy");
 
   const policy = {
     id,

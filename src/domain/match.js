@@ -1,126 +1,86 @@
 import { createGameEngine } from "./game.js";
 import { mix32 } from "./match/policy-utils.js";
+import { defineCodec, shape as s } from "../codec.js";
 
 const MATCH_SNAPSHOT_SCHEMA_VERSION = 1;
 const UINT32_MAX = 0xffffffff;
-const MATCH_SNAPSHOT_KEYS = Object.freeze([
-  "schemaVersion",
-  "matchId",
-  "seed",
-  "matchTick",
-  "rulesetId",
-  "policyId",
-  "playerIds",
-  "status",
-  "result",
-  "players",
-  "policyState"
-]);
-const MATCH_PLAYER_SNAPSHOT_KEYS = Object.freeze(["id", "game"]);
-const POLICY_HOOKS = Object.freeze([
-  "validatePlayerIds",
-  "createState",
-  "beforeStep",
-  "onGameEvent",
-  "afterStep"
-]);
-const POLICY_STATE_HOOKS = Object.freeze(["snapshotState", "restoreState"]);
-
-function assertPlainObject(value, name) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) {
-    throw new Error(`${name} must be a plain object`);
-  }
-}
-
-function assertExactKeys(value, expectedKeys, name) {
-  assertPlainObject(value, name);
-  const expected = new Set(expectedKeys);
-  for (const key of Object.keys(value)) {
-    if (!expected.has(key)) throw new Error(`${name}.${key} is not supported`);
-  }
-  for (const key of expectedKeys) {
-    if (!Object.hasOwn(value, key)) throw new Error(`${name}.${key} is required`);
-  }
-}
-
-function assertNonEmptyString(value, name) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-}
-
-function assertSafeInteger(value, name, { minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER } = {}) {
-  if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
-    throw new Error(`${name} must be an integer between ${minimum} and ${maximum}`);
-  }
-}
+const nonEmptyString = s.string({ nonEmpty: true });
+const nonNegativeInteger = s.integer({ minimum: 0 });
+const uint32 = s.integer({ minimum: 0, maximum: UINT32_MAX });
+const jsonValue = s.json();
+const resultShape = s.discriminatedUnion("type", {
+  winner: s.object({
+    type: s.literal("winner"),
+    winnerId: nonEmptyString,
+    atMatchTick: nonNegativeInteger
+  }),
+  draw: s.object({
+    type: s.literal("draw"),
+    atMatchTick: nonNegativeInteger
+  }),
+  eliminated: s.object({
+    type: s.literal("eliminated"),
+    atMatchTick: nonNegativeInteger
+  })
+});
+const MATCH_RESULT_CODEC = defineCodec(resultShape);
+const PLAYER_IDS_CODEC = defineCodec(s.array(nonEmptyString, { minimumLength: 1 }));
+const MATCH_SNAPSHOT_CODEC = defineCodec(s.object({
+  schemaVersion: s.integer(),
+  matchId: nonEmptyString,
+  seed: uint32,
+  matchTick: nonNegativeInteger,
+  rulesetId: nonEmptyString,
+  policyId: nonEmptyString,
+  playerIds: s.array(nonEmptyString, { minimumLength: 1 }),
+  status: s.enum(["playing", "finished"]),
+  result: s.nullable(resultShape),
+  players: s.array(s.object({ id: nonEmptyString, game: jsonValue }), { minimumLength: 1 }),
+  policyState: jsonValue
+}));
+const LIVE_MATCH_CODEC = defineCodec(s.object({
+  id: nonEmptyString,
+  seed: uint32,
+  matchTick: nonNegativeInteger,
+  engine: s.unknown(),
+  rulesetId: nonEmptyString,
+  policy: s.unknown(),
+  policyId: nonEmptyString,
+  policyState: s.unknown(),
+  status: s.enum(["playing", "finished"]),
+  result: s.nullable(resultShape),
+  players: s.array(s.object({ id: nonEmptyString, game: s.unknown() }), { minimumLength: 1 })
+}));
+const POLICY_CODEC = defineCodec(s.object({
+  id: nonEmptyString,
+  validatePlayerIds: s.function(),
+  createState: s.function(),
+  beforeStep: s.function(),
+  onGameEvent: s.function(),
+  afterStep: s.function()
+}, { allowUnknown: true }));
+const POLICY_STATE_HOOKS_CODEC = defineCodec(s.object({
+  snapshotState: s.function(),
+  restoreState: s.function()
+}, { allowUnknown: true }));
+const JSON_VALUE_CODEC = defineCodec(jsonValue);
+const NON_EMPTY_STRING_CODEC = defineCodec(nonEmptyString);
 
 function normalizePlayerIds(playerIds, name = "playerIds") {
-  if (!Array.isArray(playerIds) || playerIds.length === 0) {
-    throw new Error(`${name} must contain at least one player`);
-  }
-  const normalized = Array.from(playerIds, (playerId, index) => {
-    assertNonEmptyString(playerId, `${name}[${index}]`);
-    return playerId;
-  });
+  const normalized = PLAYER_IDS_CODEC.parse(playerIds, name);
   if (new Set(normalized).size !== normalized.length) {
     throw new Error(`${name} must be unique`);
   }
   return normalized;
 }
 
-function assertJsonValue(value, name, seen = new WeakSet()) {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error(`${name} must contain only finite JSON numbers`);
-    return;
-  }
-  if (typeof value !== "object") throw new Error(`${name} must contain only JSON-safe values`);
-  if (seen.has(value)) throw new Error(`${name} must not contain circular references`);
-  seen.add(value);
-  if (Array.isArray(value)) {
-    for (let index = 0; index < value.length; index += 1) {
-      if (!Object.hasOwn(value, index)) throw new Error(`${name} must not contain sparse array entries`);
-      assertJsonValue(value[index], `${name}[${index}]`, seen);
-    }
-  } else {
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
-      throw new Error(`${name} must contain only plain JSON objects`);
-    }
-    for (const [key, entry] of Object.entries(value)) {
-      assertJsonValue(entry, `${name}.${key}`, seen);
-    }
-  }
-  seen.delete(value);
-}
-
-function cloneJsonValue(value) {
-  if (value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map(cloneJsonValue);
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneJsonValue(entry)]));
-}
-
 function assertPolicy(policy) {
-  if (!policy || typeof policy !== "object") throw new Error("match policy is required");
-  if (typeof policy.id !== "string" || policy.id.trim() === "") {
-    throw new Error("match policy id must be a non-empty string");
-  }
-  for (const hook of POLICY_HOOKS) {
-    if (typeof policy[hook] !== "function") throw new Error(`match policy.${hook} must be a function`);
-  }
+  if (!policy) throw new Error("match policy is required");
+  POLICY_CODEC.assert(policy, "match policy");
 }
 
 function assertPolicyStateHooks(policy) {
-  for (const hook of POLICY_STATE_HOOKS) {
-    if (typeof policy[hook] !== "function") {
-      throw new Error(`match policy.${hook} must be a function for match snapshots`);
-    }
-  }
+  POLICY_STATE_HOOKS_CODEC.assert(policy, "match policy");
 }
 
 function normalizeResult(result, status, playerIds, matchTick, name = "match snapshot.result") {
@@ -129,27 +89,12 @@ function normalizeResult(result, status, playerIds, matchTick, name = "match sna
     return null;
   }
   if (status !== "finished") throw new Error("match snapshot.status must be playing or finished");
-  assertPlainObject(result, name);
-  assertNonEmptyString(result.type, `${name}.type`);
-
-  let normalized;
-  if (result.type === "winner") {
-    assertExactKeys(result, ["type", "winnerId", "atMatchTick"], name);
-    assertNonEmptyString(result.winnerId, `${name}.winnerId`);
-    if (!playerIds.includes(result.winnerId)) throw new Error(`${name}.winnerId must identify a match player`);
-    normalized = { type: "winner", winnerId: result.winnerId, atMatchTick: result.atMatchTick };
-  } else if (result.type === "draw" || result.type === "eliminated") {
-    assertExactKeys(result, ["type", "atMatchTick"], name);
-    normalized = { type: result.type, atMatchTick: result.atMatchTick };
-  } else {
-    throw new Error(`${name}.type is unsupported: ${result.type}`);
+  const normalized = MATCH_RESULT_CODEC.parse(result, name);
+  if (normalized.type === "winner" && !playerIds.includes(normalized.winnerId)) {
+    throw new Error(`${name}.winnerId must identify a match player`);
   }
-
-  if (Object.hasOwn(normalized, "atMatchTick")) {
-    assertSafeInteger(normalized.atMatchTick, `${name}.atMatchTick`, { minimum: 0 });
-    if (matchTick === 0 || normalized.atMatchTick !== matchTick - 1) {
-      throw new Error(`${name}.atMatchTick must be the completed match tick ${matchTick - 1}`);
-    }
+  if (matchTick === 0 || normalized.atMatchTick !== matchTick - 1) {
+    throw new Error(`${name}.atMatchTick must be the completed match tick ${matchTick - 1}`);
   }
   return normalized;
 }
@@ -258,13 +203,12 @@ export function createMatch({
 }) {
   if (!rules) throw new Error("rules are required");
   assertPolicy(policy);
-  assertNonEmptyString(id, "match id");
+  NON_EMPTY_STRING_CODEC.assert(id, "match id");
   const normalizedPlayerIds = normalizePlayerIds(playerIds);
   policy.validatePlayerIds(Object.freeze([...normalizedPlayerIds]));
   const engine = createGameEngine(rules);
 
   return {
-    version: 2,
     id,
     seed: seed >>> 0,
     matchTick: 0,
@@ -317,11 +261,7 @@ export function getPlayerGame(match, playerId) {
 }
 
 export function snapshotMatch(match) {
-  assertPlainObject(match, "match");
-  assertNonEmptyString(match.id, "match.id");
-  assertSafeInteger(match.seed, "match.seed", { minimum: 0, maximum: UINT32_MAX });
-  assertSafeInteger(match.matchTick, "match.matchTick", { minimum: 0 });
-  assertNonEmptyString(match.rulesetId, "match.rulesetId");
+  LIVE_MATCH_CODEC.assert(match, "match");
   assertPolicy(match.policy);
   assertPolicyStateHooks(match.policy);
   if (match.policyId !== match.policy.id) throw new Error("match policy id does not match the bound policy");
@@ -345,10 +285,7 @@ export function snapshotMatch(match) {
     gameSnapshots
   });
   const serializedPolicyState = match.policy.snapshotState(match.policyState, context);
-  assertJsonValue(serializedPolicyState, "match policy snapshot");
-  const policyState = cloneJsonValue(serializedPolicyState);
-
-  return {
+  const snapshot = {
     schemaVersion: MATCH_SNAPSHOT_SCHEMA_VERSION,
     matchId: match.id,
     seed: match.seed,
@@ -359,43 +296,38 @@ export function snapshotMatch(match) {
     status: match.status,
     result,
     players,
-    policyState
+    policyState: serializedPolicyState
   };
+  return MATCH_SNAPSHOT_CODEC.parse(snapshot, "match snapshot");
 }
 
 export function restoreMatch(snapshot, { rules, policy } = {}) {
   if (!rules) throw new Error("rules are required to restore a match");
   assertPolicy(policy);
   assertPolicyStateHooks(policy);
-  assertExactKeys(snapshot, MATCH_SNAPSHOT_KEYS, "match snapshot");
-  if (snapshot.schemaVersion !== MATCH_SNAPSHOT_SCHEMA_VERSION) {
-    throw new Error(`Unsupported match snapshot schema: ${String(snapshot.schemaVersion)}`);
+  const decoded = MATCH_SNAPSHOT_CODEC.parse(snapshot, "match snapshot");
+  if (decoded.schemaVersion !== MATCH_SNAPSHOT_SCHEMA_VERSION) {
+    throw new Error(`Unsupported match snapshot schema: ${String(decoded.schemaVersion)}`);
   }
-  assertNonEmptyString(snapshot.matchId, "match snapshot.matchId");
-  assertSafeInteger(snapshot.seed, "match snapshot.seed", { minimum: 0, maximum: UINT32_MAX });
-  assertSafeInteger(snapshot.matchTick, "match snapshot.matchTick", { minimum: 0 });
-  assertNonEmptyString(snapshot.rulesetId, "match snapshot.rulesetId");
-  assertNonEmptyString(snapshot.policyId, "match snapshot.policyId");
 
   const engine = createGameEngine(rules);
-  if (snapshot.rulesetId !== engine.rulesetId) {
+  if (decoded.rulesetId !== engine.rulesetId) {
     throw new Error(
-      `Match snapshot ruleset mismatch: expected ${engine.rulesetId}, received ${String(snapshot.rulesetId)}`
+      `Match snapshot ruleset mismatch: expected ${engine.rulesetId}, received ${String(decoded.rulesetId)}`
     );
   }
-  if (snapshot.policyId !== policy.id) {
-    throw new Error(`Match snapshot policy mismatch: expected ${policy.id}, received ${String(snapshot.policyId)}`);
+  if (decoded.policyId !== policy.id) {
+    throw new Error(`Match snapshot policy mismatch: expected ${policy.id}, received ${String(decoded.policyId)}`);
   }
 
-  const playerIds = normalizePlayerIds(snapshot.playerIds, "match snapshot.playerIds");
+  const playerIds = normalizePlayerIds(decoded.playerIds, "match snapshot.playerIds");
   policy.validatePlayerIds(Object.freeze([...playerIds]));
-  if (!Array.isArray(snapshot.players) || snapshot.players.length !== playerIds.length) {
+  if (decoded.players.length !== playerIds.length) {
     throw new Error("match snapshot.players must contain exactly one entry per playerId");
   }
 
-  const restoredPlayers = Array.from(snapshot.players, (playerSnapshot, index) => {
+  const restoredPlayers = Array.from(decoded.players, (playerSnapshot, index) => {
     const path = `match snapshot.players[${index}]`;
-    assertExactKeys(playerSnapshot, MATCH_PLAYER_SNAPSHOT_KEYS, path);
     if (playerSnapshot.id !== playerIds[index]) {
       throw new Error(`${path}.id must match match snapshot.playerIds[${index}]`);
     }
@@ -403,19 +335,19 @@ export function restoreMatch(snapshot, { rules, policy } = {}) {
   });
   const validatedGameSnapshots = restoredPlayers.map((player) => engine.snapshot(player.game));
   for (const [index, gameSnapshot] of validatedGameSnapshots.entries()) {
-    if (gameSnapshot.stepTick > snapshot.matchTick) {
+    if (gameSnapshot.stepTick > decoded.matchTick) {
       throw new Error(`match snapshot.players[${index}].game.stepTick cannot exceed matchTick`);
     }
-    if (gameSnapshot.status === "playing" && gameSnapshot.stepTick !== snapshot.matchTick) {
+    if (gameSnapshot.status === "playing" && gameSnapshot.stepTick !== decoded.matchTick) {
       throw new Error(`match snapshot.players[${index}].game.stepTick must equal matchTick while playing`);
     }
   }
 
   const result = normalizeResult(
-    snapshot.result,
-    snapshot.status,
+    decoded.result,
+    decoded.status,
     playerIds,
-    snapshot.matchTick,
+    decoded.matchTick,
     "match snapshot.result"
   );
   if (result?.type === "winner") {
@@ -431,27 +363,25 @@ export function restoreMatch(snapshot, { rules, policy } = {}) {
     }
   }
   const context = makePolicySnapshotContext({
-    matchId: snapshot.matchId,
-    seed: snapshot.seed,
-    matchTick: snapshot.matchTick,
+    matchId: decoded.matchId,
+    seed: decoded.seed,
+    matchTick: decoded.matchTick,
     playerIds,
     gameSnapshots: validatedGameSnapshots
   });
-  assertJsonValue(snapshot.policyState, "match snapshot.policyState");
-  const policyState = policy.restoreState(cloneJsonValue(snapshot.policyState), context);
-  assertJsonValue(policy.snapshotState(policyState, context), "restored match policy state");
+  const policyState = policy.restoreState(decoded.policyState, context);
+  JSON_VALUE_CODEC.assert(policy.snapshotState(policyState, context), "restored match policy state");
 
   return {
-    version: 2,
-    id: snapshot.matchId,
-    seed: snapshot.seed,
-    matchTick: snapshot.matchTick,
+    id: decoded.matchId,
+    seed: decoded.seed,
+    matchTick: decoded.matchTick,
     engine,
     rulesetId: engine.rulesetId,
     policy,
     policyId: policy.id,
     policyState,
-    status: snapshot.status,
+    status: decoded.status,
     result: result === null ? null : Object.freeze(result),
     players: restoredPlayers
   };

@@ -15,10 +15,8 @@ export const CLASSIC_RULESET = defineRules({
   sculpting: { carveLimit: 2, minimumCells: 1, scrapPerCarve: 1, fillCost: 2 },
   progression: {
     linesPerLevel: 5,
-    gravityStartWorldTicks: 20,
-    gravityStepWorldTicks: 2,
-    gravityMinimumWorldTicks: 6,
-    gravityCurve: {
+    gravity: {
+      type: "curve",
       points: [
         { level: 1, worldTicks: 20 },
         { level: 2, worldTicks: 18 },
@@ -33,10 +31,13 @@ export const CLASSIC_RULESET = defineRules({
         { level: 99, worldTicks: 6 }
       ]
     },
-    spawnStartWorldTicks: 480,
-    spawnStepWorldTicks: 0,
-    spawnMinimumWorldTicks: 150,
-    spawnCurve: { endLevel: 99, easeOutExponentMilli: 1500 },
+    spawn: {
+      type: "curve",
+      start: 480,
+      min: 150,
+      endLevel: 99,
+      easeOutExponentMilli: 1500
+    },
     dropQueueDepth: 2
   },
   scoring: { lineClear: [0, 100, 300, 500, 800], carve: 5, fill: 10 },

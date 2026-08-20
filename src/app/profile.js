@@ -5,6 +5,7 @@ import {
   PROFILE_SCHEMA_VERSION,
   PROFILE_STORAGE_KEY
 } from "../config.js";
+import { defineCodec, shape as s } from "../codec.js";
 
 export const ACHIEVEMENTS = Object.freeze({
   firstCut: Object.freeze({
@@ -25,6 +26,30 @@ export const ACHIEVEMENTS = Object.freeze({
 });
 
 const SINGLEPLAYER_MODE_IDS = Object.freeze(SINGLEPLAYER_CATALOG.map((mode) => mode.id));
+const nonEmptyString = s.string({ nonEmpty: true });
+const keybindingShape = s.object(Object.fromEntries(
+  Object.keys(DEFAULT_KEYBINDINGS).map((action) => [action, nonEmptyString])
+));
+const achievementIds = Object.values(ACHIEVEMENTS).map((achievement) => achievement.id);
+const PROFILE_CODEC = defineCodec(s.object({
+  schemaVersion: s.literal(PROFILE_SCHEMA_VERSION),
+  highScores: s.record(s.integer({ minimum: 0 }), { key: nonEmptyString }),
+  achievements: s.record(s.object({
+    unlocked: s.literal(true),
+    unlockedAt: nonEmptyString
+  }), { key: s.enum(achievementIds) }),
+  settings: s.object({
+    theme: nonEmptyString,
+    keybindings: keybindingShape,
+    audio: s.object({
+      masterVolume: s.number({ minimum: 0, maximum: 1 }),
+      musicVolume: s.number({ minimum: 0, maximum: 1 }),
+      sfxVolume: s.number({ minimum: 0, maximum: 1 }),
+      musicEnabled: s.boolean(),
+      sfxEnabled: s.boolean()
+    })
+  })
+}));
 
 function createDefaultHighScores() {
   return Object.fromEntries(SINGLEPLAYER_MODE_IDS.map((modeId) => [modeId, 0]));
@@ -57,60 +82,9 @@ function safeParse(text) {
   }
 }
 
-function isPlainObject(value) {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function hasExactKeys(value, keys) {
-  if (!isPlainObject(value)) return false;
-  const actual = Object.keys(value);
-  return actual.length === keys.length && keys.every((key) => Object.hasOwn(value, key));
-}
-
-function isCurrentProfileData(value) {
-  if (!hasExactKeys(value, ["schemaVersion", "highScores", "achievements", "settings"])) return false;
-  if (value.schemaVersion !== PROFILE_SCHEMA_VERSION) return false;
-
-  if (!isPlainObject(value.highScores)) return false;
-  for (const [modeId, score] of Object.entries(value.highScores)) {
-    if (modeId.trim() === "" || !Number.isSafeInteger(score) || score < 0) return false;
-  }
-
-  if (!isPlainObject(value.achievements)) return false;
-  const achievementIds = new Set(Object.values(ACHIEVEMENTS).map((achievement) => achievement.id));
-  for (const [achievementId, achievement] of Object.entries(value.achievements)) {
-    if (!achievementIds.has(achievementId)) return false;
-    if (!hasExactKeys(achievement, ["unlocked", "unlockedAt"])) return false;
-    if (achievement.unlocked !== true) return false;
-    if (typeof achievement.unlockedAt !== "string" || achievement.unlockedAt === "") return false;
-  }
-
-  if (!hasExactKeys(value.settings, ["theme", "keybindings", "audio"])) return false;
-  if (typeof value.settings.theme !== "string" || value.settings.theme === "") return false;
-
-  const keybindingActions = Object.keys(DEFAULT_KEYBINDINGS);
-  if (!hasExactKeys(value.settings.keybindings, keybindingActions)) return false;
-  if (!Object.values(value.settings.keybindings).every((code) => typeof code === "string" && code !== "")) {
-    return false;
-  }
-
-  const audio = value.settings.audio;
-  if (!hasExactKeys(audio, ["masterVolume", "musicVolume", "sfxVolume", "musicEnabled", "sfxEnabled"])) {
-    return false;
-  }
-  for (const setting of ["masterVolume", "musicVolume", "sfxVolume"]) {
-    if (!Number.isFinite(audio[setting]) || audio[setting] < 0 || audio[setting] > 1) return false;
-  }
-  return typeof audio.musicEnabled === "boolean" && typeof audio.sfxEnabled === "boolean";
-}
-
-function cloneData(data) {
-  return JSON.parse(JSON.stringify(data));
-}
-
 function normalizeCurrentProfileData(value) {
-  if (!isCurrentProfileData(value)) return null;
-  const data = cloneData(value);
+  const data = PROFILE_CODEC.tryParse(value, "profile");
+  if (!data) return null;
   for (const modeId of SINGLEPLAYER_MODE_IDS) {
     if (!Object.hasOwn(data.highScores, modeId)) data.highScores[modeId] = 0;
   }
@@ -136,7 +110,7 @@ export function createProfileStore(storage) {
   function persist() {
     try {
       if (typeof storage?.setItem !== "function") return;
-      storage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(data));
+      storage.setItem(PROFILE_STORAGE_KEY, PROFILE_CODEC.stringify(data, "profile"));
     } catch {
       // Persistence is optional; the in-memory profile still works.
     }
@@ -213,7 +187,7 @@ export function createProfileStore(storage) {
 
   return {
     getSnapshot() {
-      return cloneData(data);
+      return PROFILE_CODEC.parse(data, "profile");
     },
     getHighScore(modeId) {
       return data.highScores[modeId] || 0;
