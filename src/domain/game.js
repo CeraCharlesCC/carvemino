@@ -100,7 +100,7 @@ export function createGameEngine(rules) {
   return Object.freeze(engine);
 }
 
-export class GameSession {
+class GameSession {
   constructor({ rules, seed = 1 } = {}) {
     this.engine = createGameEngine(rules);
     this.seed = seed >>> 0;
@@ -133,14 +133,6 @@ export class GameSession {
 
   hash() {
     return this.engine.hash(this.game);
-  }
-
-  queueGarbage(packet) {
-    return this.engine.queueGarbage(this.game, packet);
-  }
-
-  cancelIncomingGarbage(rows) {
-    return this.engine.cancelIncomingGarbage(this.game, rows);
   }
 
   exportReplay() {
