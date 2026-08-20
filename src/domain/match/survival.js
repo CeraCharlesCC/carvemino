@@ -1,4 +1,4 @@
-import { mix32 } from "./policy-utils.js";
+import { mix32 } from "../hash.js";
 import { defineCodec, shape as s } from "../../codec.js";
 
 const nonEmptyString = s.string({ nonEmpty: true });

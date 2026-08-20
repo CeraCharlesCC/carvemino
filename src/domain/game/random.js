@@ -1,8 +1,7 @@
+import { mix32 } from "../hash.js";
+
 export function hashSeed(seed, salt) {
-  let x = (seed ^ salt) >>> 0;
-  x = Math.imul(x ^ (x >>> 16), 0x7feb352d);
-  x = Math.imul(x ^ (x >>> 15), 0x846ca68b);
-  return (x ^ (x >>> 16)) >>> 0 || 1;
+  return mix32(seed ^ salt) || 1;
 }
 
 function nextRandomU32(stream) {

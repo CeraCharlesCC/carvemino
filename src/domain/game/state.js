@@ -5,6 +5,7 @@ import {
   getBoardCell
 } from "./model.js";
 import { hashSeed } from "./random.js";
+import { hashJson32Hex } from "../hash.js";
 import { parseGeneratedPieceNumber } from "./piece-id.js";
 import { getEditableFillCells } from "./sculpt.js";
 import { maintainDropQueue } from "./drop-planner.js";
@@ -451,13 +452,7 @@ export function restoreGameState(snapshot, rules) {
 }
 
 export function hashGameState(state) {
-  const text = JSON.stringify(snapshotGameState(state));
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
+  return hashJson32Hex(snapshotGameState(state));
 }
 
 export function assertGameState(state) {

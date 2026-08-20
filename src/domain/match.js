@@ -1,5 +1,5 @@
 import { createGameEngine } from "./game.js";
-import { mix32 } from "./match/policy-utils.js";
+import { hashJson32Hex, mix32 } from "./hash.js";
 import { defineCodec, shape as s } from "../codec.js";
 
 const MATCH_SNAPSHOT_SCHEMA_VERSION = 1;
@@ -107,16 +107,6 @@ function makePolicySnapshotContext({ matchId, seed, matchTick, playerIds, gameSn
     playerIds: Object.freeze([...playerIds]),
     gameSnapshots: Object.freeze(gameSnapshots.map((game) => game))
   });
-}
-
-function hashSnapshot(snapshot) {
-  const text = JSON.stringify(snapshot);
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function playerById(match, playerId) {
@@ -388,5 +378,5 @@ export function restoreMatch(snapshot, { rules, policy } = {}) {
 }
 
 export function hashMatch(match) {
-  return hashSnapshot(snapshotMatch(match));
+  return hashJson32Hex(snapshotMatch(match));
 }
