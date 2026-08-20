@@ -6,7 +6,7 @@ import {
   decodeSessionDescription,
   encodeSessionDescription
 } from "../src/adapters/webrtc.js";
-import { createMessage, encodeMessage } from "../src/app/protocol.js";
+import { PROTOCOL_VERSION, createMessage, encodeMessage } from "../src/app/protocol.js";
 
 class FakeEventTarget {
   constructor() {
@@ -163,6 +163,26 @@ test("WebRTC message dispatch does not replay one packet into handlers added dur
 
   connection.channel.emit("message", { data: wire });
   assert.deepEqual(received, ["lobby", "runtime"]);
+});
+
+test("WebRTC validates untrusted wire messages before dispatching structured messages", () => {
+  const connection = new FakePeerConnection();
+  const transport = new WebRtcPeerTransport({
+    initiator: true,
+    peerConnectionFactory: () => connection
+  });
+  const received = [];
+  const errors = [];
+  transport.onMessage((message) => received.push(message));
+  transport.onError((error) => errors.push(error));
+
+  connection.channel.emit("message", {
+    data: JSON.stringify({ v: PROTOCOL_VERSION, type: "ready", payload: { playerId: "" } })
+  });
+
+  assert.deepEqual(received, []);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /playerId/);
 });
 
 test("closing WebRTC transport aborts pending ICE gathering", async () => {

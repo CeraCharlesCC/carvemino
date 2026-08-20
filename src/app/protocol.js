@@ -134,16 +134,14 @@ const PAYLOAD_CODECS = Object.freeze({
 const MESSAGE_ENVELOPE_CODEC = defineCodec(s.object({
   v: s.integer(),
   type: s.string({ nonEmpty: true }),
-  seq: s.optional(s.unknown()),
-  matchTick: s.optional(s.unknown()),
+  seq: s.optional(sequenceShape),
+  matchTick: s.optional(matchTickShape),
   payload: s.unknown()
 }));
 const MESSAGE_FIELDS_CODEC = defineCodec(s.object({
-  seq: s.optional(s.unknown()),
-  matchTick: s.optional(s.unknown())
+  seq: s.optional(sequenceShape),
+  matchTick: s.optional(matchTickShape)
 }));
-const SEQUENCE_CODEC = defineCodec(sequenceShape);
-const MATCH_TICK_CODEC = defineCodec(matchTickShape);
 
 export function validateGameplayCommand(command) {
   GAMEPLAY_COMMAND_CODEC.assert(command, "Gameplay command");
@@ -194,44 +192,45 @@ function normalizeRoster(playerIds) {
   return Object.freeze(PLAYER_IDS_CODEC.parse(playerIds, "Protocol negotiated playerIds"));
 }
 
+function parseStructuredMessage(message) {
+  const normalized = MESSAGE_ENVELOPE_CODEC.parse(message, "Protocol message");
+  if (normalized.v !== PROTOCOL_VERSION) {
+    throw new Error(`Unsupported protocol version: ${normalized.v}`);
+  }
+  if (!MESSAGE_TYPES.has(normalized.type)) {
+    throw new Error(`Unknown protocol message type: ${normalized.type}`);
+  }
+  if (SEQUENCED_MESSAGE_TYPES.has(normalized.type) && normalized.seq === undefined) {
+    throw new Error(`Protocol ${normalized.type} message.seq is required`);
+  }
+  if (TICKED_MESSAGE_TYPES.has(normalized.type) && normalized.matchTick === undefined) {
+    throw new Error(`Protocol ${normalized.type} message.matchTick is required`);
+  }
+
+  PAYLOAD_CODECS[normalized.type].assert(normalized.payload, `Protocol ${normalized.type} payload`);
+  if (normalized.type === "match-snapshot" && normalized.payload.snapshot.matchTick !== normalized.matchTick) {
+    throw new Error("Protocol match-snapshot matchTick must match payload.snapshot.matchTick");
+  }
+  return normalized;
+}
+
+// Validation ownership is intentionally split by trust boundary:
+// - createMessage validates locally constructed structured messages once.
+// - decodeMessage validates untrusted wire text and returns a trusted structured message.
+// - encodeMessage only serializes trusted structured messages; it does not validate again.
+// - context/stream validators enforce negotiated roster and ordering constraints on trusted messages.
 export function createMessage(type, payload, fields = {}) {
   if (!MESSAGE_TYPES.has(type)) throw new Error(`Unknown protocol message type: ${type}`);
   const normalizedFields = MESSAGE_FIELDS_CODEC.parse(fields, "Protocol message fields");
-  if (normalizedFields.seq !== undefined) SEQUENCE_CODEC.assert(normalizedFields.seq, "Protocol seq");
-  if (normalizedFields.matchTick !== undefined) {
-    MATCH_TICK_CODEC.assert(normalizedFields.matchTick, "Protocol matchTick");
-  }
-  const message = {
+  return parseStructuredMessage({
     v: PROTOCOL_VERSION,
     type,
     ...normalizedFields,
     payload
-  };
-  validateMessage(message);
-  return MESSAGE_ENVELOPE_CODEC.parse(message, "Protocol message");
+  });
 }
 
-export function validateMessage(message, { playerIds = null } = {}) {
-  MESSAGE_ENVELOPE_CODEC.assert(message, "Protocol message");
-  if (message.seq !== undefined) SEQUENCE_CODEC.assert(message.seq, "Protocol seq");
-  if (message.matchTick !== undefined) MATCH_TICK_CODEC.assert(message.matchTick, "Protocol matchTick");
-  if (message.v !== PROTOCOL_VERSION) {
-    throw new Error(`Unsupported protocol version: ${message.v}`);
-  }
-  if (!MESSAGE_TYPES.has(message.type)) {
-    throw new Error(`Unknown protocol message type: ${message.type}`);
-  }
-  if (SEQUENCED_MESSAGE_TYPES.has(message.type) && message.seq === undefined) {
-    throw new Error(`Protocol ${message.type} message.seq is required`);
-  }
-  if (TICKED_MESSAGE_TYPES.has(message.type) && message.matchTick === undefined) {
-    throw new Error(`Protocol ${message.type} message.matchTick is required`);
-  }
-
-  PAYLOAD_CODECS[message.type].assert(message.payload, `Protocol ${message.type} payload`);
-  if (message.type === "match-snapshot" && message.payload.snapshot.matchTick !== message.matchTick) {
-    throw new Error("Protocol match-snapshot matchTick must match payload.snapshot.matchTick");
-  }
+export function validateMessageContext(message, { playerIds = null } = {}) {
   validateRosterRouting(message, normalizeRoster(playerIds));
   return message;
 }
@@ -246,7 +245,7 @@ export function createProtocolStreamValidator({ playerIds = null } = {}) {
   }
 
   function validate(message) {
-    validateMessage(message, { playerIds: roster });
+    validateRosterRouting(message, roster);
 
     if (message.seq !== undefined && message.seq <= lastSequence) {
       throw new Error(`Protocol seq must increase monotonically after ${lastSequence}`);
@@ -265,23 +264,17 @@ export function createProtocolStreamValidator({ playerIds = null } = {}) {
     return message;
   }
 
-  function decode(text) {
-    return validate(decodeMessage(text));
-  }
-
-  return Object.freeze({ validate, decode, setPlayerIds });
+  return Object.freeze({ validate, setPlayerIds });
 }
 
 export function encodeMessage(message) {
-  validateMessage(message);
-  return MESSAGE_ENVELOPE_CODEC.stringify(message, "Protocol message");
+  return JSON.stringify(message);
 }
 
-export function decodeMessage(text, options = {}) {
+export function decodeMessage(text) {
   if (typeof text !== "string") throw new Error("Protocol data must be text");
   if (text.length > PROTOCOL_LIMITS.maxTextLength) {
     throw new Error(`Protocol data exceeds ${PROTOCOL_LIMITS.maxTextLength} characters`);
   }
-  const message = MESSAGE_ENVELOPE_CODEC.parse(JSON.parse(text), "Protocol message");
-  return validateMessage(message, options);
+  return parseStructuredMessage(JSON.parse(text));
 }

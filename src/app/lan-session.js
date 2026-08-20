@@ -263,7 +263,6 @@ export class LanSession {
   handleMessage(message) {
     if (TERMINAL_SESSION_STATES.has(this.state)) return;
     try {
-      validateMessage(message);
       if (this.role === "host") this.handleHostMessage(message);
       else if (this.role === "client") this.handleClientMessage(message);
     } catch (error) {

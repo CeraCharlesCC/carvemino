@@ -3,7 +3,7 @@ import {
   createMessage,
   createProtocolStreamValidator,
   validateGameplayCommand,
-  validateMessage
+  validateMessageContext
 } from "./protocol.js";
 import {
   getPlayerGame,
@@ -225,7 +225,7 @@ export class NetworkMatchRuntime {
   }
 
   sendMessage(message) {
-    validateMessage(message, { playerIds: this.playerIds });
+    validateMessageContext(message, { playerIds: this.playerIds });
     let sent;
     try {
       sent = this.transport.send(message);

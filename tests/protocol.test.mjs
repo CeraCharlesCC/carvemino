@@ -9,7 +9,7 @@ import {
   decodeMessage,
   encodeMessage,
   validateGameplayCommand,
-  validateMessage
+  validateMessageContext
 } from "../src/app/protocol.js";
 
 const TICKED_TYPES = new Set(["input", "input-frame", "match-hash", "match-snapshot"]);
@@ -21,6 +21,10 @@ function rawMessage(type, payload, fields = {}) {
     ...fields,
     payload
   };
+}
+
+function decodeRaw(message) {
+  return decodeMessage(JSON.stringify(message));
 }
 
 function requiredFields(type, overrides = {}) {
@@ -87,22 +91,22 @@ test("protocol validates payload contracts for every message type", () => {
 
 test("authoritative gameplay messages require bounded sequence and match tick fields", () => {
   assert.throws(
-    () => validateMessage(rawMessage("input", VALID_PAYLOADS.input, { matchTick: 12 })),
+    () => decodeRaw(rawMessage("input", VALID_PAYLOADS.input, { matchTick: 12 })),
     /input message\.seq is required/
   );
   assert.throws(
-    () => validateMessage(rawMessage("input-frame", VALID_PAYLOADS["input-frame"], { seq: 2 })),
+    () => decodeRaw(rawMessage("input-frame", VALID_PAYLOADS["input-frame"], { seq: 2 })),
     /input-frame message\.matchTick is required/
   );
   assert.throws(
-    () => validateMessage(rawMessage("match-hash", VALID_PAYLOADS["match-hash"], {
+    () => decodeRaw(rawMessage("match-hash", VALID_PAYLOADS["match-hash"], {
       seq: 2,
       matchTick: PROTOCOL_LIMITS.maxMatchTick + 1
     })),
-    /Protocol matchTick/
+    /Protocol message\.matchTick/
   );
   assert.throws(
-    () => validateMessage(rawMessage("leave", VALID_PAYLOADS.leave)),
+    () => decodeRaw(rawMessage("leave", VALID_PAYLOADS.leave)),
     /leave message\.seq is required/
   );
 });
@@ -128,7 +132,7 @@ test("gameplay commands are strict tagged objects", () => {
 
 test("protocol rejects malformed envelopes and reserved field injection", () => {
   assert.throws(
-    () => validateMessage({ ...rawMessage("ready", VALID_PAYLOADS.ready), extra: true }),
+    () => decodeRaw({ ...rawMessage("ready", VALID_PAYLOADS.ready), extra: true }),
     /Protocol message\.extra is not supported/
   );
   assert.throws(
@@ -136,11 +140,11 @@ test("protocol rejects malformed envelopes and reserved field injection", () => 
     /Protocol message fields\.type is not supported/
   );
   assert.throws(
-    () => validateMessage(rawMessage("ready", VALID_PAYLOADS.ready, { seq: Number.MAX_SAFE_INTEGER + 1 })),
-    /Protocol seq/
+    () => decodeRaw(rawMessage("ready", VALID_PAYLOADS.ready, { seq: Number.MAX_SAFE_INTEGER + 1 })),
+    /Protocol message\.seq/
   );
   assert.throws(
-    () => validateMessage({ ...rawMessage("ready", VALID_PAYLOADS.ready), v: PROTOCOL_VERSION - 1 }),
+    () => decodeRaw({ ...rawMessage("ready", VALID_PAYLOADS.ready), v: PROTOCOL_VERSION - 1 }),
     /Unsupported protocol version/
   );
 });
@@ -199,7 +203,7 @@ test("protocol rejects hostile payloads before handing messages to transport con
 
   for (const [name, type, payload, expected] of cases) {
     assert.throws(
-      () => validateMessage(rawMessage(type, payload, requiredFields(type))),
+      () => decodeRaw(rawMessage(type, payload, requiredFields(type))),
       expected,
       name
     );
@@ -208,29 +212,29 @@ test("protocol rejects hostile payloads before handing messages to transport con
 
 test("roster-aware validation rejects wrong-player routing", () => {
   const playerIds = ["p1", "p2"];
-  assert.doesNotThrow(() => validateMessage(
-    rawMessage("input", VALID_PAYLOADS.input, requiredFields("input")),
+  assert.doesNotThrow(() => validateMessageContext(
+    decodeRaw(rawMessage("input", VALID_PAYLOADS.input, requiredFields("input"))),
     { playerIds }
   ));
   assert.throws(
-    () => validateMessage(
-      rawMessage("input", { playerId: "intruder", commands: [] }, requiredFields("input")),
+    () => validateMessageContext(
+      decodeRaw(rawMessage("input", { playerId: "intruder", commands: [] }, requiredFields("input"))),
       { playerIds }
     ),
     /not in the negotiated player roster/
   );
   assert.throws(
-    () => validateMessage(
-      rawMessage("input-frame", {
+    () => validateMessageContext(
+      decodeRaw(rawMessage("input-frame", {
         commandsByPlayer: { p1: [], intruder: [] }
-      }, requiredFields("input-frame")),
+      }, requiredFields("input-frame"))),
       { playerIds }
     ),
     /must match the negotiated player roster/
   );
   assert.throws(
-    () => validateMessage(
-      rawMessage("match-start", { ...VALID_PAYLOADS["match-start"], playerIds: ["p2", "p1"] }),
+    () => validateMessageContext(
+      decodeRaw(rawMessage("match-start", { ...VALID_PAYLOADS["match-start"], playerIds: ["p2", "p1"] })),
       { playerIds }
     ),
     /must match the negotiated player roster/
@@ -239,26 +243,33 @@ test("roster-aware validation rejects wrong-player routing", () => {
 
 test("stream validation rejects duplicate or stale sequences and gameplay ticks", () => {
   const stream = createProtocolStreamValidator({ playerIds: ["p1", "p2"] });
-  const first = rawMessage("input", { playerId: "p2", commands: [] }, { seq: 10, matchTick: 20 });
+  const first = createMessage("input", { playerId: "p2", commands: [] }, { seq: 10, matchTick: 20 });
   assert.equal(stream.validate(first), first);
 
   assert.throws(
-    () => stream.validate(rawMessage("input", { playerId: "p2", commands: [] }, { seq: 11, matchTick: 20 })),
+    () => stream.validate(createMessage("input", { playerId: "p2", commands: [] }, { seq: 11, matchTick: 20 })),
     /matchTick must increase monotonically/
   );
   assert.doesNotThrow(
-    () => stream.validate(rawMessage("input", { playerId: "p2", commands: [] }, { seq: 11, matchTick: 21 }))
+    () => stream.validate(createMessage("input", { playerId: "p2", commands: [] }, { seq: 11, matchTick: 21 }))
   );
   assert.throws(
-    () => stream.validate(rawMessage("input", { playerId: "p2", commands: [] }, { seq: 10, matchTick: 22 })),
+    () => stream.validate(createMessage("input", { playerId: "p2", commands: [] }, { seq: 10, matchTick: 22 })),
     /seq must increase monotonically/
   );
+});
+
+test("wire decoding owns structural validation while encoding trusts structured messages", () => {
+  const malformed = rawMessage("ready", { playerId: "" });
+  const encoded = encodeMessage(malformed);
+  assert.equal(encoded, JSON.stringify(malformed));
+  assert.throws(() => decodeMessage(encoded), /playerId/);
 });
 
 test("match snapshots are size bounded and tied to their envelope tick", () => {
   const payload = VALID_PAYLOADS["match-snapshot"];
   assert.throws(
-    () => validateMessage(rawMessage("match-snapshot", payload, { seq: 1, matchTick: 13 })),
+    () => decodeRaw(rawMessage("match-snapshot", payload, { seq: 1, matchTick: 13 })),
     /matchTick must match payload\.snapshot\.matchTick/
   );
 
@@ -269,7 +280,7 @@ test("match snapshots are size bounded and tied to their envelope tick", () => {
     }
   };
   assert.throws(
-    () => validateMessage(rawMessage("match-snapshot", oversized, { seq: 1, matchTick: 12 })),
+    () => decodeRaw(rawMessage("match-snapshot", oversized, { seq: 1, matchTick: 12 })),
     /exceeds/
   );
 });
