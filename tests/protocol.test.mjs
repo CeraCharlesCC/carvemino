@@ -118,25 +118,21 @@ test("protocol accepts multiplayer rosters and frames with more than two players
 });
 
 test("authoritative gameplay messages require bounded sequence and match tick fields", () => {
-  assert.throws(
-    () => decodeRaw(rawMessage("input", VALID_PAYLOADS.input, { matchTick: 12 })),
-    /input message\.seq is required/
-  );
-  assert.throws(
-    () => decodeRaw(rawMessage("input-frame", VALID_PAYLOADS["input-frame"], { seq: 2 })),
-    /input-frame message\.matchTick is required/
-  );
-  assert.throws(
-    () => decodeRaw(rawMessage("match-hash", VALID_PAYLOADS["match-hash"], {
-      seq: 2,
-      matchTick: PROTOCOL_LIMITS.maxMatchTick + 1
-    })),
-    /Protocol message\.matchTick/
-  );
-  assert.throws(
-    () => decodeRaw(rawMessage("leave", VALID_PAYLOADS.leave)),
-    /leave message\.seq is required/
-  );
+  const cases = [
+    ["input missing sequence", "input", { matchTick: 12 }, /input message\.seq is required/],
+    ["frame missing match tick", "input-frame", { seq: 2 }, /input-frame message\.matchTick is required/],
+    [
+      "match tick exceeds limit",
+      "match-hash",
+      { seq: 2, matchTick: PROTOCOL_LIMITS.maxMatchTick + 1 },
+      /Protocol message\.matchTick/
+    ],
+    ["leave missing sequence", "leave", {}, /leave message\.seq is required/]
+  ];
+
+  for (const [name, type, fields, expected] of cases) {
+    assert.throws(() => decodeRaw(rawMessage(type, VALID_PAYLOADS[type], fields)), expected, name);
+  }
 });
 
 test("gameplay commands are strict tagged objects", () => {
@@ -159,22 +155,32 @@ test("gameplay commands are strict tagged objects", () => {
 });
 
 test("protocol rejects malformed envelopes and reserved field injection", () => {
-  assert.throws(
-    () => decodeRaw({ ...rawMessage("ready", VALID_PAYLOADS.ready), extra: true }),
-    /Protocol message\.extra is not supported/
-  );
-  assert.throws(
-    () => createMessage("ready", VALID_PAYLOADS.ready, { type: "input" }),
-    /Protocol message fields\.type is not supported/
-  );
-  assert.throws(
-    () => decodeRaw(rawMessage("ready", VALID_PAYLOADS.ready, { seq: Number.MAX_SAFE_INTEGER + 1 })),
-    /Protocol message\.seq/
-  );
-  assert.throws(
-    () => decodeRaw({ ...rawMessage("ready", VALID_PAYLOADS.ready), v: PROTOCOL_VERSION - 1 }),
-    /Unsupported protocol version/
-  );
+  const cases = [
+    [
+      "unknown envelope field",
+      () => decodeRaw({ ...rawMessage("ready", VALID_PAYLOADS.ready), extra: true }),
+      /Protocol message\.extra is not supported/
+    ],
+    [
+      "reserved create field",
+      () => createMessage("ready", VALID_PAYLOADS.ready, { type: "input" }),
+      /Protocol message fields\.type is not supported/
+    ],
+    [
+      "unsafe sequence integer",
+      () => decodeRaw(rawMessage("ready", VALID_PAYLOADS.ready, { seq: Number.MAX_SAFE_INTEGER + 1 })),
+      /Protocol message\.seq/
+    ],
+    [
+      "unsupported version",
+      () => decodeRaw({ ...rawMessage("ready", VALID_PAYLOADS.ready), v: PROTOCOL_VERSION - 1 }),
+      /Unsupported protocol version/
+    ]
+  ];
+
+  for (const [name, action, expected] of cases) {
+    assert.throws(action, expected, name);
+  }
 });
 
 test("protocol rejects hostile payloads before handing messages to transport consumers", () => {

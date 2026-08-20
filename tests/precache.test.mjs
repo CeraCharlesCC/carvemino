@@ -6,6 +6,15 @@ import test from "node:test";
 
 import { generatePrecacheManifest } from "../scripts/generate-precache.mjs";
 
+test("service worker consumes the generated versioned precache manifest", async () => {
+  const serviceWorker = await readFile(new URL("../sw.js", import.meta.url), "utf8");
+  assert.match(serviceWorker, /importScripts\("\.\/precache-manifest\.js"\)/);
+  assert.match(serviceWorker, /const CACHE_PREFIX = "carvemino-shell-"/);
+  assert.match(serviceWorker, /`\$\{CACHE_PREFIX\}\$\{PRECACHE\.version\}`/);
+  assert.match(serviceWorker, /PRECACHE\.urls/);
+  assert.doesNotMatch(serviceWorker, /\.\/src\/ui\/gamepad-input\.js/);
+});
+
 test("precache manifest is generated from the staged site graph and content-versioned", async (t) => {
   const site = await mkdtemp(path.join(tmpdir(), "carvemino-precache-"));
   t.after(() => rm(site, { recursive: true, force: true }));

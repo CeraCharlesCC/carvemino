@@ -31,6 +31,7 @@ import {
   getManualDemoTarget,
   performManualDemoAction
 } from "../src/ui/startup-manual.js";
+import { replaceGlobal } from "./helpers/globals.mjs";
 
 function createPointerControl(actionId) {
   const pressed = new Set();
@@ -139,6 +140,43 @@ function createNavigationDom() {
     }
   };
   return { document, documentHandlers, elements, screensByName, window, windowHandlers };
+}
+
+function installNavigationGlobals(t) {
+  const dom = createNavigationDom();
+  replaceGlobal(t, "document", dom.document);
+  replaceGlobal(t, "window", dom.window);
+  replaceGlobal(t, "requestAnimationFrame", (callback) => {
+    callback();
+    return 1;
+  });
+  return dom;
+}
+
+function createTestNavigation({ gameScreen = {}, ...options } = {}) {
+  return createNavigation({
+    attract: { start() {}, stop() {} },
+    gameScreen: {
+      getContext: () => ({ kind: "singleplayer" }),
+      getStatus: () => "playing",
+      handleKey() {},
+      performAction() { return true; },
+      refreshLayout() {},
+      ...gameScreen
+    },
+    profileUi: {
+      getKeybindings: () => ({}),
+      handleBindingKey: () => false,
+      renderOptions() {}
+    },
+    restart() {},
+    quitGame() {},
+    pauseGame() {},
+    resumeGame() {},
+    onAudioEvent() {},
+    onScreenChange() {},
+    ...options
+  });
 }
 
 test("title screen keyboard actions are explicit and do not use selection keys", () => {
@@ -313,15 +351,6 @@ test("title start prompt hides non-keyboard hints before input mode initializes"
   assert.match(css, /\.start-button \[data-input-hint="touch"\],\s*\.start-button \[data-input-hint="controller"\]\s*\{\s*display:\s*none;/);
 });
 
-test("service worker consumes the generated versioned precache manifest", () => {
-  const serviceWorker = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
-  assert.match(serviceWorker, /importScripts\("\.\/precache-manifest\.js"\)/);
-  assert.match(serviceWorker, /const CACHE_PREFIX = "carvemino-shell-"/);
-  assert.match(serviceWorker, /`\$\{CACHE_PREFIX\}\$\{PRECACHE\.version\}`/);
-  assert.match(serviceWorker, /PRECACHE\.urls/);
-  assert.doesNotMatch(serviceWorker, /\.\/src\/ui\/gamepad-input\.js/);
-});
-
 test("title start prompt blinks by default but stops when a secondary item is selected", () => {
   const css = readFileSync(new URL("../styles/screens/attract.css", import.meta.url), "utf8");
   assert.match(css, /\.start-button span\s*\{[^}]*animation:\s*start-blink 1\.05s steps\(1, end\) infinite;/s);
@@ -335,159 +364,83 @@ test("multiplayer menus never pause one peer and exit back to LAN", () => {
   assert.equal(getGameExitScreen({ kind: "multiplayer" }), "lan");
 });
 
-test("leaving the game screen clears a multiplayer match menu before the next match", () => {
-  const previousDocument = globalThis.document;
-  const previousWindow = globalThis.window;
-  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const dom = createNavigationDom();
+test("leaving the game screen clears a multiplayer match menu before the next match", (t) => {
+  const dom = installNavigationGlobals(t);
   const performedActions = [];
-  globalThis.document = dom.document;
-  globalThis.window = dom.window;
-  globalThis.requestAnimationFrame = (callback) => {
-    callback();
-    return 1;
-  };
+  const navigation = createTestNavigation({
+    gameScreen: {
+      getContext: () => ({ kind: "multiplayer" }),
+      performAction(actionId) {
+        performedActions.push(actionId);
+        return true;
+      }
+    }
+  });
 
-  try {
-    const navigation = createNavigation({
-      attract: { start() {}, stop() {} },
-      gameScreen: {
-        getContext: () => ({ kind: "multiplayer" }),
-        getStatus: () => "playing",
-        handleKey() {},
-        performAction(actionId) {
-          performedActions.push(actionId);
-          return true;
-        },
-        refreshLayout() {}
-      },
-      profileUi: {
-        getKeybindings: () => ({}),
-        handleBindingKey: () => false,
-        renderOptions() {}
-      },
-      restart() {},
-      quitGame() {},
-      pauseGame() {},
-      resumeGame() {},
-      onAudioEvent() {},
-      onScreenChange() {}
-    });
+  navigation.showScreen("game");
+  dom.windowHandlers.get("keydown")({
+    code: "Escape",
+    repeat: false,
+    target: { matches: () => false },
+    preventDefault() {}
+  });
+  assert.equal(dom.elements.get("#pause-overlay").hidden, false);
+  assert.equal(dom.elements.get(".console-layout").dataset.gameState, "paused");
 
-    navigation.showScreen("game");
-    dom.windowHandlers.get("keydown")({
-      code: "Escape",
-      repeat: false,
-      target: { matches: () => false },
-      preventDefault() {}
-    });
-    assert.equal(dom.elements.get("#pause-overlay").hidden, false);
-    assert.equal(dom.elements.get(".console-layout").dataset.gameState, "paused");
+  navigation.showScreen("lan");
+  assert.equal(dom.elements.get("#pause-overlay").hidden, true);
+  assert.equal(dom.elements.get(".console-layout").dataset.gameState, "playing");
 
-    navigation.showScreen("lan");
-    assert.equal(dom.elements.get("#pause-overlay").hidden, true);
-    assert.equal(dom.elements.get(".console-layout").dataset.gameState, "playing");
-
-    navigation.showScreen("game");
-    assert.equal(navigation.performControllerAction("focusNext"), true);
-    assert.equal(navigation.performControllerAction("hardDrop", {
-      controllerType: "xbox",
-      physicalFace: true
-    }), true);
-    assert.deepEqual(performedActions, ["focusNext", "hardDrop"]);
-  } finally {
-    if (previousDocument === undefined) delete globalThis.document;
-    else globalThis.document = previousDocument;
-    if (previousWindow === undefined) delete globalThis.window;
-    else globalThis.window = previousWindow;
-    if (previousRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
-    else globalThis.requestAnimationFrame = previousRequestAnimationFrame;
-  }
+  navigation.showScreen("game");
+  assert.equal(navigation.performControllerAction("focusNext"), true);
+  assert.equal(navigation.performControllerAction("hardDrop", {
+    controllerType: "xbox",
+    physicalFace: true
+  }), true);
+  assert.deepEqual(performedActions, ["focusNext", "hardDrop"]);
 });
 
-test("controller-family face buttons preserve familiar menu confirm/back routing", () => {
-  const previousDocument = globalThis.document;
-  const previousWindow = globalThis.window;
-  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const dom = createNavigationDom();
+test("controller-family face buttons preserve familiar menu confirm/back routing", (t) => {
+  const dom = installNavigationGlobals(t);
   const menuAction = createNavigationElement();
   let activations = 0;
   menuAction.click = () => { activations += 1; };
   dom.screensByName.get("lan").querySelectorAll = () => [menuAction];
-  globalThis.document = dom.document;
-  globalThis.window = dom.window;
-  globalThis.requestAnimationFrame = (callback) => {
-    callback();
-    return 1;
-  };
+  const navigation = createTestNavigation();
 
-  try {
-    const navigation = createNavigation({
-      attract: { start() {}, stop() {} },
-      gameScreen: {
-        getContext: () => ({ kind: "singleplayer" }),
-        getStatus: () => "playing",
-        handleKey() {},
-        performAction() { return true; },
-        refreshLayout() {}
-      },
-      profileUi: {
-        getKeybindings: () => ({}),
-        handleBindingKey: () => false,
-        renderOptions() {}
-      },
-      restart() {},
-      quitGame() {},
-      pauseGame() {},
-      resumeGame() {},
-      onAudioEvent() {},
-      onScreenChange() {}
-    });
+  navigation.showScreen("lan");
+  dom.document.activeElement = menuAction;
+  assert.equal(navigation.performControllerAction("hardDrop", {
+    controllerType: "xbox",
+    physicalFace: true
+  }), true);
+  assert.equal(activations, 1);
 
-    navigation.showScreen("lan");
-    dom.document.activeElement = menuAction;
-    assert.equal(navigation.performControllerAction("hardDrop", {
-      controllerType: "xbox",
-      physicalFace: true
-    }), true);
-    assert.equal(activations, 1);
+  assert.equal(navigation.performControllerAction("sculpt", {
+    controllerType: "xbox",
+    physicalFace: true
+  }), true);
+  assert.equal(dom.screensByName.get("multiplayer").hidden, false);
+  assert.equal(dom.screensByName.get("lan").hidden, true);
 
-    assert.equal(navigation.performControllerAction("sculpt", {
-      controllerType: "xbox",
-      physicalFace: true
-    }), true);
-    assert.equal(dom.screensByName.get("multiplayer").hidden, false);
-    assert.equal(dom.screensByName.get("lan").hidden, true);
+  navigation.showScreen("lan");
+  dom.document.activeElement = menuAction;
+  assert.equal(navigation.performControllerAction("sculpt", {
+    controllerType: "nintendo",
+    physicalFace: true
+  }), true);
+  assert.equal(activations, 2);
 
-    navigation.showScreen("lan");
-    dom.document.activeElement = menuAction;
-    assert.equal(navigation.performControllerAction("sculpt", {
-      controllerType: "nintendo",
-      physicalFace: true
-    }), true);
-    assert.equal(activations, 2);
-
-    assert.equal(navigation.performControllerAction("hardDrop", {
-      controllerType: "nintendo",
-      physicalFace: true
-    }), true);
-    assert.equal(dom.screensByName.get("multiplayer").hidden, false);
-    assert.equal(dom.screensByName.get("lan").hidden, true);
-  } finally {
-    if (previousDocument === undefined) delete globalThis.document;
-    else globalThis.document = previousDocument;
-    if (previousWindow === undefined) delete globalThis.window;
-    else globalThis.window = previousWindow;
-    if (previousRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
-    else globalThis.requestAnimationFrame = previousRequestAnimationFrame;
-  }
+  assert.equal(navigation.performControllerAction("hardDrop", {
+    controllerType: "nintendo",
+    physicalFace: true
+  }), true);
+  assert.equal(dom.screensByName.get("multiplayer").hidden, false);
+  assert.equal(dom.screensByName.get("lan").hidden, true);
 });
 
-test("controller Start covers title, pause/resume, multiplayer match menu, and game over", () => {
-  const previousDocument = globalThis.document;
-  const previousWindow = globalThis.window;
-  const previousRequestAnimationFrame = globalThis.requestAnimationFrame;
-  const dom = createNavigationDom();
+test("controller Start covers title, pause/resume, multiplayer match menu, and game over", (t) => {
+  const dom = installNavigationGlobals(t);
   let status = "playing";
   let context = { kind: "singleplayer" };
   let titleStarts = 0;
@@ -496,66 +449,37 @@ test("controller Start covers title, pause/resume, multiplayer match menu, and g
   let resumes = 0;
   dom.elements.get("#press-start").click = () => { titleStarts += 1; };
   dom.elements.get("#play-again").click = () => { playAgain += 1; };
-  globalThis.document = dom.document;
-  globalThis.window = dom.window;
-  globalThis.requestAnimationFrame = (callback) => {
-    callback();
-    return 1;
-  };
+  const navigation = createTestNavigation({
+    gameScreen: {
+      getContext: () => context,
+      getStatus: () => status
+    },
+    pauseGame() { pauses += 1; },
+    resumeGame() { resumes += 1; }
+  });
 
-  try {
-    const navigation = createNavigation({
-      attract: { start() {}, stop() {} },
-      gameScreen: {
-        getContext: () => context,
-        getStatus: () => status,
-        handleKey() {},
-        performAction() { return true; },
-        refreshLayout() {}
-      },
-      profileUi: {
-        getKeybindings: () => ({}),
-        handleBindingKey: () => false,
-        renderOptions() {}
-      },
-      restart() {},
-      quitGame() {},
-      pauseGame() { pauses += 1; },
-      resumeGame() { resumes += 1; },
-      onAudioEvent() {},
-      onScreenChange() {}
-    });
+  assert.equal(navigation.performControllerStart(), true);
+  assert.equal(titleStarts, 1);
 
-    assert.equal(navigation.performControllerStart(), true);
-    assert.equal(titleStarts, 1);
+  navigation.showScreen("game");
+  assert.equal(navigation.performControllerStart(), true);
+  assert.equal(dom.elements.get("#pause-overlay").hidden, false);
+  assert.equal(pauses, 1);
+  assert.equal(navigation.performControllerStart(), true);
+  assert.equal(dom.elements.get("#pause-overlay").hidden, true);
+  assert.equal(resumes, 1);
 
-    navigation.showScreen("game");
-    assert.equal(navigation.performControllerStart(), true);
-    assert.equal(dom.elements.get("#pause-overlay").hidden, false);
-    assert.equal(pauses, 1);
-    assert.equal(navigation.performControllerStart(), true);
-    assert.equal(dom.elements.get("#pause-overlay").hidden, true);
-    assert.equal(resumes, 1);
+  context = { kind: "multiplayer" };
+  assert.equal(navigation.performControllerStart(), true);
+  assert.equal(dom.elements.get("#pause-overlay").hidden, false);
+  assert.equal(pauses, 1, "multiplayer match menu must not pause simulation");
+  assert.equal(navigation.performControllerStart(), true);
+  assert.equal(dom.elements.get("#pause-overlay").hidden, true);
+  assert.equal(resumes, 1, "multiplayer match menu must not resume an unpaused simulation");
 
-    context = { kind: "multiplayer" };
-    assert.equal(navigation.performControllerStart(), true);
-    assert.equal(dom.elements.get("#pause-overlay").hidden, false);
-    assert.equal(pauses, 1, "multiplayer match menu must not pause simulation");
-    assert.equal(navigation.performControllerStart(), true);
-    assert.equal(dom.elements.get("#pause-overlay").hidden, true);
-    assert.equal(resumes, 1, "multiplayer match menu must not resume an unpaused simulation");
-
-    status = "gameover";
-    assert.equal(navigation.performControllerStart(), true);
-    assert.equal(playAgain, 1);
-  } finally {
-    if (previousDocument === undefined) delete globalThis.document;
-    else globalThis.document = previousDocument;
-    if (previousWindow === undefined) delete globalThis.window;
-    else globalThis.window = previousWindow;
-    if (previousRequestAnimationFrame === undefined) delete globalThis.requestAnimationFrame;
-    else globalThis.requestAnimationFrame = previousRequestAnimationFrame;
-  }
+  status = "gameover";
+  assert.equal(navigation.performControllerStart(), true);
+  assert.equal(playAgain, 1);
 });
 
 test("VS result and battle event copy is local-player aware", () => {

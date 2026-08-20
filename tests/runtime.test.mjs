@@ -4,35 +4,29 @@ import test from "node:test";
 import { getSingleplayerMode } from "../src/app/catalog.js";
 import { GameRuntime } from "../src/app/runtime.js";
 import { createGameSession } from "../src/domain/game.js";
+import { replaceGlobal } from "./helpers/globals.mjs";
 
-test("runtime stops scheduling frames after game over", () => {
-  const previousRequest = globalThis.requestAnimationFrame;
-  const previousCancel = globalThis.cancelAnimationFrame;
+test("runtime stops scheduling frames after game over", (t) => {
   const callbacks = [];
-  globalThis.requestAnimationFrame = (callback) => {
+  replaceGlobal(t, "requestAnimationFrame", (callback) => {
     callbacks.push(callback);
     return callbacks.length;
-  };
-  globalThis.cancelAnimationFrame = () => {};
+  });
+  replaceGlobal(t, "cancelAnimationFrame", () => {});
 
-  try {
-    const rules = getSingleplayerMode("classic").rules;
-    const session = createGameSession({ seed: 1, rules });
-    const { game } = session;
-    const runtime = new GameRuntime({ session });
+  const rules = getSingleplayerMode("classic").rules;
+  const session = createGameSession({ seed: 1, rules });
+  const { game } = session;
+  const runtime = new GameRuntime({ session });
 
-    runtime.start();
-    assert.equal(callbacks.length, 1);
-    game.status = "gameover";
-    callbacks.shift()(0);
+  runtime.start();
+  assert.equal(callbacks.length, 1);
+  game.status = "gameover";
+  callbacks.shift()(0);
 
-    assert.equal(runtime.running, false);
-    assert.equal(runtime.frameHandle, null);
-    assert.equal(callbacks.length, 0);
-  } finally {
-    globalThis.requestAnimationFrame = previousRequest;
-    globalThis.cancelAnimationFrame = previousCancel;
-  }
+  assert.equal(runtime.running, false);
+  assert.equal(runtime.frameHandle, null);
+  assert.equal(callbacks.length, 0);
 });
 
 test("single-player frames do not compute or publish a state hash", () => {

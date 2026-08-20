@@ -4,6 +4,7 @@ import test from "node:test";
 import { createAudioEngine } from "../src/audio/engine.js";
 import { getSoundCue, lineClearCueName } from "../src/audio/sounds.js";
 import { DEFAULT_AUDIO_SETTINGS } from "../src/config.js";
+import { FakeAudioContext } from "./helpers/web-audio.mjs";
 
 function createSilentMusicController() {
   let scene = "silent";
@@ -16,55 +17,6 @@ function createSilentMusicController() {
     dispose() { scene = "silent"; },
     getState() { return { scene, intensity, attached: false }; }
   };
-}
-
-class FakeAudioParam {
-  cancelScheduledValues() {}
-  setValueAtTime() {}
-  setTargetAtTime() {}
-  exponentialRampToValueAtTime() {}
-}
-
-class FakeGain {
-  constructor() {
-    this.gain = new FakeAudioParam();
-  }
-
-  connect() {}
-  disconnect() {}
-}
-
-class FakeOscillator {
-  constructor() {
-    this.frequency = new FakeAudioParam();
-    this.type = "sine";
-  }
-
-  connect() {}
-  disconnect() {}
-  start() {}
-  stop() {}
-}
-
-class FakeAudioContext {
-  constructor() {
-    this.currentTime = 10;
-    this.state = "running";
-    this.destination = {};
-    this.oscillators = [];
-  }
-
-  createGain() {
-    return new FakeGain();
-  }
-
-  createOscillator() {
-    const oscillator = new FakeOscillator();
-    this.oscillators.push(oscillator);
-    return oscillator;
-  }
-
-  close() {}
 }
 
 function cueToneCount(name) {

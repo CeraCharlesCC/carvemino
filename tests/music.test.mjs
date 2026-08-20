@@ -2,60 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createMusicController, getGameplayBpm, getMenuBpm } from "../src/audio/music.js";
-
-class FakeAudioParam {
-  constructor() {
-    this.values = [];
-  }
-
-  setValueAtTime(value, time) {
-    this.values.push(["set", value, time]);
-  }
-
-  exponentialRampToValueAtTime(value, time) {
-    this.values.push(["ramp", value, time]);
-  }
-}
-
-class FakeGain {
-  constructor() {
-    this.gain = new FakeAudioParam();
-  }
-
-  connect() {}
-  disconnect() {}
-}
-
-class FakeOscillator {
-  constructor() {
-    this.frequency = new FakeAudioParam();
-    this.type = "sine";
-    this.started = [];
-    this.stopped = [];
-  }
-
-  connect() {}
-  disconnect() {}
-  start(time) { this.started.push(time); }
-  stop(time) { this.stopped.push(time); }
-}
-
-class FakeAudioContext {
-  constructor() {
-    this.currentTime = 12;
-    this.oscillators = [];
-  }
-
-  createGain() {
-    return new FakeGain();
-  }
-
-  createOscillator() {
-    const oscillator = new FakeOscillator();
-    this.oscillators.push(oscillator);
-    return oscillator;
-  }
-}
+import { FakeAudioContext, FakeGain } from "./helpers/web-audio.mjs";
 
 function createFakeTimers() {
   let nextId = 1;
@@ -84,7 +31,7 @@ test("gameplay tempo is constant within a level and rises in discrete level step
 });
 
 test("Amur Waves menu BGM and Kalinka gameplay BGM follow the audio scene", () => {
-  const context = new FakeAudioContext();
+  const context = new FakeAudioContext({ currentTime: 12 });
   const output = new FakeGain();
   const timers = createFakeTimers();
   const music = createMusicController(timers);

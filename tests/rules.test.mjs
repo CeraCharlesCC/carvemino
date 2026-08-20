@@ -27,67 +27,35 @@ test("rules definitions are validated, detached, and deeply frozen", () => {
   assert.equal(Object.isFrozen(rules.presentation.cellStyles[1]), true);
 });
 
-test("rules definitions reject mode metadata and unknown fields", () => {
-  const withModeMetadata = mutableCopy(CLASSIC_RULESET);
-  withModeMetadata.modeId = "classic";
-  assert.throws(
-    () => defineRules(withModeMetadata),
-    /rules\.modeId is not a supported field/
-  );
+test("rules definitions reject invalid shapes and semantic values", () => {
+  const cases = [
+    ["mode metadata", (rules) => { rules.modeId = "classic"; }, /rules\.modeId is not a supported field/],
+    ["unknown field", (rules) => { rules.simulation.lockDelayTickz = 1; }, /rules\.simulation\.lockDelayTickz is not a supported field/],
+    ["missing required section", (rules) => { delete rules.pieces; }, /rules\.pieces is required/],
+    ["invalid tick rate", (rules) => { rules.simulation.stepsPerSecond = 0; }, /rules\.simulation\.stepsPerSecond must be an integer >= 1/],
+    ["invalid rotation", (rules) => { rules.pieces.templates.I.rotations = [0, 4]; }, /rules\.pieces\.templates\.I\.rotations\[1\] must be an integer between 0 and 3/],
+    ["invalid drop samples", (rules) => { rules.simulation.dropPositionSampleCount = 0; }, /rules\.simulation\.dropPositionSampleCount must be an integer >= 1/],
+    ["invalid focus grace", (rules) => { rules.simulation.focusGraceSteps = -1; }, /rules\.simulation\.focusGraceSteps must be an integer >= 0/],
+    ["missing used cell style", (rules) => { delete rules.presentation.cellStyles[1]; }, /rules\.presentation\.cellStyles\.1 is required for used cell value 1/],
+    ["curve-only field on gravity", (rules) => { rules.progression.gravity.step = 1; }, /rules\.progression\.gravity\.step is not a supported field/],
+    [
+      "curve-only field on linear spawn",
+      (rules) => { rules.progression.spawn.points = [{ level: 1, worldTicks: 480 }]; },
+      /rules\.progression\.spawn\.points is not a supported field/,
+      CARVER_RULESET
+    ],
+    ["rotation wider than board", (rules) => { rules.board.width = 3; }, /templates\.I rotation 0 has bounds 4x1 that do not fit rules\.board 3x23/],
+    ["rotation taller than board", (rules) => {
+      rules.board.visibleHeight = 3;
+      rules.board.hiddenHeight = 0;
+    }, /templates\.I rotation 1 has bounds 1x4 that do not fit rules\.board 10x3/]
+  ];
 
-  const withUnknownField = mutableCopy(CLASSIC_RULESET);
-  withUnknownField.simulation.lockDelayTickz = 1;
-  assert.throws(
-    () => defineRules(withUnknownField),
-    /rules\.simulation\.lockDelayTickz is not a supported field/
-  );
-});
-
-test("rules definitions validate the complete shape", () => {
-  const incomplete = mutableCopy(CLASSIC_RULESET);
-  delete incomplete.pieces;
-
-  assert.throws(
-    () => defineRules(incomplete),
-    /rules\.pieces is required/
-  );
-});
-
-test("rules definitions reject invalid semantic values", () => {
-  const invalidTickRate = mutableCopy(CLASSIC_RULESET);
-  invalidTickRate.simulation.stepsPerSecond = 0;
-  assert.throws(
-    () => defineRules(invalidTickRate),
-    /rules\.simulation\.stepsPerSecond must be an integer >= 1/
-  );
-
-  const invalidRotation = mutableCopy(CLASSIC_RULESET);
-  invalidRotation.pieces.templates.I.rotations = [0, 4];
-  assert.throws(
-    () => defineRules(invalidRotation),
-    /rules\.pieces\.templates\.I\.rotations\[1\] must be an integer between 0 and 3/
-  );
-
-  const invalidDropSamples = mutableCopy(CLASSIC_RULESET);
-  invalidDropSamples.simulation.dropPositionSampleCount = 0;
-  assert.throws(
-    () => defineRules(invalidDropSamples),
-    /rules\.simulation\.dropPositionSampleCount must be an integer >= 1/
-  );
-
-  const invalidFocusGrace = mutableCopy(CLASSIC_RULESET);
-  invalidFocusGrace.simulation.focusGraceSteps = -1;
-  assert.throws(
-    () => defineRules(invalidFocusGrace),
-    /rules\.simulation\.focusGraceSteps must be an integer >= 0/
-  );
-
-  const missingCellStyle = mutableCopy(CLASSIC_RULESET);
-  delete missingCellStyle.presentation.cellStyles[1];
-  assert.throws(
-    () => defineRules(missingCellStyle),
-    /rules\.presentation\.cellStyles\.1 is required for used cell value 1/
-  );
+  for (const [name, mutate, expected, base = CLASSIC_RULESET] of cases) {
+    const definition = mutableCopy(base);
+    mutate(definition);
+    assert.throws(() => defineRules(definition), expected, name);
+  }
 });
 
 test("progression uses mutually exclusive discriminated gravity and spawn models", () => {
@@ -105,19 +73,6 @@ test("progression uses mutually exclusive discriminated gravity and spawn models
     assert.equal(Object.hasOwn(rules.progression, "spawnMinimumWorldTicks"), false);
   }
 
-  const impossibleGravity = mutableCopy(CLASSIC_RULESET);
-  impossibleGravity.progression.gravity.step = 1;
-  assert.throws(
-    () => defineRules(impossibleGravity),
-    /rules\.progression\.gravity\.step is not a supported field/
-  );
-
-  const impossibleSpawn = mutableCopy(CARVER_RULESET);
-  impossibleSpawn.progression.spawn.points = [{ level: 1, worldTicks: 480 }];
-  assert.throws(
-    () => defineRules(impossibleSpawn),
-    /rules\.progression\.spawn\.points is not a supported field/
-  );
 });
 
 test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () => {
@@ -193,23 +148,6 @@ test("gravity follows each ruleset's configured curve and floor", () => {
       previous = current;
     }
   }
-});
-
-test("rules definitions reject piece rotations that cannot fit the configured board", () => {
-  const tooNarrow = mutableCopy(CLASSIC_RULESET);
-  tooNarrow.board.width = 3;
-  assert.throws(
-    () => defineRules(tooNarrow),
-    /templates\.I rotation 0 has bounds 4x1 that do not fit rules\.board 3x23/
-  );
-
-  const tooShort = mutableCopy(CLASSIC_RULESET);
-  tooShort.board.visibleHeight = 3;
-  tooShort.board.hiddenHeight = 0;
-  assert.throws(
-    () => defineRules(tooShort),
-    /templates\.I rotation 1 has bounds 1x4 that do not fit rules\.board 10x3/
-  );
 });
 
 test("single-player catalog resolves registered modes and rejects unknown ids", () => {

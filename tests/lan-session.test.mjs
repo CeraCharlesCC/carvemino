@@ -95,46 +95,52 @@ function sequence(values) {
   return () => values[index++] ?? (100 + index);
 }
 
-test("LAN host/join signaling completes hello/ready/match-start with identical matches", async () => {
-  const network = new FakeLanNetwork();
-  const hostMatches = [];
-  const clientMatches = [];
-  const host = new LanSession({
-    modes: VERSUS_CATALOG,
-    transportFactory: network.create,
-    randomUint32: sequence([1, 2, 77]),
-    onMatchReady: (context) => hostMatches.push(context)
-  });
-  const client = new LanSession({
-    modes: VERSUS_CATALOG,
-    transportFactory: network.create,
-    randomUint32: sequence([9]),
-    onMatchReady: (context) => clientMatches.push(context)
-  });
+test("every registered VS mode completes the LAN hello/ready/match-start path", async () => {
+  for (const mode of VERSUS_CATALOG) {
+    const network = new FakeLanNetwork();
+    const hostMatches = [];
+    const clientMatches = [];
+    const host = new LanSession({
+      modes: VERSUS_CATALOG,
+      transportFactory: network.create,
+      randomUint32: sequence([1, 2, 77]),
+      onMatchReady: (context) => hostMatches.push(context)
+    });
+    const client = new LanSession({
+      modes: VERSUS_CATALOG,
+      transportFactory: network.create,
+      randomUint32: sequence([9]),
+      onMatchReady: (context) => clientMatches.push(context)
+    });
 
-  const offer = await host.startHost("classic");
-  const answer = await client.startJoin(offer);
-  await host.acceptHostAnswer(answer);
+    const offer = await host.startHost(mode.id);
+    const answer = await client.startJoin(offer);
+    await host.acceptHostAnswer(answer);
 
-  assert.equal(host.getSnapshot().state, "lobby");
-  assert.equal(host.getSnapshot().phase, "ready-to-start");
-  assert.equal(client.getSnapshot().state, "lobby");
-  assert.equal(client.getSnapshot().phase, "ready");
-  assert.equal(hostMatches.length, 0);
-  assert.equal(clientMatches.length, 0);
+    assert.equal(host.getSnapshot().state, "lobby", mode.id);
+    assert.equal(host.getSnapshot().phase, "ready-to-start", mode.id);
+    assert.equal(client.getSnapshot().state, "lobby", mode.id);
+    assert.equal(client.getSnapshot().phase, "ready", mode.id);
+    assert.equal(hostMatches.length, 0, mode.id);
+    assert.equal(clientMatches.length, 0, mode.id);
 
-  host.startHostMatch();
+    host.startHostMatch();
 
-  assert.equal(host.getSnapshot().state, "playing");
-  assert.equal(client.getSnapshot().state, "playing");
-  assert.equal(hostMatches.length, 1);
-  assert.equal(clientMatches.length, 1);
-  assert.equal(hostMatches[0].role, "host");
-  assert.equal(clientMatches[0].role, "client");
-  assert.deepEqual(hostMatches[0].match.players.map(({ id }) => id), ["host-00000001", "join-00000009"]);
-  assert.deepEqual(clientMatches[0].match.players.map(({ id }) => id), ["host-00000001", "join-00000009"]);
-  assert.equal(hostMatches[0].match.seed, 77);
-  assert.equal(hashMatch(hostMatches[0].match), hashMatch(clientMatches[0].match));
+    assert.equal(host.getSnapshot().state, "playing", mode.id);
+    assert.equal(client.getSnapshot().state, "playing", mode.id);
+    assert.equal(hostMatches.length, 1, mode.id);
+    assert.equal(clientMatches.length, 1, mode.id);
+    assert.equal(hostMatches[0].role, "host", mode.id);
+    assert.equal(clientMatches[0].role, "client", mode.id);
+    assert.equal(hostMatches[0].mode, mode, mode.id);
+    assert.equal(clientMatches[0].mode, mode, mode.id);
+    assert.deepEqual(hostMatches[0].match.players.map(({ id }) => id), ["host-00000001", "join-00000009"], mode.id);
+    assert.deepEqual(clientMatches[0].match.players.map(({ id }) => id), ["host-00000001", "join-00000009"], mode.id);
+    assert.equal(hostMatches[0].match.seed, 77, mode.id);
+    assert.equal(hostMatches[0].match.rulesetId, mode.rules.id, mode.id);
+    assert.equal(hostMatches[0].match.policyId, mode.policy.id, mode.id);
+    assert.equal(hashMatch(hostMatches[0].match), hashMatch(clientMatches[0].match), mode.id);
+  }
 });
 
 test("two-peer LAN signaling rejects a larger protocol roster at the adapter boundary", async () => {
@@ -166,36 +172,6 @@ test("two-peer LAN signaling rejects a larger protocol roster at the adapter bou
 
   assert.equal(client.getSnapshot().state, "failed");
   assert.match(client.getSnapshot().error, /roster does not match negotiated host\/joiner roles/);
-});
-
-test("Carver VS uses the same LAN hello/ready/match-start path as Classic VS", async () => {
-  const network = new FakeLanNetwork();
-  const hostMatches = [];
-  const clientMatches = [];
-  const host = new LanSession({
-    modes: VERSUS_CATALOG,
-    transportFactory: network.create,
-    randomUint32: sequence([11, 12, 99]),
-    onMatchReady: (context) => hostMatches.push(context)
-  });
-  const client = new LanSession({
-    modes: VERSUS_CATALOG,
-    transportFactory: network.create,
-    randomUint32: sequence([19]),
-    onMatchReady: (context) => clientMatches.push(context)
-  });
-
-  const offer = await host.startHost("carver");
-  const answer = await client.startJoin(offer);
-  await host.acceptHostAnswer(answer);
-  assert.equal(host.getSnapshot().phase, "ready-to-start");
-  host.startHostMatch();
-
-  assert.equal(hostMatches[0].mode.id, "carver");
-  assert.equal(clientMatches[0].mode.id, "carver");
-  assert.match(hostMatches[0].match.rulesetId, /carver/);
-  assert.match(hostMatches[0].match.policyId, /carver/);
-  assert.equal(hashMatch(hostMatches[0].match), hashMatch(clientMatches[0].match));
 });
 
 test("LAN signaling failure releases the peer and leaves the host flow reusable", async () => {

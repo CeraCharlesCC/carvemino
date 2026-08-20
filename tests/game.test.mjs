@@ -6,6 +6,7 @@ import { createMatch, getPlayerGame, stepMatch } from "../src/domain/match.js";
 import { defineSurvivalPolicy } from "../src/domain/match/survival.js";
 import { defineVersusPolicy } from "../src/domain/match/versus.js";
 import { getTemplateBounds, getTemplateCells } from "../src/domain/rules.js";
+import { boardIndex, deferSpawns, prepareTwoLineClear } from "./helpers/game-fixtures.mjs";
 import { makeTestRules } from "./helpers/rules.mjs";
 
 const enginesByRulesetId = new Map();
@@ -76,15 +77,6 @@ function spawnI(game, rules) {
   return game.activePieces[0];
 }
 
-function deferSpawns(game) {
-  const firstDeferredWorldTick = game.worldTick + 1000;
-  const interval = 100;
-  game.dropQueue.forEach((plan, index) => {
-    plan.spawnAtWorldTick = firstDeferredWorldTick + index * interval;
-  });
-  game.nextScheduledSpawnWorldTick = firstDeferredWorldTick + game.dropQueue.length * interval;
-}
-
 function makePiece(rules, overrides = {}) {
   return {
     id: "test-piece",
@@ -114,27 +106,6 @@ function setActivePieces(game, rules, pieces, focusedPieceId = pieces[0]?.id ?? 
     game.nextSpawnIndex,
     ...game.activePieces.map((piece) => piece.spawnIndex + 1)
   );
-}
-
-function boardIndex(board, x, y) {
-  return y * board.width + x;
-}
-
-function prepareTwoLineClear(game, rules) {
-  const bottom = game.board.height - 1;
-  game.worldTick = 1;
-  deferSpawns(game);
-  for (const y of [bottom - 1, bottom]) {
-    for (let x = 1; x < game.board.width; x += 1) {
-      game.board.cells[boardIndex(game.board, x, y)] = 1;
-    }
-  }
-  setActivePieces(game, rules, [{
-    id: "manual-clear",
-    x: 0,
-    y: bottom - 1,
-    cells: [{ x: 0, y: 0 }, { x: 0, y: 1 }]
-  }]);
 }
 
 // Engine ownership and presentation contracts.
@@ -468,55 +439,40 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
     "another useful active piece keeps the scheduled spawn cadence");
 });
 
-test("natural lock immediately spawns a replacement when no useful piece remains", () => {
-  const rules = makeTestRules();
-  const game = createGame({ seed: 28, rules });
-  const bottom = game.board.height - 1;
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [{
-    id: "last-useful",
-    y: bottom,
-    restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1
-  }]);
+test("natural lock replaces the last useful piece with or without operation grace", () => {
+  const cases = [
+    ["default grace", makeTestRules(), 28],
+    ["no grace", makeTestRules({ simulation: { operationGraceSteps: 0 } }), 29]
+  ];
 
-  stepGame(game, [], rules);
-  for (let i = 1; i < rules.simulation.operationGraceSteps; i += 1) {
-    const held = stepGame(game, [], rules);
-    assert(!held.some((event) => event.type === "PIECE_SPAWNED"));
+  for (const [name, rules, seed] of cases) {
+    const game = createGame({ seed, rules });
+    const bottom = game.board.height - 1;
+    game.worldTick = 20;
+    deferSpawns(game);
+    setActivePieces(game, rules, [{
+      id: "last-useful",
+      y: bottom,
+      restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1
+    }]);
+
+    let events = stepGame(game, [], rules);
+    if (rules.simulation.operationGraceSteps > 0) {
+      for (let i = 1; i < rules.simulation.operationGraceSteps; i += 1) {
+        events = stepGame(game, [], rules);
+        assert(!events.some((event) => event.type === "PIECE_SPAWNED"), name);
+      }
+      events = stepGame(game, [], rules);
+    }
+    const spawned = events.find((event) => event.type === "PIECE_SPAWNED");
+
+    assert(events.some((event) => event.type === "PIECE_LOCKED"
+      && event.pieceId === "last-useful"), name);
+    assert(spawned, name);
+    assert.equal(game.focusedPieceId, spawned.pieceId, name);
+    assert.equal(game.worldTick, 20, `${name}: replacement spawn does not add post-lock world delay`);
+    assertGameState(game);
   }
-
-  const resolved = stepGame(game, [], rules);
-  const spawned = resolved.find((event) => event.type === "PIECE_SPAWNED");
-
-  assert(resolved.some((event) => event.type === "PIECE_LOCKED"
-    && event.pieceId === "last-useful"));
-  assert(spawned, "replacement spawns on the natural-lock resolution step");
-  assert.equal(game.focusedPieceId, spawned.pieceId);
-  assert.equal(game.worldTick, 20, "replacement spawn does not add post-lock world delay");
-  assertGameState(game);
-});
-
-test("natural lock without operation grace also spawns a replacement immediately", () => {
-  const rules = makeTestRules({ simulation: { operationGraceSteps: 0 } });
-  const game = createGame({ seed: 29, rules });
-  const bottom = game.board.height - 1;
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [{
-    id: "instant-lock",
-    y: bottom,
-    restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1
-  }]);
-
-  const events = stepGame(game, [], rules);
-  const spawned = events.find((event) => event.type === "PIECE_SPAWNED");
-
-  assert(events.some((event) => event.type === "PIECE_LOCKED"
-    && event.pieceId === "instant-lock"));
-  assert(spawned);
-  assert.equal(game.focusedPieceId, spawned.pieceId);
-  assertGameState(game);
 });
 
 test("an ordinary gravity landing reaches pending lock without pulse alignment", () => {
@@ -743,15 +699,6 @@ test("snapshot round trip preserves deterministic hash", () => {
   assertGameState(restored);
 });
 
-test("snapshots contain only random streams consumed by simulation", () => {
-  const rules = makeTestRules();
-  const snapshot = snapshotGame(createGame({ seed: 27, rules }));
-  assert.deepEqual(Object.keys(snapshot.random).sort(), ["drops", "pieces", "rotations"]);
-
-  snapshot.random.garbage = { state: 1 };
-  assert.throws(() => restoreGame(snapshot), /snapshot\.random\.garbage is not supported/);
-});
-
 test("snapshot round trip preserves a pending lock and global grace", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 25, rules });
@@ -800,17 +747,7 @@ test("snapshot round trip preserves terminal garbage-push state", () => {
   assert.equal(restored.gameOverReason, "garbage-pushed-piece-out");
 });
 
-test("restore rejects snapshots from a non-current schema instead of migrating them", () => {
-  const rules = makeTestRules();
-  const snapshot = snapshotGame(createGame({ seed: 26, rules }));
-  delete snapshot.stepTick;
-  snapshot.version = 1;
-  delete snapshot.schemaVersion;
-
-  assert.throws(() => restoreGame(snapshot), /snapshot\.version is not supported|schemaVersion is required/);
-});
-
-test("restore rejects malformed or hostile snapshot state before constructing a live game", () => {
+test("snapshots expose only simulation RNG streams and reject malformed or hostile state", () => {
   const rules = makeTestRules();
   const engine = engineForRules(rules);
   const game = engine.create({ seed: 28 });
@@ -824,9 +761,16 @@ test("restore rejects malformed or hostile snapshot state before constructing a 
   });
   const base = engine.snapshot(game);
   const clone = () => JSON.parse(JSON.stringify(base));
+  assert.deepEqual(Object.keys(base.random).sort(), ["drops", "pieces", "rotations"]);
 
   const cases = [
+    ["legacy schema", (snapshot) => {
+      delete snapshot.stepTick;
+      snapshot.version = 1;
+      delete snapshot.schemaVersion;
+    }, /snapshot\.version is not supported|schemaVersion is required/],
     ["unknown top-level field", (snapshot) => { snapshot.hostile = true; }, /snapshot\.hostile is not supported/],
+    ["ruleset mismatch", (snapshot) => { snapshot.rulesetId = "hostile-other-rules"; }, /Game snapshot ruleset mismatch/],
     ["rules-bound board width", (snapshot) => { snapshot.board.width += 1; }, /must match ruleset width/],
     ["board cell count", (snapshot) => { snapshot.board.cells.pop(); }, /must contain exactly/],
     ["board cell range", (snapshot) => { snapshot.board.cells[0] = 256; }, /snapshot\.board\.cells\[0\]/],
@@ -837,6 +781,7 @@ test("restore rejects malformed or hostile snapshot state before constructing a 
     ["drop queue placement", (snapshot) => { snapshot.dropQueue[0].x = snapshot.board.width; }, /dropQueue\[0\]\.x/],
     ["piece template", (snapshot) => { snapshot.activePieces[0].templateId = "NOPE"; }, /templateId is unknown/],
     ["piece boolean", (snapshot) => { snapshot.activePieces[0].pendingLock = 0; }, /pendingLock must be a boolean/],
+    ["unknown random stream", (snapshot) => { snapshot.random.garbage = { state: 1 }; }, /snapshot\.random\.garbage is not supported/],
     ["random stream range", (snapshot) => { snapshot.random.pieces.state = 0; }, /random\.pieces\.state/],
     ["garbage packet range", (snapshot) => { snapshot.incomingGarbage[0].rows = 0; }, /incomingGarbage\[0\]\.rows/],
     ["duplicate applied garbage ids", (snapshot) => { snapshot.appliedGarbageIds = ["g", "g"]; }, /duplicate id/],
@@ -852,18 +797,6 @@ test("restore rejects malformed or hostile snapshot state before constructing a 
     mutate(snapshot);
     assert.throws(() => engine.restore(snapshot), expected, name);
   }
-});
-
-test("restore rejects snapshots from a different ruleset", () => {
-  const rules = makeTestRules();
-  const engine = engineForRules(rules);
-  const snapshot = engine.snapshot(engine.create({ seed: 29 }));
-  snapshot.rulesetId = "hostile-other-rules";
-
-  assert.throws(
-    () => engine.restore(snapshot),
-    /Game snapshot ruleset mismatch: expected .* received hostile-other-rules/
-  );
 });
 
 // Match policy boundaries and multiplayer modes.
