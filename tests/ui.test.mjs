@@ -307,6 +307,22 @@ test("runtime input-mode CSS can override coarse-pointer hint fallbacks", () => 
   assert.match(css, /:root\[data-input-mode="controller"\] \.startup-manual \.manual-controls-card\[data-input-hint="controller"\]\s*\{\s*display:\s*block/);
 });
 
+test("title start prompt hides non-keyboard hints before input mode initializes", () => {
+  const css = readFileSync(new URL("../styles/screens/attract.css", import.meta.url), "utf8");
+  assert.match(css, /\.start-button \[data-input-hint="touch"\],\s*\.start-button \[data-input-hint="controller"\]\s*\{\s*display:\s*none;/);
+});
+
+test("service worker precaches the controller input module graph", () => {
+  const serviceWorker = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
+  for (const modulePath of [
+    "./src/ui/gamepad-input.js",
+    "./src/ui/input-constants.js",
+    "./src/ui/input-mode.js"
+  ]) {
+    assert.match(serviceWorker, new RegExp(`"${modulePath.replaceAll(".", "\\.")}"`), modulePath);
+  }
+});
+
 test("title start prompt blinks by default but stops when a secondary item is selected", () => {
   const css = readFileSync(new URL("../styles/screens/attract.css", import.meta.url), "utf8");
   assert.match(css, /\.start-button span\s*\{[^}]*animation:\s*start-blink 1\.05s steps\(1, end\) infinite;/s);

@@ -212,7 +212,8 @@
   text-shadow: 0 0 9px #9aa59245;
   animation: start-blink 1.05s steps(1, end) infinite;
 }
-.start-button [data-input-hint="touch"] { display: none; }
+.start-button [data-input-hint="touch"],
+.start-button [data-input-hint="controller"] { display: none; }
 .start-button:hover,
 .start-button:focus { outline: 0; color: var(--moss); }
 #menu-screen:focus-within .start-button:not(:focus) span { animation: none; }
