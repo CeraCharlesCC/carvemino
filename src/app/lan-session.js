@@ -321,7 +321,9 @@ export class LanSession {
       if (!this.mode || payload.rulesetId !== this.mode.rules.id || payload.policyId !== this.mode.policy.id) {
         throw new Error("LAN match-start configuration changed after hello");
       }
-      if (payload.playerIds[0] !== this.remotePlayerId || payload.playerIds[1] !== this.localPlayerId) {
+      if (payload.playerIds.length !== 2
+          || payload.playerIds[0] !== this.remotePlayerId
+          || payload.playerIds[1] !== this.localPlayerId) {
         throw new Error("LAN match-start roster does not match negotiated host/joiner roles");
       }
       this.startMatch({

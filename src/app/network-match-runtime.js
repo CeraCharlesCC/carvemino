@@ -32,6 +32,7 @@ const DEFAULT_MAX_BUFFERED_FUTURE_TICKS = 600;
 const MAX_CHECKPOINT_HISTORY = 8;
 const MAX_STEPS_PER_FRAME = 30;
 const MAX_FRAME_ELAPSED_SECONDS = 0.25;
+const PLAYER_ROUTED_MESSAGE_TYPES = new Set(["input", "resync-request", "leave"]);
 
 function assertFunction(value, name) {
   if (typeof value !== "function") throw new Error(`${name} must be a function`);
@@ -59,6 +60,12 @@ function commandsForRoster(playerIds, commandsForPlayer) {
   return commandsByPlayer;
 }
 
+function countBufferedInputs(inputsByTick) {
+  let count = 0;
+  for (const inputsByPlayer of inputsByTick.values()) count += inputsByPlayer.size;
+  return count;
+}
+
 function normalizeUnsubscribe(value) {
   return typeof value === "function" ? value : () => {};
 }
@@ -70,7 +77,6 @@ export class NetworkMatchRuntime {
     policy,
     role,
     localPlayerId,
-    remotePlayerId,
     transport,
     inputDelayTicks = DEFAULT_INPUT_DELAY_TICKS,
     hashIntervalTicks = DEFAULT_HASH_INTERVAL_TICKS,
@@ -102,12 +108,10 @@ export class NetworkMatchRuntime {
     assertFunction(onError, "onError");
 
     const playerIds = match.players?.map((player) => player.id) || [];
-    if (playerIds.length !== 2 || new Set(playerIds).size !== 2) {
-      throw new Error("network match requires exactly two unique players");
+    if (playerIds.length < 2 || new Set(playerIds).size !== playerIds.length) {
+      throw new Error("network match requires at least two unique players");
     }
     if (!playerIds.includes(localPlayerId)) throw new Error("localPlayerId is not in the match roster");
-    if (!playerIds.includes(remotePlayerId)) throw new Error("remotePlayerId is not in the match roster");
-    if (localPlayerId === remotePlayerId) throw new Error("localPlayerId and remotePlayerId must differ");
     if (match.rulesetId !== rules.id) {
       throw new Error(`network match ruleset mismatch: expected ${match.rulesetId}, received ${String(rules.id)}`);
     }
@@ -123,8 +127,8 @@ export class NetworkMatchRuntime {
     this.policy = policy;
     this.role = role;
     this.localPlayerId = localPlayerId;
-    this.remotePlayerId = remotePlayerId;
     this.playerIds = Object.freeze([...playerIds]);
+    this.remotePlayerIds = Object.freeze(playerIds.filter((playerId) => playerId !== localPlayerId));
     this.transport = transport;
     this.inputDelayTicks = inputDelayTicks;
     this.hashIntervalTicks = hashIntervalTicks;
@@ -158,6 +162,12 @@ export class NetworkMatchRuntime {
     this.transportState = "open";
     this.boundFrame = (time) => this.frame(time);
     this.incomingValidator = createProtocolStreamValidator({ playerIds: this.playerIds });
+    this.incomingValidatorsByPlayer = new Map(
+      this.remotePlayerIds.map((playerId) => [
+        playerId,
+        createProtocolStreamValidator({ playerIds: this.playerIds })
+      ])
+    );
 
     this.counters = {
       messagesSent: 0,
@@ -179,7 +189,9 @@ export class NetworkMatchRuntime {
     };
 
     this.removeMessageHandler = normalizeUnsubscribe(
-      transport.onMessage((message) => this.receive(message))
+      // Multiplexed transports may identify the sending roster member as a second callback argument.
+      // Existing one-peer transports can omit it because the sole remote player is unambiguous.
+      transport.onMessage((message, sourcePlayerId) => this.receive(message, sourcePlayerId))
     );
     this.removeStateHandler = normalizeUnsubscribe(
       transport.onStateChange((state) => this.handleTransportState(state))
@@ -190,8 +202,11 @@ export class NetworkMatchRuntime {
     return this.match.engine.view(getPlayerGame(this.match, this.localPlayerId));
   }
 
-  get opponentView() {
-    return this.match.engine.view(getPlayerGame(this.match, this.remotePlayerId));
+  get opponentViews() {
+    return Object.freeze(this.remotePlayerIds.map((playerId) => Object.freeze({
+      playerId,
+      view: this.match.engine.view(getPlayerGame(this.match, playerId))
+    })));
   }
 
   get result() {
@@ -205,7 +220,7 @@ export class NetworkMatchRuntime {
       matchTick: this.match.matchTick,
       inputDelayTicks: this.inputDelayTicks,
       bufferedFrames: this.authoritativeFrames.size,
-      bufferedRemoteInputs: this.remoteInputsByTick.size,
+      bufferedRemoteInputs: countBufferedInputs(this.remoteInputsByTick),
       maxBufferedFutureTicks: this.maxBufferedFutureTicks,
       resyncPending: this.resyncPending,
       ...this.counters
@@ -297,9 +312,10 @@ export class NetworkMatchRuntime {
   runHostTick() {
     if (!this.scheduleLocalCommands()) return [];
     const matchTick = this.match.matchTick;
+    const remoteInputs = this.remoteInputsByTick.get(matchTick);
     const commandsByPlayer = commandsForRoster(this.playerIds, (playerId) => {
       if (playerId === this.localPlayerId) return this.localInputsByTick.get(matchTick) || [];
-      return this.remoteInputsByTick.get(matchTick) || [];
+      return remoteInputs?.get(playerId) || [];
     });
 
     if (!this.sendSequenced("input-frame", { commandsByPlayer }, matchTick)) return [];
@@ -382,11 +398,24 @@ export class NetworkMatchRuntime {
     return true;
   }
 
-  receive(message) {
+  receive(message, sourcePlayerId = null) {
     if (this.disposed) return;
     if (this.match.status !== "playing" && !this.canReceiveAfterMatchEnd(message)) return;
     try {
-      const validated = this.incomingValidator.validate(message);
+      let validator = this.incomingValidator;
+      if (this.role === "host" && PLAYER_ROUTED_MESSAGE_TYPES.has(message?.type)) {
+        const routedPlayerId = sourcePlayerId ?? (
+          this.remotePlayerIds.length === 1 ? this.remotePlayerIds[0] : null
+        );
+        if (!this.incomingValidatorsByPlayer.has(routedPlayerId)) {
+          throw new Error("network match transport must identify a remote source player");
+        }
+        if (message.payload.playerId !== routedPlayerId) {
+          throw new Error(`Protocol ${message.type} playerId does not match the transport source player`);
+        }
+        validator = this.incomingValidatorsByPlayer.get(routedPlayerId);
+      }
+      const validated = validator.validate(message);
       this.counters.messagesReceived += 1;
       this.handleValidatedMessage(validated);
     } catch (error) {
@@ -445,8 +474,9 @@ export class NetworkMatchRuntime {
 
   handleInput(message) {
     this.requireRole("host", "input");
-    if (message.payload.playerId !== this.remotePlayerId) {
-      throw new Error("Protocol input must come from the remote player");
+    const { playerId } = message.payload;
+    if (!this.remotePlayerIds.includes(playerId)) {
+      throw new Error("Protocol input must come from a remote player");
     }
     if (message.matchTick < this.match.matchTick) {
       this.counters.staleInputsDropped += 1;
@@ -455,10 +485,15 @@ export class NetworkMatchRuntime {
     if (message.matchTick > this.match.matchTick + this.inputDelayTicks) {
       throw new Error("Protocol input matchTick exceeds the negotiated input-delay window");
     }
-    if (this.remoteInputsByTick.has(message.matchTick)) {
-      throw new Error(`Protocol input already exists for match tick ${message.matchTick}`);
+    let inputsByPlayer = this.remoteInputsByTick.get(message.matchTick);
+    if (!inputsByPlayer) {
+      inputsByPlayer = new Map();
+      this.remoteInputsByTick.set(message.matchTick, inputsByPlayer);
     }
-    this.remoteInputsByTick.set(message.matchTick, cloneCommands(message.payload.commands));
+    if (inputsByPlayer.has(playerId)) {
+      throw new Error(`Protocol input already exists for player ${playerId} at match tick ${message.matchTick}`);
+    }
+    inputsByPlayer.set(playerId, cloneCommands(message.payload.commands));
     this.counters.inputsReceived += 1;
   }
 
@@ -497,8 +532,8 @@ export class NetworkMatchRuntime {
 
   handleResyncRequest(message) {
     this.requireRole("host", "resync-request");
-    if (message.payload.playerId !== this.remotePlayerId) {
-      throw new Error("Protocol resync-request must come from the remote player");
+    if (!this.remotePlayerIds.includes(message.payload.playerId)) {
+      throw new Error("Protocol resync-request must come from a remote player");
     }
     this.counters.resyncRequestsReceived += 1;
     const snapshot = snapshotMatch(this.match);
@@ -544,8 +579,8 @@ export class NetworkMatchRuntime {
   }
 
   handleLeave(message) {
-    if (message.payload.playerId !== this.remotePlayerId) {
-      throw new Error("Protocol leave must come from the remote player");
+    if (!this.remotePlayerIds.includes(message.payload.playerId)) {
+      throw new Error("Protocol leave must come from a remote player");
     }
     this.stop("peer-left");
   }
@@ -565,7 +600,7 @@ export class NetworkMatchRuntime {
 
   emitFrame(interpolation) {
     this.onFrame(this.localView, {
-      opponentView: this.opponentView,
+      opponentViews: this.opponentViews,
       matchResult: this.match.result,
       matchStatus: this.match.status,
       interpolation,

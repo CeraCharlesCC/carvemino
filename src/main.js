@@ -78,7 +78,7 @@ function localAudioEvents(events, localPlayerId) {
 }
 
 function describeNetworkStop(reason) {
-  if (reason === "peer-left") return "PLAYER 2 LEFT THE MATCH.";
+  if (reason === "peer-left") return "A PLAYER LEFT THE MATCH.";
   if (String(reason).startsWith("transport-")) return "LAN LINK WAS LOST.";
   if (reason === "protocol-error") return "LAN SESSION ENDED AFTER INVALID PEER DATA.";
   return "LAN MATCH ENDED.";
@@ -86,7 +86,7 @@ function describeNetworkStop(reason) {
 
 function startNetworkMatch(context) {
   if (runtimeKind === "singleplayer") stopSingleplayer();
-  const { role, mode, match, localPlayerId, remotePlayerId, transport } = context;
+  const { role, mode, match, localPlayerId, transport } = context;
   activeModeId = mode.id;
   audio.startGame({ modeId: mode.id, level: getPlayerGame(match, localPlayerId).level });
   ui.setGameMode(mode.id, { kind: "multiplayer", localPlayerId });
@@ -99,7 +99,6 @@ function startNetworkMatch(context) {
     policy: mode.policy,
     role,
     localPlayerId,
-    remotePlayerId,
     transport,
     onEvents(events, currentMatch) {
       ui.handleMatchEvents(events);
@@ -129,7 +128,7 @@ function startNetworkMatch(context) {
   runtime = networkRuntime;
   runtimeKind = "network";
   ui.renderNetwork(networkRuntime.localView, {
-    opponentView: networkRuntime.opponentView,
+    opponentViews: networkRuntime.opponentViews,
     matchResult: networkRuntime.result,
     matchStatus: networkRuntime.match.status,
     interpolation: 0,

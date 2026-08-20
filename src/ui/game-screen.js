@@ -418,7 +418,7 @@ export function createGameScreen({ sendCommand }) {
     renderFocus(view);
     renderHud(view, meta);
     if (gameContext.kind === "multiplayer") {
-      renderOpponent(meta?.opponentView);
+      renderOpponent(meta?.opponentViews?.[0]?.view);
       renderConnectionState(meta);
     }
     renderFocusConnector(view);

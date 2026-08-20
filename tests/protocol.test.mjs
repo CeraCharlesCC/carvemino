@@ -89,6 +89,34 @@ test("protocol validates payload contracts for every message type", () => {
   }
 });
 
+test("protocol accepts multiplayer rosters and frames with more than two players", () => {
+  const playerIds = ["p1", "p2", "p3"];
+  const matchStart = createMessage("match-start", {
+    ...VALID_PAYLOADS["match-start"],
+    playerIds
+  });
+  assert.deepEqual(matchStart.payload.playerIds, playerIds);
+
+  const inputFrame = createMessage("input-frame", {
+    commandsByPlayer: {
+      p1: [],
+      p2: [{ type: "FOCUS_NEXT" }],
+      p3: [{ type: "FOCUS_PREVIOUS" }]
+    }
+  }, { seq: 1, matchTick: 12 });
+  assert.doesNotThrow(() => validateMessageContext(inputFrame, { playerIds }));
+  const stream = createProtocolStreamValidator({ playerIds });
+  assert.doesNotThrow(() => stream.validate(inputFrame));
+
+  const snapshot = createMessage("match-snapshot", {
+    snapshot: {
+      ...VALID_PAYLOADS["match-snapshot"].snapshot,
+      playerIds
+    }
+  }, { seq: 2, matchTick: 12 });
+  assert.doesNotThrow(() => validateMessageContext(snapshot, { playerIds }));
+});
+
 test("authoritative gameplay messages require bounded sequence and match tick fields", () => {
   assert.throws(
     () => decodeRaw(rawMessage("input", VALID_PAYLOADS.input, { matchTick: 12 })),
@@ -167,7 +195,7 @@ test("protocol rejects hostile payloads before handing messages to transport con
       "match-start wrong roster size",
       "match-start",
       { ...VALID_PAYLOADS["match-start"], playerIds: ["p1"] },
-      /exactly 2 player ids/
+      /at least 2 player ids/
     ],
     ["input command array type", "input", { playerId: "p2", commands: {} }, /commands must be an array/],
     [
@@ -183,10 +211,10 @@ test("protocol rejects hostile payloads before handing messages to transport con
       /at most/
     ],
     [
-      "input frame must include both players",
+      "input frame must include a multiplayer roster",
       "input-frame",
       { commandsByPlayer: { p1: [] } },
-      /exactly 2 players/
+      /at least 2 players/
     ],
     ["match hash format", "match-hash", { hash: "01ABCDEF" }, /lowercase hexadecimal/],
     [

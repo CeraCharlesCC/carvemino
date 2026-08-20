@@ -1,6 +1,6 @@
 import { defineCodec, shape as s } from "../codec.js";
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export const PROTOCOL_LIMITS = Object.freeze({
   maxTextLength: 256 * 1024,
@@ -40,7 +40,7 @@ const uint32Shape = s.integer({ minimum: 0, maximum: UINT32_MAX });
 const sequenceShape = s.integer({ minimum: 0, maximum: PROTOCOL_LIMITS.maxSequence });
 const matchTickShape = s.integer({ minimum: 0, maximum: PROTOCOL_LIMITS.maxMatchTick });
 const playerIdsShape = s.refine(
-  s.array(playerIdShape, { exactLength: 2, entryLabel: "player ids" }),
+  s.array(playerIdShape, { minimumLength: 2, entryLabel: "player ids" }),
   (playerIds, path) => {
     if (new Set(playerIds).size !== playerIds.length) {
       throw new Error(`${path} must contain unique player ids`);
@@ -74,7 +74,7 @@ const commandArrayShape = s.array(gameplayCommandShape, {
 });
 const commandsByPlayerShape = s.record(commandArrayShape, {
   key: playerIdShape,
-  exactEntries: 2,
+  minimumEntries: 2,
   entryLabel: "players"
 });
 

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { LanSession } from "../src/app/lan-session.js";
 import { VERSUS_CATALOG } from "../src/app/catalog.js";
+import { createMessage } from "../src/app/protocol.js";
 import { hashMatch } from "../src/domain/match.js";
 
 class FakeLanTransport {
@@ -134,6 +135,37 @@ test("LAN host/join signaling completes hello/ready/match-start with identical m
   assert.deepEqual(clientMatches[0].match.players.map(({ id }) => id), ["host-00000001", "join-00000009"]);
   assert.equal(hostMatches[0].match.seed, 77);
   assert.equal(hashMatch(hostMatches[0].match), hashMatch(clientMatches[0].match));
+});
+
+test("two-peer LAN signaling rejects a larger protocol roster at the adapter boundary", async () => {
+  const network = new FakeLanNetwork();
+  const client = new LanSession({
+    modes: VERSUS_CATALOG,
+    transportFactory: network.create,
+    randomUint32: sequence([9])
+  });
+  const host = new LanSession({
+    modes: VERSUS_CATALOG,
+    transportFactory: network.create,
+    randomUint32: sequence([1, 2, 77])
+  });
+
+  const offer = await host.startHost("classic");
+  const answer = await client.startJoin(offer);
+  await host.acceptHostAnswer(answer);
+
+  const hostSnapshot = host.getSnapshot();
+  const clientSnapshot = client.getSnapshot();
+  network.host.send(createMessage("match-start", {
+    matchId: "lan-multiplayer-roster",
+    seed: 77,
+    rulesetId: host.mode.rules.id,
+    policyId: host.mode.policy.id,
+    playerIds: [hostSnapshot.localPlayerId, clientSnapshot.localPlayerId, "third-player"]
+  }));
+
+  assert.equal(client.getSnapshot().state, "failed");
+  assert.match(client.getSnapshot().error, /roster does not match negotiated host\/joiner roles/);
 });
 
 test("Carver VS uses the same LAN hello/ready/match-start path as Classic VS", async () => {

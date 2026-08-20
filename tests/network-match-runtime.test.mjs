@@ -62,6 +62,59 @@ function createTransportPair() {
   return { host, client };
 }
 
+class StarTransport {
+  constructor(id, network, isHost = false) {
+    this.id = id;
+    this.network = network;
+    this.isHost = isHost;
+    this.open = true;
+    this.sent = [];
+    this.messageHandlers = new Set();
+    this.stateHandlers = new Set();
+    this.closeCount = 0;
+  }
+
+  onMessage(handler) {
+    this.messageHandlers.add(handler);
+    return () => this.messageHandlers.delete(handler);
+  }
+
+  onStateChange(handler) {
+    this.stateHandlers.add(handler);
+    return () => this.stateHandlers.delete(handler);
+  }
+
+  send(message) {
+    if (!this.open) return false;
+    const recipients = this.isHost
+      ? [...this.network.values()].filter((transport) => !transport.isHost)
+      : [[...this.network.values()].find((transport) => transport.isHost)];
+    if (recipients.some((transport) => !transport?.open)) return false;
+
+    const wireCopy = JSON.parse(JSON.stringify(message));
+    this.sent.push(wireCopy);
+    for (const recipient of recipients) {
+      for (const handler of recipient.messageHandlers) {
+        handler(JSON.parse(JSON.stringify(wireCopy)), this.id);
+      }
+    }
+    return true;
+  }
+
+  close() {
+    this.open = false;
+    this.closeCount += 1;
+  }
+}
+
+function createTransportStar(playerIds) {
+  const network = new Map();
+  for (const playerId of playerIds) {
+    network.set(playerId, new StarTransport(playerId, network, playerId === playerIds[0]));
+  }
+  return network;
+}
+
 function createVersusPolicy(id = "network-runtime-vs") {
   return defineVersusPolicy({
     id,
@@ -89,7 +142,6 @@ function createRuntimePair({
     policy,
     role: "host",
     localPlayerId: "a",
-    remotePlayerId: "b",
     transport: transports.host,
     inputDelayTicks,
     hashIntervalTicks,
@@ -104,7 +156,6 @@ function createRuntimePair({
     policy,
     role: "client",
     localPlayerId: "b",
-    remotePlayerId: "a",
     transport: transports.client,
     inputDelayTicks,
     hashIntervalTicks,
@@ -209,7 +260,8 @@ test("network runtimes apply only host frames and converge after commands from b
   assert.equal(client.connectionStats.matchTick, host.connectionStats.matchTick);
   assert.equal(client.connectionStats.stalledTicks, 1);
   assert(client.localView.board);
-  assert(client.opponentView.board);
+  assert.equal(client.opponentViews.length, 1);
+  assert(client.opponentViews[0].view.board);
 
   const delayedFrame = transports.host.sent.find(
     (message) => message.type === "input-frame" && message.matchTick === 2
@@ -218,6 +270,72 @@ test("network runtimes apply only host frames and converge after commands from b
   assert.deepEqual(delayedFrame.payload.commandsByPlayer.b, [{ type: "FOCUS_NEXT" }]);
   assert(client.connectionStats.inputsSent > 0);
   assert(host.connectionStats.inputsReceived > 0);
+});
+
+test("network runtime routes independent inputs for every remote player in a larger roster", () => {
+  const rules = makeTestRules();
+  const policy = createVersusPolicy("network-runtime-multiplayer");
+  const playerIds = ["a", "b", "c"];
+  const transports = createTransportStar(playerIds);
+  const runtimes = new Map(playerIds.map((playerId, index) => [
+    playerId,
+    new NetworkMatchRuntime({
+      match: createMatch({
+        id: "multiplayer-lockstep-match",
+        playerIds,
+        seed: 91,
+        rules,
+        policy
+      }),
+      rules,
+      policy,
+      role: index === 0 ? "host" : "client",
+      localPlayerId: playerId,
+      transport: transports.get(playerId),
+      inputDelayTicks: 2,
+      hashIntervalTicks: 10
+    })
+  ]));
+  const host = runtimes.get("a");
+  const clientB = runtimes.get("b");
+  const clientC = runtimes.get("c");
+
+  assert.deepEqual(host.remotePlayerIds, ["b", "c"]);
+  assert.deepEqual(clientB.remotePlayerIds, ["a", "c"]);
+  assert.deepEqual(clientB.opponentViews.map(({ playerId }) => playerId), ["a", "c"]);
+
+  clientB.command({ type: "FOCUS_NEXT" });
+  clientC.command({ type: "FOCUS_PREVIOUS" });
+  clientB.runOneTick();
+  clientC.runOneTick();
+
+  assert.equal(host.disposed, false);
+  assert.equal(host.connectionStats.inputsReceived, 2);
+  assert.equal(host.connectionStats.bufferedRemoteInputs, 2);
+
+  for (let tick = 0; tick < 5; tick += 1) {
+    host.runOneTick();
+    clientB.runOneTick();
+    clientC.runOneTick();
+  }
+
+  const multiplayerFrame = transports.get("a").sent.find(
+    (message) => message.type === "input-frame" && message.matchTick === 2
+  );
+  assert.deepEqual(multiplayerFrame.payload.commandsByPlayer.a, []);
+  assert.deepEqual(multiplayerFrame.payload.commandsByPlayer.b, [{ type: "FOCUS_NEXT" }]);
+  assert.deepEqual(multiplayerFrame.payload.commandsByPlayer.c, [{ type: "FOCUS_PREVIOUS" }]);
+  assert.equal(host.connectionStats.bufferedRemoteInputs, 0);
+  assert.equal(hashMatch(clientB.match), hashMatch(host.match));
+  assert.equal(hashMatch(clientC.match), hashMatch(host.match));
+
+  transports.get("b").send(createMessage(
+    "input",
+    { playerId: "c", commands: [] },
+    { seq: 1, matchTick: host.match.matchTick }
+  ));
+  assert.equal(host.connectionStats.protocolErrors, 1);
+  assert.equal(host.disposed, true);
 });
 
 test("Carver VS uses the same authoritative network runtime path", () => {
@@ -324,7 +442,6 @@ test("client render timing catches up a backgrounded authoritative-frame backlog
     policy,
     role: "host",
     localPlayerId: "a",
-    remotePlayerId: "b",
     transport: transports.host,
     hashIntervalTicks: 10
   });
@@ -334,7 +451,6 @@ test("client render timing catches up a backgrounded authoritative-frame backlog
     policy,
     role: "client",
     localPlayerId: "b",
-    remotePlayerId: "a",
     transport: transports.client,
     hashIntervalTicks: 10,
     onFrame(_localView, metadata) {
@@ -853,7 +969,6 @@ test("network runtime buffer settings cannot permit an unbounded input-delay que
     policy,
     role: "host",
     localPlayerId: "a",
-    remotePlayerId: "b",
     transport: transports.host,
     inputDelayTicks: 5,
     maxBufferedFutureTicks: 4
