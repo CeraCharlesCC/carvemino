@@ -37,6 +37,7 @@ jobs:
           mkdir _site
           cp index.html favicon.svg manifest.webmanifest og-image.png sw.js _site/
           cp -R icons src styles _site/
+          node scripts/generate-precache.mjs _site
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

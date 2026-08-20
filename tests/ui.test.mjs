@@ -314,15 +314,13 @@ test("title start prompt hides non-keyboard hints before input mode initializes"
   assert.match(css, /\.start-button \[data-input-hint="touch"\],\s*\.start-button \[data-input-hint="controller"\]\s*\{\s*display:\s*none;/);
 });
 
-test("service worker precaches the controller input module graph", () => {
+test("service worker consumes the generated versioned precache manifest", () => {
   const serviceWorker = readFileSync(new URL("../sw.js", import.meta.url), "utf8");
-  for (const modulePath of [
-    "./src/ui/gamepad-input.js",
-    "./src/ui/input-constants.js",
-    "./src/ui/input-mode.js"
-  ]) {
-    assert.match(serviceWorker, new RegExp(`"${modulePath.replaceAll(".", "\\.")}"`), modulePath);
-  }
+  assert.match(serviceWorker, /importScripts\("\.\/precache-manifest\.js"\)/);
+  assert.match(serviceWorker, /const CACHE_PREFIX = "carvemino-shell-"/);
+  assert.match(serviceWorker, /`\$\{CACHE_PREFIX\}\$\{PRECACHE\.version\}`/);
+  assert.match(serviceWorker, /PRECACHE\.urls/);
+  assert.doesNotMatch(serviceWorker, /\.\/src\/ui\/gamepad-input\.js/);
 });
 
 test("title start prompt blinks by default but stops when a secondary item is selected", () => {

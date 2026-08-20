@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:precache": "node scripts/generate-precache.mjs _site",
     "test": "node --test tests/*.test.mjs"
   }
 }
