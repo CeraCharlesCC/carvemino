@@ -432,11 +432,6 @@ export class NetworkMatchRuntime {
       case "ready":
       case "match-start":
         throw new Error(`Protocol ${message.type} is not valid after a network match has started`);
-      case "attack":
-      case "game-over":
-      case "snapshot":
-      case "state-hash":
-        throw new Error(`Protocol ${message.type} is not authoritative in a network match`);
       default:
         throw new Error(`Unsupported network match message: ${String(message.type)}`);
     }

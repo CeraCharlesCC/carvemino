@@ -1,4 +1,5 @@
-import { STARTUP_MANUAL_STORAGE_KEY } from "../config.js";
+import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS, STARTUP_MANUAL_STORAGE_KEY } from "../config.js";
+import { formatKeyLabel, getGameInputAction } from "./game-input.js";
 import { mapPhysicalFaceActionForMenu } from "./gamepad-input.js";
 
 const FIELD_WIDTH = 8;
@@ -7,18 +8,7 @@ const FOCUS_SIZE = 4;
 const FILL_COST = 2;
 const MINIMUM_CELLS = 2;
 
-const KEY_ACTIONS = Object.freeze({
-  KeyQ: "focusPrevious",
-  KeyE: "focusNext",
-  KeyW: "cursorUp",
-  KeyA: "cursorLeft",
-  KeyS: "cursorDown",
-  KeyD: "cursorRight",
-  KeyZ: "sculpt",
-  Enter: "sculpt",
-  Space: "hardDrop"
-});
-const MANUAL_GAME_ACTIONS = new Set(Object.values(KEY_ACTIONS));
+const MANUAL_GAME_ACTIONS = new Set(GAMEPLAY_ACTIONS.map(({ id }) => id));
 const MANUAL_CONTROLLER_PREVIOUS_ACTIONS = new Set(["cursorUp", "cursorLeft", "focusPrevious"]);
 const MANUAL_CONTROLLER_NEXT_ACTIONS = new Set(["cursorDown", "cursorRight", "focusNext"]);
 
@@ -233,7 +223,8 @@ export function createStartupManual({
   returnFocus = null,
   screen = null,
   onStart = null,
-  onAudioEvent = () => {}
+  onAudioEvent = () => {},
+  getKeybindings = () => DEFAULT_KEYBINDINGS
 } = {}) {
   const dialog = document.querySelector("#startup-manual");
   if (!dialog) {
@@ -242,7 +233,8 @@ export function createStartupManual({
       close() {},
       handleGameAction() { return null; },
       handleControllerAction() { return null; },
-      handleControllerStart() { return null; }
+      handleControllerStart() { return null; },
+      refreshKeybindings() {}
     };
   }
 
@@ -269,6 +261,26 @@ export function createStartupManual({
 
   function usesPhysicalPad() {
     return touchInput?.matches === true;
+  }
+
+  function currentKeybindings() {
+    return getKeybindings?.() || DEFAULT_KEYBINDINGS;
+  }
+
+  function refreshKeybindings() {
+    const bindings = currentKeybindings();
+    for (const element of dialog.querySelectorAll("[data-manual-keybinding]")) {
+      const actionIds = element.dataset.manualKeybinding.split(/\s+/).filter(Boolean);
+      element.textContent = actionIds
+        .map((actionId) => formatKeyLabel(bindings[actionId]))
+        .join(" / ");
+    }
+    for (const element of dialog.querySelectorAll("[data-manual-key-alias]")) {
+      const code = element.dataset.manualKeyAlias;
+      const actionId = element.dataset.manualKeyAliasAction;
+      element.textContent = formatKeyLabel(code);
+      element.hidden = bindings[actionId] === code || getGameInputAction(code, bindings) !== actionId;
+    }
   }
 
   function positionOverScreen() {
@@ -374,6 +386,7 @@ export function createStartupManual({
     completionMode = mode;
     pageIndex = 0;
     demoState = createManualDemoState();
+    refreshKeybindings();
     renderPage();
     positionOverScreen();
     if (usesPhysicalPad() && typeof dialog.show === "function") dialog.show();
@@ -484,7 +497,7 @@ export function createStartupManual({
   dialog.addEventListener("keydown", (event) => {
     if (pageIndex !== 1) return;
     if ((event.code === "Enter" || event.code === "Space") && event.target.closest("button")) return;
-    const action = KEY_ACTIONS[event.code];
+    const action = getGameInputAction(event.code, currentKeybindings());
     if (!action) return;
     perform(action);
     event.preventDefault();
@@ -504,6 +517,7 @@ export function createStartupManual({
   }, true);
 
   i18n.apply(dialog);
+  refreshKeybindings();
   renderDemo();
-  return { open, close, handleGameAction, handleControllerAction, handleControllerStart };
+  return { open, close, handleGameAction, handleControllerAction, handleControllerStart, refreshKeybindings };
 }

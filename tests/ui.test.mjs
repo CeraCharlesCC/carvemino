@@ -6,6 +6,7 @@ import { createI18n, resolveLocale } from "../src/i18n.js";
 import { getGameInputAction } from "../src/ui/game-screen.js";
 import {
   createOnScreenGameInput,
+  formatKeyLabel,
   getOnScreenGameAction,
   isGameplayActionId,
   isRepeatingGameAction,
@@ -220,9 +221,10 @@ test("title and manual input hints use medium-specific primary controls", () => 
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /data-input-hint="keyboard">PRESS ENTER TO START<\/span>/);
   assert.match(html, /data-input-hint="touch">PRESS START<\/span>/);
-  assert.match(html, /data-input-hint="keyboard"><kbd>ENTER<\/kbd><kbd>Z<\/kbd>/);
-  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="keyboard"[\s\S]*?<kbd>ENTER<\/kbd><small data-i18n="manual\.lab\.quick\.sculpt"/);
-  assert.match(html, /data-manual-action="sculpt"[^>]*><kbd>ENTER<\/kbd>/);
+  assert.match(html, /data-input-hint="keyboard"><kbd data-manual-key-alias="Enter" data-manual-key-alias-action="sculpt"><\/kbd><kbd data-manual-keybinding="sculpt"><\/kbd>/);
+  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="keyboard"[\s\S]*?<kbd data-manual-keybinding="sculpt"><\/kbd><small data-i18n="manual\.lab\.quick\.sculpt"/);
+  assert.match(html, /data-manual-action="sculpt"[^>]*><kbd data-manual-keybinding="sculpt"><\/kbd>/);
+  assert.match(html, /manual-controls-card[^>]+data-input-hint="keyboard"[\s\S]*?data-manual-keybinding="cursorRight"/);
   assert.match(html, /data-input-hint="controller">PRESS START<\/span>/);
   assert.match(html, /data-input-hint="controller">D-PAD \/ STICK SELECT · A \/ CROSS CONFIRM · B \/ CIRCLE BACK<\/span>/);
   assert.match(html, /data-input-hint="controller"><kbd>LB<\/kbd><kbd>RB<\/kbd>/);
@@ -614,6 +616,14 @@ test("game input translation uses configured bindings with Enter as sculpt fallb
   assert.equal(getGameInputAction("Space", bindings), "sculpt");
   assert.equal(getGameInputAction("Enter", bindings), "sculpt");
   assert.equal(getGameInputAction("KeyR", bindings), null);
+});
+
+test("keyboard binding labels are derived from KeyboardEvent codes", () => {
+  assert.equal(formatKeyLabel("KeyR"), "R");
+  assert.equal(formatKeyLabel("Digit7"), "7");
+  assert.equal(formatKeyLabel("ArrowLeft"), "LEFT");
+  assert.equal(formatKeyLabel("Space"), "SPACE");
+  assert.equal(formatKeyLabel("ShiftRight"), "R SHIFT");
 });
 
 test("responsive shell scales up when roomy and always fits within both viewport axes", () => {

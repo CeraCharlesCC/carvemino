@@ -628,59 +628,6 @@ test("terminal resync resumes a running client when the host snapshot is still p
   }
 });
 
-test("legacy remote attack messages are rejected instead of mutating the shared match", () => {
-  const rules = makeTestRules();
-  const policy = createVersusPolicy("network-runtime-reject-attack");
-  const hostMatch = createMatch({
-    id: "reject-attack-match",
-    playerIds: ["a", "b"],
-    seed: 3,
-    rules,
-    policy
-  });
-  const clientMatch = createMatch({
-    id: "reject-attack-match",
-    playerIds: ["a", "b"],
-    seed: 3,
-    rules,
-    policy
-  });
-  const errors = [];
-  const transports = createTransportPair();
-  const client = new NetworkMatchRuntime({
-    match: clientMatch,
-    rules,
-    policy,
-    role: "client",
-    localPlayerId: "b",
-    remotePlayerId: "a",
-    transport: transports.client,
-    onError(error) {
-      errors.push(error);
-    }
-  });
-  const beforeHash = hashMatch(client.match);
-  const attack = createMessage("attack", {
-    targetPlayerId: "b",
-    packet: {
-      id: "hostile-garbage",
-      sourcePlayerId: "a",
-      rows: 4,
-      applyAtWorldTick: 1,
-      seed: 9
-    }
-  });
-
-  transports.host.send(attack);
-
-  assert.equal(client.disposed, true);
-  assert.equal(client.stopReason, "protocol-error");
-  assert.equal(errors.length, 1);
-  assert.equal(getPlayerGame(client.match, "b").incomingGarbage.length, 0);
-  assert.equal(hashMatch(client.match), beforeHash);
-  assert.equal(hashMatch(hostMatch), beforeHash);
-});
-
 test("leaving a live network match notifies the peer and closes both transports", () => {
   const rules = makeTestRules();
   const policy = createVersusPolicy("network-runtime-leave");
@@ -881,16 +828,7 @@ test("network runtime ignores messages after the deterministic match is terminal
   client.match.status = "finished";
   client.markFinishedIfNeeded();
 
-  transports.host.send(createMessage("attack", {
-    targetPlayerId: "b",
-    packet: {
-      id: "late-garbage",
-      sourcePlayerId: "a",
-      rows: 1,
-      applyAtWorldTick: 1,
-      seed: 3
-    }
-  }));
+  transports.host.send(createMessage("ping", { nonce: 3 }));
 
   assert.equal(client.disposed, false);
   assert.equal(client.connectionStats.protocolErrors, 0);

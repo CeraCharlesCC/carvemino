@@ -35,6 +35,34 @@ test("runtime stops scheduling frames after game over", () => {
   }
 });
 
+test("single-player frames do not compute or publish a state hash", () => {
+  const metadata = [];
+  let hashCalls = 0;
+  const session = {
+    engine: { stepsPerSecond: 60 },
+    game: { status: "gameover" },
+    step: () => [],
+    view: () => ({ status: "gameover" }),
+    hash() {
+      hashCalls += 1;
+      return "deadbeef";
+    }
+  };
+  const runtime = new GameRuntime({
+    session,
+    onFrame(_view, meta) {
+      metadata.push(meta);
+    }
+  });
+
+  runtime.running = true;
+  runtime.frame(0);
+
+  assert.equal(hashCalls, 0);
+  assert.equal(metadata.length, 1);
+  assert.deepEqual(metadata[0], { interpolation: 0 });
+});
+
 test("runtime replay commands are indexed by the fixed-step clock", () => {
   const rules = getSingleplayerMode("classic").rules;
   const session = createGameSession({ seed: 2, rules });

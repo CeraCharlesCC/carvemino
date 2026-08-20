@@ -20,10 +20,6 @@ const MESSAGE_TYPES = new Set([
   "match-hash",
   "match-snapshot",
   "leave",
-  "attack",
-  "game-over",
-  "snapshot",
-  "state-hash",
   "ping",
   "pong",
   "resync-request"
@@ -35,12 +31,6 @@ const TICKED_MESSAGE_TYPES = new Set(["input", "input-frame", "match-hash", "mat
 const SEQUENCED_MESSAGE_TYPES = new Set([...TICKED_MESSAGE_TYPES, "leave"]);
 const MONOTONIC_TICK_TYPES = new Set(["input", "input-frame", "match-hash"]);
 const UINT32_MAX = 0xffffffff;
-const GAME_OVER_REASONS = new Set([
-  "spawn-blocked",
-  "garbage-topout",
-  "garbage-pushed-piece-out",
-  "lock-topout"
-]);
 const GAMEPLAY_COMMAND_TYPES = new Set([
   "FOCUS_PREVIOUS",
   "FOCUS_NEXT",
@@ -231,50 +221,6 @@ function validateLeave(payload) {
   assertId(payload.playerId, "Protocol leave payload.playerId");
 }
 
-function validateGarbagePacket(packet, path) {
-  assertExactKeys(
-    packet,
-    ["id", "sourcePlayerId", "rows", "applyAtWorldTick", "seed"],
-    path
-  );
-  assertId(packet.id, `${path}.id`);
-  assertId(packet.sourcePlayerId, `${path}.sourcePlayerId`);
-  assertSafeInteger(packet.rows, `${path}.rows`, { minimum: 1 });
-  assertSafeInteger(packet.applyAtWorldTick, `${path}.applyAtWorldTick`, { minimum: 0 });
-  assertSafeInteger(packet.seed, `${path}.seed`, { minimum: 0, maximum: UINT32_MAX });
-}
-
-function validateAttack(payload) {
-  assertExactKeys(payload, ["targetPlayerId", "packet"], "Protocol attack payload");
-  assertId(payload.targetPlayerId, "Protocol attack payload.targetPlayerId");
-  validateGarbagePacket(payload.packet, "Protocol attack payload.packet");
-}
-
-function validateGameOver(payload) {
-  assertExactKeys(payload, ["playerId", "reason"], "Protocol game-over payload");
-  assertId(payload.playerId, "Protocol game-over payload.playerId");
-  if (!GAME_OVER_REASONS.has(payload.reason)) {
-    throw new Error(`Protocol game-over payload.reason is invalid: ${String(payload.reason)}`);
-  }
-}
-
-function validateSnapshot(payload) {
-  assertExactKeys(payload, ["playerId", "snapshot"], "Protocol snapshot payload");
-  assertId(payload.playerId, "Protocol snapshot payload.playerId");
-  // Legacy one-playfield snapshots remain reserved. Full semantic validation is
-  // rules-bound and happens at GameEngine.restore().
-  assertPlainObject(payload.snapshot, "Protocol snapshot payload.snapshot");
-  assertId(payload.snapshot.rulesetId, "Protocol snapshot payload.snapshot.rulesetId");
-  assertSafeInteger(payload.snapshot.schemaVersion, "Protocol snapshot payload.snapshot.schemaVersion", { minimum: 1 });
-  assertJsonSize(payload.snapshot, "Protocol snapshot payload.snapshot", PROTOCOL_LIMITS.maxSnapshotLength);
-}
-
-function validateStateHash(payload) {
-  assertExactKeys(payload, ["playerId", "hash"], "Protocol state-hash payload");
-  assertId(payload.playerId, "Protocol state-hash payload.playerId");
-  assertHash(payload.hash, "Protocol state-hash payload.hash");
-}
-
 function validatePingPong(payload, type) {
   assertExactKeys(payload, ["nonce"], `Protocol ${type} payload`);
   assertSafeInteger(payload.nonce, `Protocol ${type} payload.nonce`, { minimum: 0, maximum: UINT32_MAX });
@@ -294,10 +240,6 @@ const PAYLOAD_VALIDATORS = Object.freeze({
   "match-hash": validateMatchHash,
   "match-snapshot": validateMatchSnapshot,
   leave: validateLeave,
-  attack: validateAttack,
-  "game-over": validateGameOver,
-  snapshot: validateSnapshot,
-  "state-hash": validateStateHash,
   ping: (payload) => validatePingPong(payload, "ping"),
   pong: (payload) => validatePingPong(payload, "pong"),
   "resync-request": validateResyncRequest
@@ -320,9 +262,6 @@ function validateRosterRouting(message, playerIds) {
     case "hello":
     case "ready":
     case "input":
-    case "game-over":
-    case "snapshot":
-    case "state-hash":
     case "resync-request":
     case "leave":
       assertRosterMember(payload.playerId, playerIds, `Protocol ${message.type} payload.playerId`);
@@ -339,10 +278,6 @@ function validateRosterRouting(message, playerIds) {
       break;
     case "match-snapshot":
       assertSameRoster(payload.snapshot.playerIds, playerIds, "Protocol match-snapshot payload.snapshot.playerIds");
-      break;
-    case "attack":
-      assertRosterMember(payload.targetPlayerId, playerIds, "Protocol attack payload.targetPlayerId");
-      assertRosterMember(payload.packet.sourcePlayerId, playerIds, "Protocol attack payload.packet.sourcePlayerId");
       break;
     default:
       break;

@@ -5,17 +5,7 @@ import {
   GAMEPLAY_ACTIONS,
   GAMEPLAY_ACTION_IDS
 } from "../config.js";
-
-function keyLabel(code) {
-  if (!code) return "-";
-  if (code === "Space") return "SPACE";
-  if (code === "ShiftLeft") return "L SHIFT";
-  if (code === "ShiftRight") return "R SHIFT";
-  if (code.startsWith("Key")) return code.slice(3);
-  if (code.startsWith("Digit")) return code.slice(5);
-  if (code.startsWith("Arrow")) return code.slice(5).toUpperCase();
-  return code.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase();
-}
+import { formatKeyLabel } from "./game-input.js";
 
 function emptyProfile(modes) {
   return {
@@ -141,8 +131,8 @@ export function createProfileUi({
 
   function renderControlKeys() {
     const bindings = profile.settings.keybindings;
-    focusPrevKey.textContent = keyLabel(bindings[GAMEPLAY_ACTION_IDS.focusPrevious]);
-    focusNextKey.textContent = keyLabel(bindings[GAMEPLAY_ACTION_IDS.focusNext]);
+    focusPrevKey.textContent = formatKeyLabel(bindings[GAMEPLAY_ACTION_IDS.focusPrevious]);
+    focusNextKey.textContent = formatKeyLabel(bindings[GAMEPLAY_ACTION_IDS.focusNext]);
   }
 
   function renderKeybindings() {
@@ -157,7 +147,7 @@ export function createProfileUi({
       button.dataset.bindAction = action;
       button.textContent = pendingBinding === action
         ? "PRESS KEY"
-        : keyLabel(profile.settings.keybindings[action]);
+        : formatKeyLabel(profile.settings.keybindings[action]);
       button.addEventListener("click", () => {
         onAudioEvent("confirm");
         pendingBinding = action;

@@ -145,8 +145,14 @@ export function createUi({
     returnFocus: document.querySelector("#press-start"),
     screen: document.querySelector(".crt-glass"),
     onStart: () => navigation.showScreen("menu"),
-    onAudioEvent
+    onAudioEvent,
+    getKeybindings: profileUi.getKeybindings
   });
+
+  function setProfile(profile) {
+    profileUi.setProfile(profile);
+    startupManual.refreshKeybindings();
+  }
 
   function setGameMode(modeId, options = {}) {
     const source = options.kind === "multiplayer" ? lanModes : modes;
@@ -163,7 +169,7 @@ export function createUi({
     render: gameScreen.render,
     renderNetwork: gameScreen.render,
     handleMatchEvents: gameScreen.handleMatchEvents,
-    setProfile: profileUi.setProfile,
+    setProfile,
     setGameMode,
     setLanSessionState: lanLobby.setSessionState,
     setLanNotice: lanLobby.setNotice,

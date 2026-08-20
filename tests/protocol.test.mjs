@@ -67,22 +67,6 @@ const VALID_PAYLOADS = {
     }
   },
   leave: { playerId: "p2" },
-  attack: {
-    targetPlayerId: "p2",
-    packet: {
-      id: "match-1:g1",
-      sourcePlayerId: "p1",
-      rows: 2,
-      applyAtWorldTick: 90,
-      seed: 55
-    }
-  },
-  "game-over": { playerId: "p1", reason: "lock-topout" },
-  snapshot: {
-    playerId: "p1",
-    snapshot: { schemaVersion: 3, rulesetId: "rules-v1" }
-  },
-  "state-hash": { playerId: "p1", hash: "01abcdef" },
   ping: { nonce: 42 },
   pong: { nonce: 42 },
   "resync-request": { playerId: "p1" }
@@ -148,7 +132,7 @@ test("protocol rejects malformed envelopes and reserved field injection", () => 
     /Protocol message\.extra is not supported/
   );
   assert.throws(
-    () => createMessage("ready", VALID_PAYLOADS.ready, { type: "attack" }),
+    () => createMessage("ready", VALID_PAYLOADS.ready, { type: "input" }),
     /Protocol message fields\.type is not supported/
   );
   assert.throws(
@@ -208,28 +192,6 @@ test("protocol rejects hostile payloads before handing messages to transport con
       /playerIds is required/
     ],
     ["leave extra field", "leave", { playerId: "p2", force: true }, /force is not supported/],
-    [
-      "attack nonpositive rows",
-      "attack",
-      {
-        ...VALID_PAYLOADS.attack,
-        packet: { ...VALID_PAYLOADS.attack.packet, rows: 0 }
-      },
-      /packet\.rows/
-    ],
-    [
-      "attack invalid seed",
-      "attack",
-      {
-        ...VALID_PAYLOADS.attack,
-        packet: { ...VALID_PAYLOADS.attack.packet, seed: 0x100000000 }
-      },
-      /packet\.seed/
-    ],
-    ["game-over invalid reason", "game-over", { playerId: "p1", reason: "remote-said-so" }, /reason is invalid/],
-    ["snapshot array", "snapshot", { playerId: "p1", snapshot: [] }, /snapshot must be an object/],
-    ["snapshot missing ruleset", "snapshot", { playerId: "p1", snapshot: { schemaVersion: 3 } }, /rulesetId/],
-    ["state hash format", "state-hash", { playerId: "p1", hash: "not-a-hash" }, /lowercase hexadecimal/],
     ["ping nonce type", "ping", { nonce: "42" }, /ping payload\.nonce/],
     ["pong extra field", "pong", { nonce: 1, echoedAt: 2 }, /echoedAt is not supported/],
     ["resync missing player", "resync-request", {}, /playerId is required/]

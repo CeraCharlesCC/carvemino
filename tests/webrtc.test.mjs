@@ -116,29 +116,7 @@ test("WebRTC transport supports injected peer connections and distinct channel/c
   assert.equal(connection.channel.closeCount, 1);
 });
 
-test("WebRTC join transport accepts legacy JSON signaling and emits compact answer codes", async () => {
-  const connection = new FakePeerConnection();
-  const transport = new WebRtcPeerTransport({
-    peerConnectionFactory: () => connection
-  });
-  const errors = [];
-  transport.onError((error) => errors.push(error));
-
-  const answer = await transport.acceptOfferTextAndCreateAnswerText(
-    JSON.stringify({ type: "offer", sdp: "remote-offer" })
-  );
-  assert.match(answer, /^cm1a\.[du]\.[A-Za-z0-9_-]+$/);
-  assert.deepEqual(await decodeSessionDescription(answer), { type: "answer", sdp: "answer-sdp" });
-  assert.deepEqual(connection.remoteDescription, { type: "offer", sdp: "remote-offer" });
-
-  const channel = new FakeChannel();
-  connection.emit("datachannel", { channel });
-  channel.emit("message", { data: "not-json" });
-  assert.equal(errors.length, 1);
-  assert.match(errors[0].message, /JSON|Unexpected token|not valid/i);
-});
-
-test("compact WebRTC signaling round-trips SDP and stays shorter than legacy JSON", async () => {
+test("compact WebRTC signaling round-trips SDP and stays smaller than raw JSON", async () => {
   const description = {
     type: "offer",
     sdp: [
@@ -156,12 +134,12 @@ test("compact WebRTC signaling round-trips SDP and stays shorter than legacy JSO
       "a=max-message-size:262144"
     ].join("\r\n")
   };
-  const legacy = JSON.stringify(description);
+  const rawJson = JSON.stringify(description);
   const encoded = await encodeSessionDescription(description);
 
   assert.match(encoded, /^cm1o\.[du]\.[A-Za-z0-9_-]+$/);
   assert.deepEqual(await decodeSessionDescription(encoded, "offer"), description);
-  if (encoded.startsWith("cm1o.d.")) assert.ok(encoded.length < legacy.length, `${encoded.length} < ${legacy.length}`);
+  if (encoded.startsWith("cm1o.d.")) assert.ok(encoded.length < rawJson.length, `${encoded.length} < ${rawJson.length}`);
   await assert.rejects(() => decodeSessionDescription(encoded, "answer"), /Expected WebRTC answer/);
 });
 

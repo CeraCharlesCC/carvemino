@@ -9,6 +9,17 @@ const REPEATING_GAME_ACTIONS = new Set([
   GAMEPLAY_ACTION_IDS.cursorRight
 ]);
 
+export function formatKeyLabel(code) {
+  if (!code) return "-";
+  if (code === "Space") return "SPACE";
+  if (code === "ShiftLeft") return "L SHIFT";
+  if (code === "ShiftRight") return "R SHIFT";
+  if (code.startsWith("Key")) return code.slice(3);
+  if (code.startsWith("Digit")) return code.slice(5);
+  if (code.startsWith("Arrow")) return code.slice(5).toUpperCase();
+  return code.replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase();
+}
+
 export function getGameInputAction(code, bindings = {}) {
   const action = GAMEPLAY_ACTIONS.find(({ id }) => bindings[id] === code)?.id;
   if (action) return action;

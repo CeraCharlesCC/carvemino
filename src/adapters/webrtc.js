@@ -97,22 +97,13 @@ export async function encodeSessionDescription(description) {
 
 export async function decodeSessionDescription(text, expectedType = null) {
   const normalized = String(text || "").trim();
-  let parsed;
-  if (normalized.startsWith("{")) {
-    try {
-      parsed = JSON.parse(normalized);
-    } catch {
-      throw new Error("Invalid WebRTC session description");
-    }
-  } else {
-    const match = /^cm1([oa])\.([a-z])\.([A-Za-z0-9_-]+)$/u.exec(normalized);
-    if (!match) throw new Error("Invalid LAN signaling code");
-    const [, typeCode, codec, payload] = match;
-    parsed = {
-      type: SIGNALING_CODE_TYPE[typeCode],
-      sdp: await decompressSdp(codec, base64UrlToBytes(payload))
-    };
-  }
+  const match = /^cm1([oa])\.([a-z])\.([A-Za-z0-9_-]+)$/u.exec(normalized);
+  if (!match) throw new Error("Invalid LAN signaling code");
+  const [, typeCode, codec, payload] = match;
+  const parsed = {
+    type: SIGNALING_CODE_TYPE[typeCode],
+    sdp: await decompressSdp(codec, base64UrlToBytes(payload))
+  };
 
   if (!parsed || typeof parsed.type !== "string" || typeof parsed.sdp !== "string" || parsed.sdp.length === 0) {
     throw new Error("Invalid WebRTC session description");

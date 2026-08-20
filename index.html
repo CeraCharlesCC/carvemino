@@ -545,7 +545,7 @@
                 <div>
                   <div class="manual-step-title-row">
                     <b data-i18n="manual.step.focus.title">CHOOSE A PIECE</b>
-                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>Q</kbd><kbd>E</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd data-manual-keybinding="focusPrevious"></kbd><kbd data-manual-keybinding="focusNext"></kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>SELECT</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="controller"><kbd>LB</kbd><kbd>RB</kbd></span>
                   </div>
@@ -557,7 +557,7 @@
                 <div>
                   <div class="manual-step-title-row">
                     <b data-i18n="manual.step.cursor.title">CHOOSE A CELL</b>
-                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>WASD</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd data-manual-keybinding="cursorUp cursorLeft cursorDown cursorRight"></kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>D-PAD</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="controller"><kbd>D-PAD / STICK</kbd></span>
                   </div>
@@ -569,7 +569,7 @@
                 <div>
                   <div class="manual-step-title-row">
                     <b data-i18n="manual.step.sculpt.title">RESHAPE THE PIECE</b>
-                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>ENTER</kbd><kbd>Z</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd data-manual-key-alias="Enter" data-manual-key-alias-action="sculpt"></kbd><kbd data-manual-keybinding="sculpt"></kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>A</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="controller"><kbd data-controller-game-action="sculpt">RIGHT FACE</kbd></span>
                   </div>
@@ -581,7 +581,7 @@
                 <div>
                   <div class="manual-step-title-row">
                     <b data-i18n="manual.step.drop.title">DROP THE PIECE</b>
-                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd>SPACE</kbd></span>
+                    <span class="manual-inline-keys" data-input-hint="keyboard"><kbd data-manual-keybinding="hardDrop"></kbd></span>
                     <span class="manual-inline-keys" data-input-hint="touch"><kbd>B</kbd></span>
                     <span class="manual-inline-keys" data-input-hint="controller"><kbd data-controller-game-action="hardDrop">BOTTOM FACE</kbd></span>
                   </div>
@@ -628,10 +628,10 @@
           <aside class="manual-lab-quick-card">
             <strong data-i18n="manual.lab.quick.title">CONTROLS</strong>
             <div class="manual-lab-quick-list" data-input-hint="keyboard">
-              <span><kbd>Q / E</kbd><small data-i18n="manual.lab.quick.focus">SELECT PIECE</small></span>
-              <span><kbd>WASD</kbd><small data-i18n="manual.lab.quick.cursor">MOVE</small></span>
-              <span><kbd>ENTER</kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
-              <span><kbd>SPACE</kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
+              <span><kbd data-manual-keybinding="focusPrevious focusNext"></kbd><small data-i18n="manual.lab.quick.focus">SELECT PIECE</small></span>
+              <span><kbd data-manual-keybinding="cursorUp cursorLeft cursorDown cursorRight"></kbd><small data-i18n="manual.lab.quick.cursor">MOVE</small></span>
+              <span><kbd data-manual-keybinding="sculpt"></kbd><small data-i18n="manual.lab.quick.sculpt">RESHAPE</small></span>
+              <span><kbd data-manual-keybinding="hardDrop"></kbd><small data-i18n="manual.lab.quick.drop">DROP PIECE</small></span>
             </div>
             <div class="manual-lab-quick-list" data-input-hint="touch">
               <span><kbd>SELECT</kbd><small data-i18n="manual.lab.quick.focus">SELECT PIECE</small></span>
@@ -671,19 +671,19 @@
               <p data-i18n="manual.lab.keyboardHint">You can also click the keys below to practice.</p>
               <div class="manual-keyboard-pad">
                 <div class="manual-focus-keys">
-                  <button type="button" data-manual-action="focusPrevious" data-i18n-aria-label="manual.lab.prev"><kbd>Q</kbd><small data-i18n="manual.lab.prevShort">PREVIOUS</small></button>
-                  <button type="button" data-manual-action="focusNext" data-i18n-aria-label="manual.lab.next"><kbd>E</kbd><small data-i18n="manual.lab.nextShort">NEXT</small></button>
+                  <button type="button" data-manual-action="focusPrevious" data-i18n-aria-label="manual.lab.prev"><kbd data-manual-keybinding="focusPrevious"></kbd><small data-i18n="manual.lab.prevShort">PREVIOUS</small></button>
+                  <button type="button" data-manual-action="focusNext" data-i18n-aria-label="manual.lab.next"><kbd data-manual-keybinding="focusNext"></kbd><small data-i18n="manual.lab.nextShort">NEXT</small></button>
                 </div>
                 <div class="manual-dpad">
-                  <button class="manual-dpad-up" type="button" data-manual-action="cursorUp" data-i18n-aria-label="manual.lab.up"><kbd>W</kbd></button>
-                  <button class="manual-dpad-left" type="button" data-manual-action="cursorLeft" data-i18n-aria-label="manual.lab.left"><kbd>A</kbd></button>
+                  <button class="manual-dpad-up" type="button" data-manual-action="cursorUp" data-i18n-aria-label="manual.lab.up"><kbd data-manual-keybinding="cursorUp"></kbd></button>
+                  <button class="manual-dpad-left" type="button" data-manual-action="cursorLeft" data-i18n-aria-label="manual.lab.left"><kbd data-manual-keybinding="cursorLeft"></kbd></button>
                   <span aria-hidden="true">+</span>
-                  <button class="manual-dpad-right" type="button" data-manual-action="cursorRight" data-i18n-aria-label="manual.lab.right"><kbd>D</kbd></button>
-                  <button class="manual-dpad-down" type="button" data-manual-action="cursorDown" data-i18n-aria-label="manual.lab.down"><kbd>S</kbd></button>
+                  <button class="manual-dpad-right" type="button" data-manual-action="cursorRight" data-i18n-aria-label="manual.lab.right"><kbd data-manual-keybinding="cursorRight"></kbd></button>
+                  <button class="manual-dpad-down" type="button" data-manual-action="cursorDown" data-i18n-aria-label="manual.lab.down"><kbd data-manual-keybinding="cursorDown"></kbd></button>
                 </div>
                 <div class="manual-action-keys">
-                  <button type="button" data-manual-action="hardDrop" data-i18n-aria-label="manual.lab.drop"><kbd>SPACE</kbd><small data-i18n="manual.lab.dropShort">DROP</small></button>
-                  <button type="button" data-manual-action="sculpt" data-i18n-aria-label="manual.lab.sculpt"><kbd>ENTER</kbd><small data-i18n="manual.lab.sculptShort">RESHAPE</small></button>
+                  <button type="button" data-manual-action="hardDrop" data-i18n-aria-label="manual.lab.drop"><kbd data-manual-keybinding="hardDrop"></kbd><small data-i18n="manual.lab.dropShort">DROP</small></button>
+                  <button type="button" data-manual-action="sculpt" data-i18n-aria-label="manual.lab.sculpt"><kbd data-manual-keybinding="sculpt"></kbd><small data-i18n="manual.lab.sculptShort">RESHAPE</small></button>
                 </div>
               </div>
             </div>
@@ -708,10 +708,10 @@
           <div class="manual-controls-card" data-input-hint="keyboard">
             <h3 data-i18n="manual.controls.keyboard.title">KEYBOARD</h3>
             <dl>
-              <div><dt><kbd>Q</kbd><kbd>E</kbd></dt><dd data-i18n="manual.controls.keyboard.focus">Select the previous / next piece</dd></div>
-              <div><dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd data-i18n="manual.controls.keyboard.cursor">Move the cursor</dd></div>
-              <div><dt><kbd>ENTER</kbd><kbd>Z</kbd></dt><dd data-i18n="manual.controls.keyboard.sculpt">Reshape the selected cell</dd></div>
-              <div><dt><kbd>SPACE</kbd></dt><dd data-i18n="manual.controls.keyboard.drop">Drop the selected piece to the bottom</dd></div>
+              <div><dt><kbd data-manual-keybinding="focusPrevious"></kbd><kbd data-manual-keybinding="focusNext"></kbd></dt><dd data-i18n="manual.controls.keyboard.focus">Select the previous / next piece</dd></div>
+              <div><dt><kbd data-manual-keybinding="cursorUp"></kbd><kbd data-manual-keybinding="cursorLeft"></kbd><kbd data-manual-keybinding="cursorDown"></kbd><kbd data-manual-keybinding="cursorRight"></kbd></dt><dd data-i18n="manual.controls.keyboard.cursor">Move the cursor</dd></div>
+              <div><dt><kbd data-manual-key-alias="Enter" data-manual-key-alias-action="sculpt"></kbd><kbd data-manual-keybinding="sculpt"></kbd></dt><dd data-i18n="manual.controls.keyboard.sculpt">Reshape the selected cell</dd></div>
+              <div><dt><kbd data-manual-keybinding="hardDrop"></kbd></dt><dd data-i18n="manual.controls.keyboard.drop">Drop the selected piece to the bottom</dd></div>
               <div><dt><kbd>ESC</kbd></dt><dd data-i18n="manual.controls.keyboard.pause">Pause / resume</dd></div>
             </dl>
           </div>
