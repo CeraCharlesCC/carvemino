@@ -589,16 +589,18 @@ test("commit focuses another useful active piece without spawning an extra one",
 
 // Drop planning and garbage behavior.
 
-test("drop planning uses extra samples to avoid covered columns and caps its history", () => {
+test("recent-coverage drop planning uses extra samples and caps its history", () => {
   const history = Array.from({ length: 5 }, () => ({ templateId: "O", rotation: 0, x: 0 }));
 
   const planWithSamples = (dropPositionSampleCount) => {
     const rules = makeTestRules({
-      simulation: { dropCoverageHistoryLength: history.length, dropPositionSampleCount }
+      simulation: {
+        dropPosition: { historyLength: history.length, sampleCount: dropPositionSampleCount }
+      }
     });
     const game = createGame({ seed: 24, rules });
     game.dropQueue = [];
-    game.dropCoverageHistory = history.map((plan) => ({ ...plan }));
+    game.dropPositionMemory.placements = history.map((plan) => ({ ...plan }));
     game.random.drops.state = 1;
     game.nextScheduledSpawnWorldTick = game.worldTick + 100;
 
@@ -619,12 +621,72 @@ test("drop planning uses extra samples to avoid covered columns and caps its his
   const singleSample = planWithSamples(1);
   const balanced = planWithSamples(3);
   assert(balanced.coverageScore < singleSample.coverageScore);
-  assert.equal(balanced.game.dropCoverageHistory.length, history.length);
+  assert.equal(balanced.game.dropPositionMemory.placements.length, history.length);
   const newestPlan = balanced.game.dropQueue.at(-1);
   assert.deepEqual(
-    balanced.game.dropCoverageHistory.at(-1),
+    balanced.game.dropPositionMemory.placements.at(-1),
     { templateId: newestPlan.templateId, rotation: newestPlan.rotation, x: newestPlan.x }
   );
+});
+
+test("leaky-coverage drop planning decays pressure and supports raw-random escape", () => {
+  const initialPressure = [640, 512, 384, 256, 128, 64, 32, 16, 8, 4];
+  const nextRandom = (stream) => {
+    let x = stream.state >>> 0 || 1;
+    x ^= x << 13;
+    x ^= x >>> 17;
+    x ^= x << 5;
+    stream.state = x >>> 0 || 1;
+    return stream.state;
+  };
+
+  const planWithRawRandomNumerator = (rawRandomNumerator) => {
+    const rules = makeTestRules({
+      simulation: {
+        dropPosition: {
+          type: "leaky-coverage",
+          sampleCount: 3,
+          decayNumerator: 63,
+          decayDenominator: 64,
+          pressurePerCell: 256,
+          rawRandomNumerator,
+          rawRandomDenominator: 1
+        }
+      },
+      progression: { dropQueueDepth: 1 }
+    });
+    const game = createGame({ seed: 24, rules });
+    game.dropQueue = [];
+    game.dropPositionMemory.pressure = [...initialPressure];
+    game.random.drops.state = 1;
+    game.nextScheduledSpawnWorldTick = game.worldTick + 100;
+    const sampleStream = { ...game.random.drops };
+
+    stepGame(game, [], rules);
+
+    const plan = game.dropQueue[0];
+    const cells = getTemplateCells(rules, plan.templateId, plan.rotation);
+    const maxX = game.board.width - getTemplateBounds(rules, plan.templateId, plan.rotation).width;
+    const candidates = Array.from({ length: 3 }, () => nextRandom(sampleStream) % (maxX + 1));
+    nextRandom(sampleStream); // The escape-hatch draw is consumed after all three candidates.
+    const decayed = initialPressure.map((value) => Math.floor(value * 63 / 64));
+    const score = (x) => cells.reduce((sum, cell) => sum + decayed[x + cell.x], 0);
+    const balancedX = candidates.reduce((best, x) => score(x) < score(best) ? x : best);
+
+    const expectedPressure = [...decayed];
+    for (const cell of cells) expectedPressure[plan.x + cell.x] += 256;
+    assert.deepEqual(game.dropPositionMemory.pressure, expectedPressure);
+    const restored = restoreGame(snapshotGame(game));
+    assert.deepEqual(restored.dropPositionMemory, game.dropPositionMemory);
+    assert.equal(hashGameState(restored), hashGameState(game));
+    return { plan, candidates, balancedX };
+  };
+
+  const raw = planWithRawRandomNumerator(1);
+  assert.equal(raw.plan.x, raw.candidates[0]);
+
+  const balanced = planWithRawRandomNumerator(0);
+  assert.equal(balanced.plan.x, balanced.balancedX);
 });
 
 test("template rotation produces normalized unique orientations", () => {

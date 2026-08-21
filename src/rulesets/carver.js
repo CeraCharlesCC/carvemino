@@ -2,15 +2,22 @@ import { defineRules } from "../domain/rules.js";
 import { CARVEMINO_CELL_STYLES } from "../palette.js";
 
 export const CARVER_RULESET = defineRules({
-  id: "carvemino-carver-rules-v4",
+  id: "carvemino-carver-rules-v5",
   board: { width: 10, visibleHeight: 24, hiddenHeight: 6 },
   simulation: {
     stepsPerSecond: 60,
     lockDelayWorldTicks: 30,
     operationGraceSteps: 8,
     focusGraceSteps: 2,
-    dropCoverageHistoryLength: 48,
-    dropPositionSampleCount: 3
+    dropPosition: {
+      type: "leaky-coverage",
+      sampleCount: 3,
+      decayNumerator: 63,
+      decayDenominator: 64,
+      pressurePerCell: 256,
+      rawRandomNumerator: 1,
+      rawRandomDenominator: 4
+    }
   },
   sculpting: { carveLimit: 3, minimumCells: 3, scrapPerCarve: 1, fillCost: 2 },
   progression: {

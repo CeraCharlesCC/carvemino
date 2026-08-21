@@ -17,7 +17,7 @@ import {
 } from "../rules.js";
 import { defineCodec, shape as s } from "../../codec.js";
 
-const GAME_SCHEMA_VERSION = 4;
+const GAME_SCHEMA_VERSION = 5;
 const GAME_OVER_REASONS = new Set([
   "spawn-blocked",
   "garbage-topout",
@@ -42,7 +42,17 @@ const dropPlanShape = s.object({
   ...templatePlacementFields,
   spawnAtWorldTick: nonNegativeInteger
 });
-const dropCoverageShape = s.object({ ...templatePlacementFields });
+const dropPlacementShape = s.object({ ...templatePlacementFields });
+const dropPositionMemoryShape = s.discriminatedUnion("type", {
+  "recent-coverage": s.object({
+    type: s.literal("recent-coverage"),
+    placements: s.array(dropPlacementShape)
+  }),
+  "leaky-coverage": s.object({
+    type: s.literal("leaky-coverage"),
+    pressure: s.array(nonNegativeInteger)
+  })
+});
 const pieceShape = s.object({
   id: nonEmptyString,
   templateId: nonEmptyString,
@@ -83,7 +93,7 @@ const GAME_SNAPSHOT_CODEC = defineCodec(s.object({
   activePieces: s.array(pieceShape),
   focusedPieceId: s.nullable(nonEmptyString),
   dropQueue: s.array(dropPlanShape),
-  dropCoverageHistory: s.array(dropCoverageShape),
+  dropPositionMemory: dropPositionMemoryShape,
   incomingGarbage: s.array(garbagePacketShape),
   appliedGarbageIds: s.array(nonEmptyString),
   scrap: nonNegativeInteger,
@@ -121,7 +131,9 @@ export function createGameState({ seed = 1, rules }) {
     activePieces: [],
     focusedPieceId: null,
     dropQueue: [],
-    dropCoverageHistory: [],
+    dropPositionMemory: rules.simulation.dropPosition.type === "leaky-coverage"
+      ? { type: "leaky-coverage", pressure: Array(rules.board.width).fill(0) }
+      : { type: "recent-coverage", placements: [] },
     incomingGarbage: [],
     appliedGarbageIds: [],
     scrap: 0,
@@ -394,13 +406,28 @@ function assertCurrentSnapshot(snapshot, rules) {
     previousSpawnTick = plan.spawnAtWorldTick;
   }
 
-  if (decoded.dropCoverageHistory.length > rules.simulation.dropCoverageHistoryLength) {
+  const dropPosition = rules.simulation.dropPosition;
+  if (decoded.dropPositionMemory.type !== dropPosition.type) {
     throw new Error(
-      `snapshot.dropCoverageHistory must contain at most ${rules.simulation.dropCoverageHistoryLength} entries`
+      `snapshot.dropPositionMemory.type must match ruleset strategy ${dropPosition.type}`
     );
   }
-  for (const [index, plan] of decoded.dropCoverageHistory.entries()) {
-    assertTemplatePlacement(plan, `snapshot.dropCoverageHistory[${index}]`, rules);
+  if (decoded.dropPositionMemory.type === "leaky-coverage") {
+    if (decoded.dropPositionMemory.pressure.length !== decoded.board.width) {
+      throw new Error(
+        `snapshot.dropPositionMemory.pressure must contain exactly ${decoded.board.width} entries`
+      );
+    }
+  } else {
+    const placements = decoded.dropPositionMemory.placements;
+    if (placements.length > dropPosition.historyLength) {
+      throw new Error(
+        `snapshot.dropPositionMemory.placements must contain at most ${dropPosition.historyLength} entries`
+      );
+    }
+    for (const [index, plan] of placements.entries()) {
+      assertTemplatePlacement(plan, `snapshot.dropPositionMemory.placements[${index}]`, rules);
+    }
   }
 
   const garbageIds = new Set();

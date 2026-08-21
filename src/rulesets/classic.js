@@ -2,15 +2,18 @@ import { defineRules } from "../domain/rules.js";
 import { CARVEMINO_CELL_STYLES } from "../palette.js";
 
 export const CLASSIC_RULESET = defineRules({
-  id: "carvemino-classic-rules-v5",
+  id: "carvemino-classic-rules-v6",
   board: { width: 10, visibleHeight: 19, hiddenHeight: 4 },
   simulation: {
     stepsPerSecond: 60,
     lockDelayWorldTicks: 24,
     operationGraceSteps: 8,
     focusGraceSteps: 2,
-    dropCoverageHistoryLength: 48,
-    dropPositionSampleCount: 2
+    dropPosition: {
+      type: "recent-coverage",
+      historyLength: 48,
+      sampleCount: 2
+    }
   },
   sculpting: { carveLimit: 2, minimumCells: 1, scrapPerCarve: 1, fillCost: 2 },
   progression: {

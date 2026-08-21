@@ -34,7 +34,7 @@ test("rules definitions reject invalid shapes and semantic values", () => {
     ["missing required section", (rules) => { delete rules.pieces; }, /rules\.pieces is required/],
     ["invalid tick rate", (rules) => { rules.simulation.stepsPerSecond = 0; }, /rules\.simulation\.stepsPerSecond must be an integer >= 1/],
     ["invalid rotation", (rules) => { rules.pieces.templates.I.rotations = [0, 4]; }, /rules\.pieces\.templates\.I\.rotations\[1\] must be an integer between 0 and 3/],
-    ["invalid drop samples", (rules) => { rules.simulation.dropPositionSampleCount = 0; }, /rules\.simulation\.dropPositionSampleCount must be an integer >= 1/],
+    ["invalid drop samples", (rules) => { rules.simulation.dropPosition.sampleCount = 0; }, /rules\.simulation\.dropPosition\.sampleCount must be an integer >= 1/],
     ["invalid focus grace", (rules) => { rules.simulation.focusGraceSteps = -1; }, /rules\.simulation\.focusGraceSteps must be an integer >= 0/],
     ["missing used cell style", (rules) => { delete rules.presentation.cellStyles[1]; }, /rules\.presentation\.cellStyles\.1 is required for used cell value 1/],
     ["curve-only field on gravity", (rules) => { rules.progression.gravity.step = 1; }, /rules\.progression\.gravity\.step is not a supported field/],
@@ -76,6 +76,19 @@ test("progression uses mutually exclusive discriminated gravity and spawn models
     assert.equal(Object.hasOwn(rules.progression, "spawnMinimumWorldTicks"), false);
   }
 
+});
+
+test("carver v5 uses three-sample leaky coverage with 25% raw randomness", () => {
+  assert.equal(CARVER_RULESET.id, "carvemino-carver-rules-v5");
+  assert.deepEqual(CARVER_RULESET.simulation.dropPosition, {
+    type: "leaky-coverage",
+    sampleCount: 3,
+    decayNumerator: 63,
+    decayDenominator: 64,
+    pressurePerCell: 256,
+    rawRandomNumerator: 1,
+    rawRandomDenominator: 4
+  });
 });
 
 test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () => {

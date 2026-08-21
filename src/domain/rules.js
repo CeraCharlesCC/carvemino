@@ -9,6 +9,23 @@ const coordinate = s.integer();
 const cell = s.tuple([coordinate, coordinate]);
 const gravityPoint = rulesObject({ level: positiveInteger, worldTicks: positiveInteger });
 
+const dropPositionStrategy = s.discriminatedUnion("type", {
+  "recent-coverage": rulesObject({
+    type: s.literal("recent-coverage"),
+    historyLength: positiveInteger,
+    sampleCount: positiveInteger
+  }),
+  "leaky-coverage": rulesObject({
+    type: s.literal("leaky-coverage"),
+    sampleCount: positiveInteger,
+    decayNumerator: nonNegativeInteger,
+    decayDenominator: positiveInteger,
+    pressurePerCell: positiveInteger,
+    rawRandomNumerator: nonNegativeInteger,
+    rawRandomDenominator: positiveInteger
+  })
+});
+
 const gravityProgression = s.discriminatedUnion("type", {
   linear: rulesObject({
     type: s.literal("linear"),
@@ -56,8 +73,7 @@ const RULES_CODEC = defineCodec(rulesObject({
     lockDelayWorldTicks: nonNegativeInteger,
     operationGraceSteps: nonNegativeInteger,
     focusGraceSteps: nonNegativeInteger,
-    dropCoverageHistoryLength: positiveInteger,
-    dropPositionSampleCount: positiveInteger
+    dropPosition: dropPositionStrategy
   }),
   sculpting: rulesObject({
     carveLimit: nonNegativeInteger,
@@ -108,6 +124,20 @@ function validatePieceTemplate(templateId, template) {
 }
 
 function validateRules(rules) {
+  const dropPosition = rules.simulation.dropPosition;
+  if (dropPosition.type === "leaky-coverage") {
+    if (dropPosition.decayNumerator >= dropPosition.decayDenominator) {
+      throw new Error(
+        "rules.simulation.dropPosition.decayNumerator must be less than decayDenominator"
+      );
+    }
+    if (dropPosition.rawRandomNumerator > dropPosition.rawRandomDenominator) {
+      throw new Error(
+        "rules.simulation.dropPosition.rawRandomNumerator must not exceed rawRandomDenominator"
+      );
+    }
+  }
+
   const gravity = rules.progression.gravity;
   if (gravity.type === "curve") {
     let previousLevel = 0;

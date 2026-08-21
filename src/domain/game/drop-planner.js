@@ -19,9 +19,9 @@ export function bringNextSpawnForward(state) {
   if (state.nextScheduledSpawnWorldTick != null) state.nextScheduledSpawnWorldTick += delta;
 }
 
-function getDropCoverage(state, rules) {
+function getRecentDropCoverage(state, rules) {
   const coverage = Array(state.board.width).fill(0);
-  for (const plan of state.dropCoverageHistory) {
+  for (const plan of state.dropPositionMemory.placements) {
     for (const cell of getTemplateCells(rules, plan.templateId, plan.rotation)) {
       const x = plan.x + cell.x;
       if (x >= 0 && x < coverage.length) coverage[x] += 1;
@@ -30,18 +30,11 @@ function getDropCoverage(state, rules) {
   return coverage;
 }
 
-function chooseCoverageBalancedX(state, rules, templateId, rotation) {
-  const cells = getTemplateCells(rules, templateId, rotation);
-  const bounds = getTemplateBounds(rules, templateId, rotation);
-  const maxX = state.board.width - bounds.width;
-  const coverage = getDropCoverage(state, rules);
+function chooseBestSampledX(state, cells, maxX, coverage, sampleCount) {
   let chosenX = randomInt(state.random.drops, maxX + 1);
   let chosenScore = cells.reduce((sum, cell) => sum + coverage[chosenX + cell.x], 0);
 
-  // Sample the configured number of legal positions instead of globally
-  // optimizing every drop. This nudges the long-run distribution toward
-  // under-covered columns while still allowing local streaks and droughts.
-  for (let choice = 1; choice < rules.simulation.dropPositionSampleCount; choice += 1) {
+  for (let choice = 1; choice < sampleCount; choice += 1) {
     const x = randomInt(state.random.drops, maxX + 1);
     const score = cells.reduce((sum, cell) => sum + coverage[x + cell.x], 0);
     if (score < chosenScore) {
@@ -53,13 +46,72 @@ function chooseCoverageBalancedX(state, rules, templateId, rotation) {
   return chosenX;
 }
 
-function rememberDropCoverage(state, templateId, rotation, x, rules) {
-  state.dropCoverageHistory.push({ templateId, rotation, x });
-  const historyLength = rules.simulation.dropCoverageHistoryLength;
-  if (state.dropCoverageHistory.length > historyLength) {
-    state.dropCoverageHistory.splice(
+function chooseRecentCoverageX(state, rules, cells, maxX, strategy) {
+  const coverage = getRecentDropCoverage(state, rules);
+  return chooseBestSampledX(state, cells, maxX, coverage, strategy.sampleCount);
+}
+
+function chooseLeakyCoverageX(state, cells, maxX, strategy) {
+  const pressure = state.dropPositionMemory.pressure;
+  // This memory deliberately depends only on generated pieces and positions.
+  // Settled board state must not influence drop distribution.
+  for (let x = 0; x < pressure.length; x += 1) {
+    pressure[x] = Math.floor(
+      pressure[x] * strategy.decayNumerator / strategy.decayDenominator
+    );
+  }
+
+  const candidates = Array.from(
+    { length: strategy.sampleCount },
+    () => randomInt(state.random.drops, maxX + 1)
+  );
+  const rawRandom = randomInt(state.random.drops, strategy.rawRandomDenominator)
+    < strategy.rawRandomNumerator;
+  if (rawRandom) return candidates[0];
+
+  const score = (candidateX) => cells.reduce(
+    (sum, cell) => sum + pressure[candidateX + cell.x],
+    0
+  );
+  let chosenX = candidates[0];
+  let chosenScore = score(chosenX);
+  for (let choice = 1; choice < candidates.length; choice += 1) {
+    const candidateX = candidates[choice];
+    const candidateScore = score(candidateX);
+    if (candidateScore < chosenScore) {
+      chosenX = candidateX;
+      chosenScore = candidateScore;
+    }
+  }
+  return chosenX;
+}
+
+function chooseDropX(state, rules, templateId, rotation) {
+  const cells = getTemplateCells(rules, templateId, rotation);
+  const bounds = getTemplateBounds(rules, templateId, rotation);
+  const maxX = state.board.width - bounds.width;
+  const strategy = rules.simulation.dropPosition;
+  if (strategy.type === "leaky-coverage") {
+    return chooseLeakyCoverageX(state, cells, maxX, strategy);
+  }
+  return chooseRecentCoverageX(state, rules, cells, maxX, strategy);
+}
+
+function rememberDropPosition(state, templateId, rotation, x, rules) {
+  const strategy = rules.simulation.dropPosition;
+  if (strategy.type === "leaky-coverage") {
+    for (const cell of getTemplateCells(rules, templateId, rotation)) {
+      state.dropPositionMemory.pressure[x + cell.x] += strategy.pressurePerCell;
+    }
+    return;
+  }
+
+  const placements = state.dropPositionMemory.placements;
+  placements.push({ templateId, rotation, x });
+  if (placements.length > strategy.historyLength) {
+    placements.splice(
       0,
-      state.dropCoverageHistory.length - historyLength
+      placements.length - strategy.historyLength
     );
   }
 }
@@ -69,9 +121,9 @@ function makeDropPlan(state, spawnAtWorldTick, rules) {
   const templateId = templateIds[randomInt(state.random.pieces, templateIds.length)];
   const rotations = getTemplateRotations(rules, templateId);
   const rotation = rotations[randomInt(state.random.rotations, rotations.length)];
-  const x = chooseCoverageBalancedX(state, rules, templateId, rotation);
+  const x = chooseDropX(state, rules, templateId, rotation);
   const pieceId = formatGeneratedPieceId(state.nextPieceId++);
-  rememberDropCoverage(state, templateId, rotation, x, rules);
+  rememberDropPosition(state, templateId, rotation, x, rules);
 
   return {
     pieceId,
