@@ -638,6 +638,97 @@
   text-align: center;
 }
 
+.manual-controller-notice {
+  --controller-signal-section-width: 54px;
+  position: relative;
+  max-width: 700px;
+  min-height: 72px;
+  margin: 14px auto 0;
+  padding: 10px 82px 10px 88px;
+  display: flex;
+  align-items: center;
+  border: 2px solid #4b4636;
+  background:
+    linear-gradient(90deg, #393528 0 68px, transparent 68px),
+    repeating-linear-gradient(135deg, #ded4bb 0 8px, #e7ddc5 8px 16px);
+  box-shadow: 4px 4px 0 #81765952, inset 0 0 0 1px #fff6dd73;
+  overflow: hidden;
+}
+
+.manual-controller-notice::before,
+.manual-controller-notice::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.manual-controller-notice::before {
+  inset: 5px;
+  border: 1px dashed #756d558f;
+}
+
+.manual-controller-notice::after {
+  top: 0;
+  right: var(--controller-signal-section-width);
+  bottom: 0;
+  width: 1px;
+  background: #756d5570;
+}
+
+.manual-controller-glyph {
+  position: absolute;
+  z-index: 1;
+  left: 9px;
+  top: 50%;
+  width: 50px;
+  height: auto;
+  display: block;
+  transform: translateY(-50%);
+  filter: drop-shadow(2px 3px 0 #17150f70);
+}
+
+.manual-controller-notice-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.manual-controller-notice-copy strong {
+  font-size: 15px;
+  letter-spacing: .12em;
+}
+
+.manual-controller-notice-copy > span {
+  color: #514b3a;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.manual-controller-signal {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  top: 50%;
+  width: var(--controller-signal-section-width);
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 4px;
+  color: #514b3a;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  transform: translateY(-50%);
+}
+
+.manual-controller-signal img {
+  width: 14px;
+  height: auto;
+  display: block;
+}
+
 .manual-book-footer {
   min-height: 58px;
   margin: 0 24px;
@@ -852,9 +943,20 @@
   .manual-action-keys button { min-width: 40px; min-height: 34px; font-size: 14px; }
   .manual-action-keys button:first-child { min-width: 54px; }
   .manual-controls-card { padding: 9px 11px; }
-  .manual-controls-card dl > div { min-height: 34px; grid-template-columns: 115px 1fr; gap: 8px; }
+  .manual-controls-card dl > div { min-height: 34px; grid-template-columns: 134px minmax(0, 1fr); gap: 8px; }
   .manual-controls-card dd { font-size: 14px; }
   .manual-controls-card kbd { font-size: 14px; }
+  .manual-controller-notice {
+    --controller-signal-section-width: 42px;
+    min-height: 58px;
+    margin-top: 9px;
+    padding: 7px 60px 7px 67px;
+  }
+  .manual-controller-glyph { left: 13px; width: 42px; }
+  .manual-controller-notice-copy strong { font-size: 13px; }
+  .manual-controller-notice-copy > span { font-size: 11px; }
+  .manual-controller-signal { font-size: 8px; }
+  .manual-controller-signal img { width: 12px; }
   .manual-book-footer {
     min-height: 50px;
     margin-inline: 13px;

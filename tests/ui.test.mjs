@@ -268,6 +268,8 @@ test("title and manual input hints use medium-specific primary controls", () => 
   assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="controller"[\s\S]*?<kbd data-controller-game-action="sculpt">RIGHT FACE<\/kbd>/);
   assert.match(html, /data-controller-game-action="hardDrop">BOTTOM FACE<\/kbd>/);
   assert.match(html, /manual-controls-card[^>]+data-input-hint="controller"[\s\S]*?manual\.controls\.controller\.title/);
+  assert.match(html, /<img class="manual-controller-glyph" src="\.\/icons\/manual-controller\.svg" alt="" aria-hidden="true">/);
+  assert.match(html, /<img src="\.\/icons\/manual-controller-status\.svg" alt="">/);
 });
 
 test("input mode initializes from pointer layout and switches on meaningful input types", () => {
@@ -681,6 +683,8 @@ test("startup manual locale follows browser language with an English fallback", 
   assert.equal(japanese.t("manual.controls.controller.title"), "コントローラー");
   assert.match(english.t("manual.lab.controllerHint"), /controller/i);
   assert.match(japanese.t("manual.lab.controllerHint"), /コントローラー/);
+  assert.match(english.t("manual.controllerNotice.copy"), /controller/i);
+  assert.match(japanese.t("manual.controllerNotice.copy"), /コントローラー/);
 });
 
 test("startup manual is automatically claimed only once per local storage", () => {

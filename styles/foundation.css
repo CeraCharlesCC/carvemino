@@ -39,18 +39,18 @@
   font-family: "Lucida Console", "Courier New", Courier, monospace;
   font-size: 14px;
 
-  --moss:      #9aa592;
-  --wire:      #7d8076;
-  --arrow:     #504c3f;
-  --olive:     #353217;
-  --ink:       #c8ccbe;
+  --moss:      #abb6a2;
+  --wire:      #8d9285;
+  --arrow:     #605d4d;
+  --olive:     #403d20;
+  --ink:       #d5dacd;
   --bg:        #0b0c09;
   --panel:     #111210;
   --panel-2:   #161714;
-  --line:      #3a3830;
+  --line:      #45443a;
   --glass:     #0e100d;
-  --glow:      #9aa59244;
-  --glow-wide: #9aa59218;
+  --glow:      #abb6a24f;
+  --glow-wide: #abb6a220;
 
   --accent:    var(--moss);
   --muted:     var(--wire);

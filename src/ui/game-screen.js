@@ -22,14 +22,14 @@ function drawCell(context, x, y, size, style, focused = false, pendingLock = fal
   const inset = 1.5;
   context.fillStyle = style.fill;
   context.fillRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
-  context.strokeStyle = pendingLock ? "#f0b35d" : focused ? "#9aa592" : "#0a0b0866";
+  context.strokeStyle = pendingLock ? "#f0b35d" : focused ? "#bdc8b4" : "#0a0b08a6";
   context.lineWidth = pendingLock || focused ? 2 : 1;
   context.strokeRect(x + inset, y + inset, size - inset * 2, size - inset * 2);
 }
 
 function drawGrid(context, width, height, cellSize) {
   context.save();
-  context.strokeStyle = "#9aa59212";
+  context.strokeStyle = "#abb6a226";
   context.lineWidth = 1;
   context.beginPath();
   for (let x = 0; x <= width; x += 1) {
@@ -247,7 +247,7 @@ export function createGameScreen({ sendCommand }) {
       resetFocusCursor(piece);
     }
 
-    focus.strokeStyle = "#9aa59216";
+    focus.strokeStyle = "#abb6a22e";
     focus.lineWidth = 1;
     for (let x = 0; x <= columns; x += 1) {
       const px = originX + x * cellSize + 0.5;
@@ -266,7 +266,7 @@ export function createGameScreen({ sendCommand }) {
 
     focus.save();
     focus.setLineDash([3, 4]);
-    focus.strokeStyle = "#9aa59266";
+    focus.strokeStyle = "#abb6a280";
     focus.lineWidth = 1.5;
     for (const cell of editable) {
       const px = originX + (cell.x - minX) * cellSize;
