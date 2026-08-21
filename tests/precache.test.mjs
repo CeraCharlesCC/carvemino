@@ -15,12 +15,25 @@ test("service worker consumes the generated versioned precache manifest", async 
   assert.doesNotMatch(serviceWorker, /\.\/src\/ui\/gamepad-input\.js/);
 });
 
+test("raw repository includes a valid no-op precache manifest", async () => {
+  const manifestSource = await readFile(new URL("../precache-manifest.js", import.meta.url), "utf8");
+  const scope = {};
+  Function("self", manifestSource)(scope);
+
+  assert.deepEqual(scope.__CARVEMINO_PRECACHE__, {
+    version: "local",
+    urls: []
+  });
+  assert(Object.isFrozen(scope.__CARVEMINO_PRECACHE__));
+});
+
 test("precache manifest is generated from the staged site graph and content-versioned", async (t) => {
   const site = await mkdtemp(path.join(tmpdir(), "carvemino-precache-"));
   t.after(() => rm(site, { recursive: true, force: true }));
   await mkdir(path.join(site, "src", "ui"), { recursive: true });
   await mkdir(path.join(site, "styles"), { recursive: true });
   await writeFile(path.join(site, "index.html"), "<main>alpha</main>\n");
+  await writeFile(path.join(site, "precache-manifest.js"), "// local fallback\n");
   await writeFile(path.join(site, "sw.js"), "// service worker\n");
   await writeFile(path.join(site, "src", "ui", "gamepad-input.js"), "export const input = true;\n");
   await writeFile(path.join(site, "styles", "app.css"), "body {}\n");
@@ -38,6 +51,7 @@ test("precache manifest is generated from the staged site graph and content-vers
   const generatedSource = await readFile(path.join(site, "precache-manifest.js"), "utf8");
   assert.match(generatedSource, /self\.__CARVEMINO_PRECACHE__/);
   assert.match(generatedSource, /\.\/src\/ui\/gamepad-input\.js/);
+  assert.doesNotMatch(generatedSource, /local fallback/);
 
   const repeated = await generatePrecacheManifest(site);
   assert.equal(repeated.version, first.version, "the generated manifest must not hash itself");
