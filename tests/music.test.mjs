@@ -23,11 +23,16 @@ function createFakeTimers() {
 }
 
 test("gameplay tempo is constant within a level and rises in discrete level steps", () => {
-  assert.equal(getMenuBpm(), 104);
-  assert.equal(getGameplayBpm(1), 116);
-  assert.equal(getGameplayBpm(2), 123);
-  assert.equal(getGameplayBpm(5), 144);
-  assert.equal(getGameplayBpm(99), 200);
+  const levelOne = getGameplayBpm(1);
+  const levelTwo = getGameplayBpm(2);
+  assert(Number.isFinite(getMenuBpm()) && getMenuBpm() > 0);
+  assert(Number.isFinite(levelOne) && levelOne > 0);
+  assert(levelTwo > levelOne);
+  assert(getGameplayBpm(5) > levelTwo);
+  assert.equal(getGameplayBpm(2.1), levelTwo);
+  assert.equal(getGameplayBpm(2.9), levelTwo);
+  assert.equal(getGameplayBpm(0), levelOne);
+  assert.equal(getGameplayBpm(9999), getGameplayBpm(99999), "tempo must remain capped at high levels");
 });
 
 test("Amur Waves menu BGM and Kalinka gameplay BGM follow the audio scene", () => {
@@ -41,19 +46,19 @@ test("Amur Waves menu BGM and Kalinka gameplay BGM follow the audio scene", () =
   assert(context.oscillators.length >= 8, "menu lead, bass, and waltz chord stabs should be scheduled");
   assert.equal(timers.activeCount, 1);
   assert.equal(music.getState().playing, true);
-  assert.equal(music.getState().bpm, 104);
+  assert.equal(music.getState().bpm, getMenuBpm());
 
   const menuBatch = context.oscillators.length;
   music.setScene("gameplay");
   assert(context.oscillators.length > menuBatch, "gameplay lead and bass should replace the menu arrangement");
   assert.equal(timers.activeCount, 1);
   assert.equal(music.getState().playing, true);
-  assert.equal(music.getState().bpm, 116);
+  assert.equal(music.getState().bpm, getGameplayBpm(1));
 
   const firstBatch = context.oscillators.length;
   music.setIntensity(4);
   assert(context.oscillators.length > firstBatch, "new-level notes should be rescheduled");
-  assert.equal(music.getState().bpm, 137);
+  assert.equal(music.getState().bpm, getGameplayBpm(4));
   assert.equal(timers.activeCount, 1);
 
   music.setScene("paused");

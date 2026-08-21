@@ -8,11 +8,73 @@ import { generatePrecacheManifest } from "../scripts/generate-precache.mjs";
 
 test("service worker consumes the generated versioned precache manifest", async () => {
   const serviceWorker = await readFile(new URL("../sw.js", import.meta.url), "utf8");
-  assert.match(serviceWorker, /importScripts\("\.\/precache-manifest\.js"\)/);
-  assert.match(serviceWorker, /const CACHE_PREFIX = "carvemino-shell-"/);
-  assert.match(serviceWorker, /`\$\{CACHE_PREFIX\}\$\{PRECACHE\.version\}`/);
-  assert.match(serviceWorker, /PRECACHE\.urls/);
-  assert.doesNotMatch(serviceWorker, /\.\/src\/ui\/gamepad-input\.js/);
+  const manifest = Object.freeze({
+    version: "test-version",
+    urls: ["./index.html", "./src/ui/input-mode.js"]
+  });
+  const listeners = new Map();
+  const openedCaches = [];
+  const addedUrls = [];
+  const deletedCaches = [];
+  let skippedWaiting = 0;
+  let claimedClients = 0;
+  const cache = {
+    async addAll(urls) {
+      addedUrls.push(...urls);
+    }
+  };
+  const caches = {
+    async open(name) {
+      openedCaches.push(name);
+      return cache;
+    },
+    async keys() {
+      return ["carvemino-shell-old", "carvemino-shell-test-version", "other-app-cache"];
+    },
+    async delete(name) {
+      deletedCaches.push(name);
+      return true;
+    }
+  };
+  const self = {
+    location: { origin: "https://example.test" },
+    clients: {
+      async claim() {
+        claimedClients += 1;
+      }
+    },
+    addEventListener(type, handler) {
+      listeners.set(type, handler);
+    },
+    async skipWaiting() {
+      skippedWaiting += 1;
+    }
+  };
+  const importScripts = (url) => {
+    assert.equal(url, "./precache-manifest.js");
+    self.__CARVEMINO_PRECACHE__ = manifest;
+  };
+
+  Function("importScripts", "self", "caches", "fetch", "URL", serviceWorker)(
+    importScripts,
+    self,
+    caches,
+    async () => { throw new Error("fetch not expected during lifecycle test"); },
+    URL
+  );
+
+  let installPromise;
+  listeners.get("install")({ waitUntil: (promise) => { installPromise = promise; } });
+  await installPromise;
+  assert.deepEqual(openedCaches, ["carvemino-shell-test-version"]);
+  assert.deepEqual(addedUrls, manifest.urls);
+  assert.equal(skippedWaiting, 1);
+
+  let activatePromise;
+  listeners.get("activate")({ waitUntil: (promise) => { activatePromise = promise; } });
+  await activatePromise;
+  assert.deepEqual(deletedCaches, ["carvemino-shell-old"]);
+  assert.equal(claimedClients, 1);
 });
 
 test("raw repository includes a valid no-op precache manifest", async () => {

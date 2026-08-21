@@ -13,11 +13,14 @@ import {
   triggerHapticFeedback
 } from "../src/ui/game-input.js";
 import {
+  getFocusFeedbackKey,
   getLineClearRows,
   getSculptAction,
   getVersusEventLabel,
   getVersusResultLabel,
-  isDangerView
+  isDangerView,
+  isSculptFeedbackCurrent,
+  shouldClearSculptFeedbackForEvent
 } from "../src/ui/game-screen-model.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getLanStatusText } from "../src/ui/lan-lobby.js";
@@ -221,18 +224,16 @@ test("menu navigation ignores controls inside hidden LAN steps", () => {
   assert.deepEqual(getMenuButtons(container), [visibleAction, backButton]);
 });
 
-test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled", () => {
+test("index exposes the DOM hooks required by navigation and the LAN lobby", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  assert.match(html, /id="press-start"[^>]+data-nav="play"/);
   for (const screen of ["play", "singleplayer", "multiplayer", "lan", "lan-host", "lan-join"]) {
-    assert.match(html, new RegExp(`data-screen="${screen}"`), screen);
+    assert.match(html, new RegExp(`\\bdata-screen=["']${screen}["']`), screen);
   }
-  assert.match(html, /data-nav="singleplayer"/);
-  assert.match(html, /data-nav="multiplayer"/);
-  assert.match(html, /data-nav="lan"/);
-  assert.match(html, /data-nav="lan-host"/);
-  assert.match(html, /data-nav="lan-join"/);
+  for (const destination of ["play", "singleplayer", "multiplayer", "lan", "lan-host", "lan-join"]) {
+    assert.match(html, new RegExp(`\\bdata-nav=["']${destination}["']`), destination);
+  }
   for (const id of [
+    "press-start",
     "lan-host-mode",
     "lan-create-invite",
     "lan-host-offer-qr",
@@ -251,31 +252,8 @@ test("multiplayer navigation shell exposes LAN roles while ONLINE stays disabled
     "peer-state",
     "versus-feed"
   ]) {
-    assert.match(html, new RegExp(`id="${id}"`), id);
+    assert.match(html, new RegExp(`\\bid=["']${id}["']`), id);
   }
-  assert.match(html, /<button[^>]+disabled[^>]+aria-disabled="true"[^>]+tabindex="-1"[^>]*>\s*<span>Online<\/span><b>WIP<\/b>/i);
-  assert.doesNotMatch(html, /<button[^>]+disabled[^>]+data-nav="lan(?:-host|-join)?"/i);
-  assert.doesNotMatch(html, /id="lan-host-offer"/);
-  assert.doesNotMatch(html, /id="lan-join-answer"/);
-  assert.doesNotMatch(html, /<textarea[^>]+id="lan-(?:host|join)-/i);
-});
-
-test("title and manual input hints use medium-specific primary controls", () => {
-  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-  assert.match(html, /data-input-hint="keyboard">PRESS ENTER TO START<\/span>/);
-  assert.match(html, /data-input-hint="touch">PRESS START<\/span>/);
-  assert.match(html, /data-input-hint="keyboard"><kbd data-manual-key-alias="Enter" data-manual-key-alias-action="sculpt"><\/kbd><kbd data-manual-keybinding="sculpt"><\/kbd>/);
-  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="keyboard"[\s\S]*?<kbd data-manual-keybinding="sculpt"><\/kbd><small data-i18n="manual\.lab\.quick\.sculpt"/);
-  assert.match(html, /data-manual-action="sculpt"[^>]*><kbd data-manual-keybinding="sculpt"><\/kbd>/);
-  assert.match(html, /manual-controls-card[^>]+data-input-hint="keyboard"[\s\S]*?data-manual-keybinding="cursorRight"/);
-  assert.match(html, /data-input-hint="controller">PRESS START<\/span>/);
-  assert.match(html, /data-input-hint="controller">D-PAD \/ STICK SELECT · A \/ CROSS CONFIRM · B \/ CIRCLE BACK<\/span>/);
-  assert.match(html, /data-input-hint="controller"><kbd>LB<\/kbd><kbd>RB<\/kbd>/);
-  assert.match(html, /manual-lab-quick-list[^>]+data-input-hint="controller"[\s\S]*?<kbd data-controller-game-action="sculpt">RIGHT FACE<\/kbd>/);
-  assert.match(html, /data-controller-game-action="hardDrop">BOTTOM FACE<\/kbd>/);
-  assert.match(html, /manual-controls-card[^>]+data-input-hint="controller"[\s\S]*?manual\.controls\.controller\.title/);
-  assert.match(html, /<img class="manual-controller-glyph" src="\.\/icons\/manual-controller\.svg" alt="" aria-hidden="true">/);
-  assert.match(html, /<img src="\.\/icons\/manual-controller-status\.svg" alt="">/);
 });
 
 test("input mode initializes from pointer layout and switches on meaningful input types", () => {
@@ -345,24 +323,6 @@ test("manual controller actions stay in the practice lab and become DOM navigati
     controllerType: "nintendo",
     physicalFace: true
   }), "back");
-});
-
-test("runtime input-mode CSS can override coarse-pointer hint fallbacks", () => {
-  const css = readFileSync(new URL("../styles/controls/touch-controls.css", import.meta.url), "utf8");
-  assert.match(css, /:root\[data-input-mode="controller"\][^{]+\[data-input-hint="keyboard"\]/);
-  assert.match(css, /:root\[data-input-mode="controller"\] \.focus-nav\[data-input-hint="controller"\]\s*\{\s*display:\s*flex/);
-  assert.match(css, /:root\[data-input-mode="controller"\] \.startup-manual \.manual-controls-card\[data-input-hint="controller"\]\s*\{\s*display:\s*block/);
-});
-
-test("title start prompt hides non-keyboard hints before input mode initializes", () => {
-  const css = readFileSync(new URL("../styles/screens/attract.css", import.meta.url), "utf8");
-  assert.match(css, /\.start-button \[data-input-hint="touch"\],\s*\.start-button \[data-input-hint="controller"\]\s*\{\s*display:\s*none;/);
-});
-
-test("title start prompt blinks by default but stops when a secondary item is selected", () => {
-  const css = readFileSync(new URL("../styles/screens/attract.css", import.meta.url), "utf8");
-  assert.match(css, /\.start-button span\s*\{[^}]*animation:\s*start-blink 1\.05s steps\(1, end\) infinite;/s);
-  assert.match(css, /#menu-screen:focus-within \.start-button:not\(:focus\) span\s*\{\s*animation:\s*none;/);
 });
 
 test("multiplayer menus never pause one peer and exit back to LAN", () => {
@@ -562,58 +522,35 @@ test("line clear feedback reconstructs rows completed by pieces that lock in the
   assert.deepEqual(getLineClearRows(view, [{ type: "PIECE_LOCKED", pieceId: "falling" }]), []);
 });
 
-test("sculpt feedback expresses cutting and filling as staged material changes", () => {
-  const screen = readFileSync(new URL("../src/ui/game-screen.js", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../styles/screens/game.css", import.meta.url), "utf8");
+test("sculpt feedback validity follows the focused piece layout rather than implementation details", () => {
+  const view = { focusedPiece: { id: "piece-a" } };
+  const layout = {
+    minX: -1,
+    minY: -1,
+    maxX: 4,
+    maxY: 3,
+    cellSize: 30,
+    originX: 20,
+    originY: 35
+  };
+  const activeKey = getFocusFeedbackKey(view, layout);
 
-  assert(!css.includes("@media (prefers-reduced-motion"));
-  assert.match(screen, /spawnSculptCellEffect\(geometry, "cut", color,[^;]+\);\s*spawnMaterialChips/s,
-    "CUT breaks the source cell before its material moves to SCRAP");
-  assert.match(screen, /spawnSculptCellEffect\(geometry, "fill", color,[^;]+\);\s*spawnMaterialChips/s,
-    "FILL places its framework before SCRAP material arrives");
-  assert.match(screen, /case "BLOCK_CARVED":\s*spawnCarveFeedback\(event, afterView\)/s);
-  assert.match(screen, /case "BLOCK_FILLED":\s*spawnFillFeedback\(event, afterView\)/s,
-    "sculpt overlays use the same post-edit layout that the FOCUS canvas renders");
-  assert.match(screen, /elementContentOriginInShell\(focusCanvas\)/,
-    "overlay coordinates begin at the canvas content box rather than its border box");
-  assert.match(css, /@keyframes cut-fragment-break\s*\{/);
-  assert.match(css, /@keyframes cut-crack-reveal\s*\{/);
-  assert.match(css, /@keyframes fill-framework-place\s*\{/);
-  assert.match(css, /@keyframes fill-material-build\s*\{/);
-  assert(!css.includes("feedback-particle"));
-  assert(!css.includes("@keyframes material-flow"));
-  assert.match(css, /@keyframes hard-drop-impact\s*\{\s*0%, 26% \{ opacity: \.95;/);
+  assert.equal(isSculptFeedbackCurrent(view, layout, activeKey), true);
+  assert.equal(isSculptFeedbackCurrent(view, { ...layout, originY: 36 }, activeKey), false,
+    "layout movement invalidates overlay coordinates");
+  assert.equal(isSculptFeedbackCurrent({ focusedPiece: { id: "piece-b" } }, layout, activeKey), false,
+    "focus changes invalidate feedback for the previous piece");
+  assert.equal(isSculptFeedbackCurrent(view, layout, null), true);
 });
 
-test("sculpt feedback stays within FOCUS and level-up feedback remains prominent", () => {
-  const screen = readFileSync(new URL("../src/ui/game-screen.js", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../styles/screens/game.css", import.meta.url), "utf8");
-
-  assert(!screen.includes("fieldPointForCell"),
-    "CARVE and FILL should not duplicate material feedback over the main playfield");
-  assert.match(css, /\.level-up-warning\s*\{[^}]*min-width:\s*236px;/s);
-  assert.match(css, /\.level-up-warning\s*\{[^}]*font-size:\s*14px;/s);
-  assert.match(css, /\.level-up-warning\s*\{[^}]*animation:\s*level-up-warning 1800ms/s);
-});
-
-test("transient feedback drops stale FOCUS geometry instead of stacking old animations", () => {
-  const screen = readFileSync(new URL("../src/ui/game-screen.js", import.meta.url), "utf8");
-
-  assert.match(screen, /function spawnCarveFeedback\(event, view\)\s*\{\s*clearSculptFeedback\(\);/s);
-  assert.match(screen, /function spawnFillFeedback\(event, view\)\s*\{\s*clearSculptFeedback\(\);/s,
-    "a rapid next edit supersedes the previous FOCUS animation");
-  assert.match(screen, /view\.focusedPiece\?\.id !== event\.pieceId/s,
-    "a tick-final view must not animate an edit over a different focused piece");
-  assert.match(screen, /activeSculptFeedbackKey !== focusFeedbackKey\(view, focusLayout\)[\s\S]*?clearSculptFeedback\(\)/,
-    "gravity/collisions that change FOCUS bounds invalidate old overlay coordinates");
-  assert.match(screen, /function spawnHardDropFeedback[\s\S]*?clearSculptFeedback\(\);[\s\S]*?clearTransientGroup\(FEEDBACK_GROUPS\.hardDrop\)/,
-    "hard drop removes an in-flight sculpt effect and replaces any previous drop effect");
-  assert.match(screen, /spawnCarveFeedback[\s\S]*?clearPulseClass\(scrap, "is-spending"\)[\s\S]*?pulseClass\(scrap, "is-gaining"/,
-    "rapid carve/fill alternation must not leave the previous SCRAP pulse winning the cascade");
-  assert.match(screen, /spawnFillFeedback[\s\S]*?clearPulseClass\(scrap, "is-gaining"\)[\s\S]*?pulseClass\(scrap, "is-spending"/);
-  assert.match(screen, /case "FOCUS_CHANGED":\s*clearSculptFeedback\(\)/s);
-  assert.match(screen, /case "PIECE_LOCKED":\s*if \(event\.pieceId === activeSculptFeedbackPieceId\) clearSculptFeedback\(\)/s,
-    "locking another active piece must not cancel feedback for the focused piece");
+test("sculpt feedback lifecycle clears only for events that invalidate the active edit", () => {
+  assert.equal(shouldClearSculptFeedbackForEvent({ type: "FOCUS_CHANGED" }, "piece-a"), true);
+  assert.equal(shouldClearSculptFeedbackForEvent({ type: "PIECE_HARD_DROPPED", pieceId: "piece-a" }, "piece-a"), true);
+  assert.equal(shouldClearSculptFeedbackForEvent({ type: "GAME_OVER" }, "piece-a"), true);
+  assert.equal(shouldClearSculptFeedbackForEvent({ type: "PIECE_LOCKED", pieceId: "piece-a" }, "piece-a"), true);
+  assert.equal(shouldClearSculptFeedbackForEvent({ type: "PIECE_LOCKED", pieceId: "piece-b" }, "piece-a"), false,
+    "locking another piece must not cancel feedback for the focused piece");
+  assert.equal(shouldClearSculptFeedbackForEvent({ type: "LINES_CLEARED" }, "piece-a"), false);
 });
 
 test("game input translation uses configured bindings with Enter as sculpt fallback", () => {

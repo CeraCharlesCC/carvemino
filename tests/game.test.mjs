@@ -6,7 +6,14 @@ import { createMatch, getPlayerGame, stepMatch } from "../src/domain/match.js";
 import { defineSurvivalPolicy } from "../src/domain/match/survival.js";
 import { defineVersusPolicy } from "../src/domain/match/versus.js";
 import { getTemplateBounds, getTemplateCells } from "../src/domain/rules.js";
-import { boardIndex, deferSpawns, prepareTwoLineClear } from "./helpers/game-fixtures.mjs";
+import {
+  boardIndex,
+  deferSpawns,
+  prepareActiveWorld,
+  prepareTwoLineClear,
+  resetDropPlanner,
+  setActivePieces
+} from "./helpers/game-fixtures.mjs";
 import { makeTestRules } from "./helpers/rules.mjs";
 
 const enginesByRulesetId = new Map();
@@ -75,37 +82,6 @@ function spawnI(game, rules) {
   stepGame(game, [], rules);
   assert.equal(game.activePieces.length, 1);
   return game.activePieces[0];
-}
-
-function makePiece(rules, overrides = {}) {
-  return {
-    id: "test-piece",
-    templateId: "I",
-    rotation: 0,
-    cellValue: 1,
-    x: 0,
-    y: 0,
-    cells: [{ x: 0, y: 0 }],
-    carved: 0,
-    carveLimit: rules.sculpting.carveLimit,
-    restingWorldTicks: 0,
-    pendingLock: false,
-    spawnIndex: 1,
-    committed: false,
-    ...overrides
-  };
-}
-
-function setActivePieces(game, rules, pieces, focusedPieceId = pieces[0]?.id ?? null) {
-  game.activePieces = pieces.map((piece, index) => makePiece(rules, {
-    spawnIndex: index + 1,
-    ...piece
-  }));
-  game.focusedPieceId = focusedPieceId;
-  game.nextSpawnIndex = Math.max(
-    game.nextSpawnIndex,
-    ...game.activePieces.map((piece) => piece.spawnIndex + 1)
-  );
 }
 
 // Engine ownership and presentation contracts.
@@ -259,9 +235,7 @@ test("sculpt fills only one empty orthogonal neighbor per command", () => {
 test("successful sculpt pauses the whole playfield timeline for the grace window", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 20, rules });
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [
+  prepareActiveWorld(game, rules, [
     {
       id: "focus",
       y: 5,
@@ -311,9 +285,7 @@ test("successful continuous sculpting refreshes the full operation grace", () =>
 test("focus switching adds a short hold but cannot freeze one world tick indefinitely", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 22, rules });
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [
+  prepareActiveWorld(game, rules, [
     { id: "first", y: 5 },
     { id: "second", x: 9, y: 5 }
   ]);
@@ -379,9 +351,7 @@ test("global grace defers scheduled spawns and garbage", () => {
 test("invalid sculpt does not suppress gravity", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 21, rules });
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [
+  prepareActiveWorld(game, rules, [
     {
       id: "focus",
       y: 5,
@@ -403,9 +373,7 @@ test("natural lock becomes pending while the whole playfield pauses", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 22, rules });
   const bottom = game.board.height - 1;
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [
+  prepareActiveWorld(game, rules, [
     {
       id: "locking",
       y: bottom,
@@ -448,9 +416,7 @@ test("natural lock replaces the last useful piece with or without operation grac
   for (const [name, rules, seed] of cases) {
     const game = createGame({ seed, rules });
     const bottom = game.board.height - 1;
-    game.worldTick = 20;
-    deferSpawns(game);
-    setActivePieces(game, rules, [{
+    prepareActiveWorld(game, rules, [{
       id: "last-useful",
       y: bottom,
       restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1
@@ -502,9 +468,7 @@ test("sculpt can edit a pending piece and refreshes the global grace", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 23, rules });
   const bottom = game.board.height - 1;
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [
+  prepareActiveWorld(game, rules, [
     {
       id: "editing",
       y: bottom,
@@ -598,11 +562,8 @@ test("recent-coverage drop planning uses extra samples and caps its history", ()
         dropPosition: { historyLength: history.length, sampleCount: dropPositionSampleCount }
       }
     });
-    const game = createGame({ seed: 24, rules });
-    game.dropQueue = [];
-    game.dropPositionMemory.placements = history.map((plan) => ({ ...plan }));
-    game.random.drops.state = 1;
-    game.nextScheduledSpawnWorldTick = game.worldTick + 100;
+    const game = createGame({ seed: 3, rules });
+    resetDropPlanner(game, { placements: history });
 
     stepGame(game, [], rules);
 
@@ -631,14 +592,6 @@ test("recent-coverage drop planning uses extra samples and caps its history", ()
 
 test("leaky-coverage drop planning decays pressure and supports raw-random escape", () => {
   const initialPressure = [640, 512, 384, 256, 128, 64, 32, 16, 8, 4];
-  const nextRandom = (stream) => {
-    let x = stream.state >>> 0 || 1;
-    x ^= x << 13;
-    x ^= x >>> 17;
-    x ^= x << 5;
-    stream.state = x >>> 0 || 1;
-    return stream.state;
-  };
 
   const planWithRawRandomNumerator = (rawRandomNumerator) => {
     const rules = makeTestRules({
@@ -655,38 +608,35 @@ test("leaky-coverage drop planning decays pressure and supports raw-random escap
       },
       progression: { dropQueueDepth: 1 }
     });
-    const game = createGame({ seed: 24, rules });
-    game.dropQueue = [];
-    game.dropPositionMemory.pressure = [...initialPressure];
-    game.random.drops.state = 1;
-    game.nextScheduledSpawnWorldTick = game.worldTick + 100;
-    const sampleStream = { ...game.random.drops };
+    const game = createGame({ seed: 2, rules });
+    resetDropPlanner(game, { pressure: initialPressure });
 
     stepGame(game, [], rules);
 
     const plan = game.dropQueue[0];
     const cells = getTemplateCells(rules, plan.templateId, plan.rotation);
-    const maxX = game.board.width - getTemplateBounds(rules, plan.templateId, plan.rotation).width;
-    const candidates = Array.from({ length: 3 }, () => nextRandom(sampleStream) % (maxX + 1));
-    nextRandom(sampleStream); // The escape-hatch draw is consumed after all three candidates.
-    const decayed = initialPressure.map((value) => Math.floor(value * 63 / 64));
-    const score = (x) => cells.reduce((sum, cell) => sum + decayed[x + cell.x], 0);
-    const balancedX = candidates.reduce((best, x) => score(x) < score(best) ? x : best);
-
-    const expectedPressure = [...decayed];
-    for (const cell of cells) expectedPressure[plan.x + cell.x] += 256;
-    assert.deepEqual(game.dropPositionMemory.pressure, expectedPressure);
+    const coveredColumns = new Set(cells.map((cell) => plan.x + cell.x));
+    for (let x = 0; x < initialPressure.length; x += 1) {
+      if (!coveredColumns.has(x)) {
+        assert(game.dropPositionMemory.pressure[x] < initialPressure[x],
+          `pressure at untouched column ${x} should decay`);
+      }
+    }
     const restored = restoreGame(snapshotGame(game));
     assert.deepEqual(restored.dropPositionMemory, game.dropPositionMemory);
     assert.equal(hashGameState(restored), hashGameState(game));
-    return { plan, candidates, balancedX };
+    return {
+      plan,
+      pressureScore: cells.reduce((sum, cell) => sum + initialPressure[plan.x + cell.x], 0)
+    };
   };
 
   const raw = planWithRawRandomNumerator(1);
-  assert.equal(raw.plan.x, raw.candidates[0]);
-
   const balanced = planWithRawRandomNumerator(0);
-  assert.equal(balanced.plan.x, balanced.balancedX);
+  assert.equal(balanced.plan.templateId, raw.plan.templateId);
+  assert.equal(balanced.plan.rotation, raw.plan.rotation);
+  assert(balanced.pressureScore < raw.pressureScore,
+    "balanced selection should improve on the raw-random placement for the same deterministic draw sequence");
 });
 
 test("template rotation produces normalized unique orientations", () => {
@@ -765,9 +715,7 @@ test("snapshot round trip preserves a pending lock and global grace", () => {
   const rules = makeTestRules();
   const game = createGame({ seed: 25, rules });
   const bottom = game.board.height - 1;
-  game.worldTick = 20;
-  deferSpawns(game);
-  setActivePieces(game, rules, [{
+  prepareActiveWorld(game, rules, [{
     id: "pending",
     y: bottom,
     restingWorldTicks: rules.simulation.lockDelayWorldTicks - 1

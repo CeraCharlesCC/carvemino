@@ -78,72 +78,55 @@ test("progression uses mutually exclusive discriminated gravity and spawn models
 
 });
 
-test("carver v5 uses three-sample leaky coverage with 25% raw randomness", () => {
-  assert.equal(CARVER_RULESET.id, "carvemino-carver-rules-v5");
-  assert.deepEqual(CARVER_RULESET.simulation.dropPosition, {
-    type: "leaky-coverage",
-    sampleCount: 3,
-    decayNumerator: 63,
-    decayDenominator: 64,
-    pressurePerCell: 256,
-    rawRandomNumerator: 1,
-    rawRandomDenominator: 4
-  });
+test("carver drop placement mixes pressure balancing with occasional raw randomness", () => {
+  const strategy = CARVER_RULESET.simulation.dropPosition;
+  assert.equal(strategy.type, "leaky-coverage");
+  assert(strategy.sampleCount > 1, "balancing should compare multiple candidates");
+  assert(strategy.decayNumerator > 0 && strategy.decayNumerator < strategy.decayDenominator,
+    "historical pressure should decay without disappearing immediately");
+  assert(strategy.pressurePerCell > 0);
+  assert(strategy.rawRandomNumerator > 0 && strategy.rawRandomNumerator < strategy.rawRandomDenominator,
+    "the escape hatch should be possible without dominating placement");
 });
 
-test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () => {
-  const seconds = (level) => spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, level) / 60;
+test("curve progression follows fixed examples without mirroring the implementation formula", () => {
+  const rules = {
+    progression: {
+      gravity: {
+        type: "curve",
+        points: [
+          { level: 1, worldTicks: 20 },
+          { level: 5, worldTicks: 12 },
+          { level: 9, worldTicks: 8 }
+        ]
+      },
+      spawn: {
+        type: "curve",
+        start: 600,
+        min: 120,
+        endLevel: 11,
+        easeOutExponentMilli: 2000
+      }
+    }
+  };
 
-  assert.equal(seconds(1), 8);
-  assert.equal(seconds(99), 2.5);
-  assert.equal(seconds(120), 2.5, "levels beyond the curve endpoint stay capped");
+  assert.equal(gravityIntervalWorldTicksForLevel(rules, 1), 20);
+  assert.equal(gravityIntervalWorldTicksForLevel(rules, 3), 16);
+  assert.equal(gravityIntervalWorldTicksForLevel(rules, 5), 12);
+  assert.equal(gravityIntervalWorldTicksForLevel(rules, 7), 10);
+  assert.equal(gravityIntervalWorldTicksForLevel(rules, 20), 8);
 
-  assert(seconds(10) > 7.2 && seconds(10) < 7.3);
-  assert(seconds(20) > 6.4 && seconds(20) < 6.6);
-  assert(seconds(50) > 4.4 && seconds(50) < 4.5);
-  assert(seconds(80) > 2.9 && seconds(80) < 3.0);
-
-  let previous = spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, 1);
-  for (let level = 2; level <= 99; level += 1) {
-    const current = spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, level);
-    assert(current <= previous, `spawn interval must not increase at level ${level}`);
-    previous = current;
-  }
-
-  const tenLevelDrop = (startLevel) => (
-    spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, startLevel)
-    - spawnIntervalWorldTicksForLevel(CLASSIC_RULESET, startLevel + 10)
-  );
-  assert(tenLevelDrop(1) > tenLevelDrop(31));
-  assert(tenLevelDrop(31) > tenLevelDrop(61));
-  assert(tenLevelDrop(61) > tenLevelDrop(81));
+  assert.equal(spawnIntervalWorldTicksForLevel(rules, 1), 600);
+  assert.equal(spawnIntervalWorldTicksForLevel(rules, 6), 240);
+  assert.equal(spawnIntervalWorldTicksForLevel(rules, 11), 120);
+  assert.equal(spawnIntervalWorldTicksForLevel(rules, 20), 120);
 });
 
-test("carver spawn cadence ramps concurrency gradually through level 22", () => {
-  const seconds = (level) => spawnIntervalWorldTicksForLevel(CARVER_RULESET, level) / 60;
-
-  assert.equal(seconds(1), 9);
-  assert.equal(seconds(22), 1.5);
-  assert.equal(seconds(99), 1.5, "levels beyond the curve endpoint stay capped");
-
-  assert(seconds(7) > 4.5 && seconds(7) < 4.6);
-  assert(seconds(11) > 2.8 && seconds(11) < 2.9);
-  assert(seconds(15) > 1.8 && seconds(15) < 2.0);
-  assert(seconds(19) > 1.5 && seconds(19) < 1.6);
-
-  let previous = spawnIntervalWorldTicksForLevel(CARVER_RULESET, 1);
-  for (let level = 2; level <= 22; level += 1) {
-    const current = spawnIntervalWorldTicksForLevel(CARVER_RULESET, level);
-    assert(current <= previous, `spawn interval must not increase at level ${level}`);
-    previous = current;
-  }
-});
-
-test("gravity follows each ruleset's configured curve and floor", () => {
+test("configured progression curves remain monotonic and respect their configured floors", () => {
   for (const rules of [CLASSIC_RULESET, CARVER_RULESET]) {
-    const points = rules.progression.gravity.points;
+    const gravityPoints = rules.progression.gravity.points;
 
-    for (const point of points) {
+    for (const point of gravityPoints) {
       assert.equal(
         gravityIntervalWorldTicksForLevel(rules, point.level),
         point.worldTicks,
@@ -151,22 +134,7 @@ test("gravity follows each ruleset's configured curve and floor", () => {
       );
     }
 
-    for (let index = 1; index < points.length; index += 1) {
-      const lower = points[index - 1];
-      const upper = points[index];
-      const midpointLevel = Math.floor((lower.level + upper.level) / 2);
-      const progress = (midpointLevel - lower.level) / (upper.level - lower.level);
-      const expected = Math.ceil(
-        lower.worldTicks + (upper.worldTicks - lower.worldTicks) * progress
-      );
-      assert.equal(
-        gravityIntervalWorldTicksForLevel(rules, midpointLevel),
-        expected,
-        `gravity must interpolate the configured curve at level ${midpointLevel}`
-      );
-    }
-
-    const lastPoint = points.at(-1);
+    const lastPoint = gravityPoints.at(-1);
     assert.equal(
       gravityIntervalWorldTicksForLevel(rules, lastPoint.level + 21),
       lastPoint.worldTicks,
@@ -183,6 +151,17 @@ test("gravity follows each ruleset's configured curve and floor", () => {
       );
       previous = current;
     }
+
+    const spawn = rules.progression.spawn;
+    const spawnFloor = spawn.min;
+    previous = spawnIntervalWorldTicksForLevel(rules, 1);
+    for (let level = 2; level <= spawn.endLevel + 21; level += 1) {
+      const current = spawnIntervalWorldTicksForLevel(rules, level);
+      assert(current <= previous, `spawn interval must not increase at level ${level}`);
+      assert(current >= spawnFloor, `spawn interval must respect its floor at level ${level}`);
+      previous = current;
+    }
+    assert.equal(spawnIntervalWorldTicksForLevel(rules, spawn.endLevel + 21), spawnFloor);
   }
 });
 

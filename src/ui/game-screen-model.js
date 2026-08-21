@@ -31,6 +31,39 @@ export function getSculptAction(view, cursor) {
   return null;
 }
 
+export function getFocusFeedbackKey(view, layout) {
+  const pieceId = view?.focusedPiece?.id;
+  if (!pieceId || !layout) return null;
+  return [
+    pieceId,
+    layout.minX,
+    layout.minY,
+    layout.maxX,
+    layout.maxY,
+    layout.cellSize,
+    layout.originX,
+    layout.originY
+  ].join(":");
+}
+
+export function isSculptFeedbackCurrent(view, layout, activeFeedbackKey) {
+  if (!activeFeedbackKey) return true;
+  return activeFeedbackKey === getFocusFeedbackKey(view, layout);
+}
+
+export function shouldClearSculptFeedbackForEvent(event, activePieceId) {
+  switch (event?.type) {
+    case "FOCUS_CHANGED":
+    case "PIECE_HARD_DROPPED":
+    case "GAME_OVER":
+      return true;
+    case "PIECE_LOCKED":
+      return Boolean(activePieceId) && event.pieceId === activePieceId;
+    default:
+      return false;
+  }
+}
+
 export function isDangerView(view, warningRows = 4) {
   const board = view?.board;
   if (!board || !Array.isArray(board.cells) || board.width <= 0 || board.height <= 0) return false;

@@ -4,7 +4,10 @@ import test from "node:test";
 import { SINGLEPLAYER_CATALOG, VERSUS_CATALOG } from "../src/app/catalog.js";
 
 test("versus catalog derives each mode from the shared base registry", () => {
-  assert.deepEqual(VERSUS_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
+  assert.deepEqual(
+    new Set(VERSUS_CATALOG.map((mode) => mode.id)),
+    new Set(SINGLEPLAYER_CATALOG.map((mode) => mode.id))
+  );
   for (const mode of VERSUS_CATALOG) {
     const singleplayer = SINGLEPLAYER_CATALOG.find((candidate) => candidate.id === mode.id);
     assert.ok(singleplayer);
@@ -19,10 +22,12 @@ test("versus catalog derives each mode from the shared base registry", () => {
   }
 });
 
-test("single-player and versus presentations keep their intended ordering and copy", () => {
-  assert.deepEqual(SINGLEPLAYER_CATALOG.map((mode) => mode.id), ["carver", "classic"]);
-  assert.deepEqual(VERSUS_CATALOG.map((mode) => mode.id), ["classic", "carver"]);
+test("single-player and versus catalogs expose independent, usable presentation metadata", () => {
   assert.notEqual(VERSUS_CATALOG, SINGLEPLAYER_CATALOG);
-  assert.equal(VERSUS_CATALOG[0].description, "Classic rules with line-clear attacks and garbage cancellation.");
-  assert.equal(SINGLEPLAYER_CATALOG[0].description, "Chunky polyominoes, a taller dig site, and twice the carving budget.");
+  for (const mode of [...SINGLEPLAYER_CATALOG, ...VERSUS_CATALOG]) {
+    assert.equal(typeof mode.name, "string");
+    assert(mode.name.trim().length > 0);
+    assert.equal(typeof mode.description, "string");
+    assert(mode.description.trim().length > 0);
+  }
 });

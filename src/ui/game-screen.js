@@ -1,11 +1,14 @@
 import { GAMEPLAY_ACTION_IDS } from "../config.js";
 import { getGameInputAction } from "./game-input.js";
 import {
+  getFocusFeedbackKey,
   getLineClearRows,
   getSculptAction,
   getVersusEventLabel,
   getVersusResultLabel,
-  isDangerView
+  isDangerView,
+  isSculptFeedbackCurrent,
+  shouldClearSculptFeedbackForEvent
 } from "./game-screen-model.js";
 import { createResponsiveShell } from "./responsive-shell.js";
 
@@ -161,21 +164,6 @@ export function createGameScreen({ sendCommand }) {
       }
     }
     classTimers.clear();
-  }
-
-  function focusFeedbackKey(view, layout = getFocusLayout(view)) {
-    const pieceId = view?.focusedPiece?.id;
-    if (!pieceId || !layout) return null;
-    return [
-      pieceId,
-      layout.minX,
-      layout.minY,
-      layout.maxX,
-      layout.maxY,
-      layout.cellSize,
-      layout.originX,
-      layout.originY
-    ].join(":");
   }
 
   function shellMetrics() {
@@ -418,7 +406,7 @@ export function createGameScreen({ sendCommand }) {
     if (!view || !event?.cell || view.focusedPiece?.id !== event.pieceId) return;
     const geometry = focusCellGeometry(view, event.cell);
     if (!geometry) return;
-    activeSculptFeedbackKey = focusFeedbackKey(view);
+    activeSculptFeedbackKey = getFocusFeedbackKey(view, getFocusLayout(view));
     activeSculptFeedbackPieceId = event.pieceId;
     const source = geometry ? { x: geometry.x, y: geometry.y } : null;
     const target = elementCenterInShell(scrap);
@@ -441,7 +429,7 @@ export function createGameScreen({ sendCommand }) {
     const source = elementCenterInShell(scrap);
     const geometry = focusCellGeometry(view, event.cell);
     if (!geometry) return;
-    activeSculptFeedbackKey = focusFeedbackKey(view);
+    activeSculptFeedbackKey = getFocusFeedbackKey(view, getFocusLayout(view));
     activeSculptFeedbackPieceId = event.pieceId;
     const target = geometry ? { x: geometry.x, y: geometry.y } : null;
     const piece = view.activePieces?.find((candidate) => candidate.id === event.pieceId);
@@ -458,7 +446,6 @@ export function createGameScreen({ sendCommand }) {
   }
 
   function spawnHardDropFeedback(event, beforeView, afterView) {
-    clearSculptFeedback();
     clearTransientGroup(FEEDBACK_GROUPS.hardDrop);
     if (!beforeView || !event?.pieceId) return;
     const beforePiece = beforeView.activePieces.find((candidate) => candidate.id === event.pieceId);
@@ -636,7 +623,7 @@ export function createGameScreen({ sendCommand }) {
     clearCanvas(focusCanvas, focus);
     const piece = view.focusedPiece;
     focusLayout = getFocusLayout(view);
-    if (activeSculptFeedbackKey && activeSculptFeedbackKey !== focusFeedbackKey(view, focusLayout)) {
+    if (!isSculptFeedbackCurrent(view, focusLayout, activeSculptFeedbackKey)) {
       clearSculptFeedback();
     }
     if (!piece || !focusLayout) {
@@ -926,6 +913,9 @@ export function createGameScreen({ sendCommand }) {
     const afterView = feedbackViews?.afterView || beforeView;
 
     for (const event of localEvents) {
+      if (shouldClearSculptFeedbackForEvent(event, activeSculptFeedbackPieceId)) {
+        clearSculptFeedback();
+      }
       switch (event.type) {
         case "BLOCK_CARVED":
           spawnCarveFeedback(event, afterView);
@@ -937,13 +927,8 @@ export function createGameScreen({ sendCommand }) {
           spawnHardDropFeedback(event, beforeView, afterView);
           break;
         case "FOCUS_CHANGED":
-          clearSculptFeedback();
-          break;
         case "PIECE_LOCKED":
-          if (event.pieceId === activeSculptFeedbackPieceId) clearSculptFeedback();
-          break;
         case "GAME_OVER":
-          clearSculptFeedback();
           break;
         case "LINES_CLEARED":
           spawnLineClearFeedback(event, localEvents, beforeView);
