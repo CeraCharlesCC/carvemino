@@ -40,7 +40,10 @@ test("rules definitions reject invalid shapes and semantic values", () => {
     ["curve-only field on gravity", (rules) => { rules.progression.gravity.step = 1; }, /rules\.progression\.gravity\.step is not a supported field/],
     [
       "curve-only field on linear spawn",
-      (rules) => { rules.progression.spawn.points = [{ level: 1, worldTicks: 480 }]; },
+      (rules) => {
+        rules.progression.spawn = { type: "linear", start: 540, step: 60, min: 90 };
+        rules.progression.spawn.points = [{ level: 1, worldTicks: 480 }];
+      },
       /rules\.progression\.spawn\.points is not a supported field/,
       CARVER_RULESET
     ],
@@ -62,7 +65,7 @@ test("progression uses mutually exclusive discriminated gravity and spawn models
   assert.equal(CLASSIC_RULESET.progression.gravity.type, "curve");
   assert.equal(CLASSIC_RULESET.progression.spawn.type, "curve");
   assert.equal(CARVER_RULESET.progression.gravity.type, "curve");
-  assert.equal(CARVER_RULESET.progression.spawn.type, "linear");
+  assert.equal(CARVER_RULESET.progression.spawn.type, "curve");
 
   for (const rules of [CLASSIC_RULESET, CARVER_RULESET]) {
     assert.equal(Object.hasOwn(rules.progression, "gravityStartWorldTicks"), false);
@@ -101,6 +104,26 @@ test("classic spawn cadence eases smoothly toward 2.5 seconds at level 99", () =
   assert(tenLevelDrop(1) > tenLevelDrop(31));
   assert(tenLevelDrop(31) > tenLevelDrop(61));
   assert(tenLevelDrop(61) > tenLevelDrop(81));
+});
+
+test("carver spawn cadence ramps concurrency gradually through level 22", () => {
+  const seconds = (level) => spawnIntervalWorldTicksForLevel(CARVER_RULESET, level) / 60;
+
+  assert.equal(seconds(1), 9);
+  assert.equal(seconds(22), 1.5);
+  assert.equal(seconds(99), 1.5, "levels beyond the curve endpoint stay capped");
+
+  assert(seconds(7) > 4.5 && seconds(7) < 4.6);
+  assert(seconds(11) > 2.8 && seconds(11) < 2.9);
+  assert(seconds(15) > 1.8 && seconds(15) < 2.0);
+  assert(seconds(19) > 1.5 && seconds(19) < 1.6);
+
+  let previous = spawnIntervalWorldTicksForLevel(CARVER_RULESET, 1);
+  for (let level = 2; level <= 22; level += 1) {
+    const current = spawnIntervalWorldTicksForLevel(CARVER_RULESET, level);
+    assert(current <= previous, `spawn interval must not increase at level ${level}`);
+    previous = current;
+  }
 });
 
 test("gravity follows each ruleset's configured curve and floor", () => {

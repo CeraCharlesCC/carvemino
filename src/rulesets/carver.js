@@ -10,7 +10,7 @@ export const CARVER_RULESET = defineRules({
     operationGraceSteps: 8,
     focusGraceSteps: 2,
     dropCoverageHistoryLength: 48,
-    dropPositionSampleCount: 2
+    dropPositionSampleCount: 3
   },
   sculpting: { carveLimit: 3, minimumCells: 3, scrapPerCarve: 1, fillCost: 2 },
   progression: {
@@ -35,20 +35,54 @@ export const CARVER_RULESET = defineRules({
         { level: 99, worldTicks: 6 }
       ]
     },
-    spawn: { type: "linear", start: 540, step: 60, min: 90 },
+    spawn: {
+      type: "curve",
+      start: 540,
+      min: 90,
+      endLevel: 22,
+      easeOutExponentMilli: 2700
+    },
     dropQueueDepth: 2
   },
   scoring: { lineClear: [0, 140, 380, 700, 1200, 1800], carve: 8, fill: 12 },
   pieces: {
     garbageCellValue: 8,
     templates: {
-      SLAB: { cells: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]], rotations: [0, 1], cellValue: 1 },
-      BOOT: { cells: [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]], rotations: [0, 1, 2, 3], cellValue: 2 },
-      STAIR: { cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2], [3, 2]], rotations: [0, 1], cellValue: 3 },
-      PLUS: { cells: [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2]], rotations: [0], cellValue: 4 },
-      U: { cells: [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]], rotations: [0, 1, 2, 3], cellValue: 5 },
-      P: { cells: [[0, 0], [1, 0], [0, 1], [1, 1], [0, 2]], rotations: [0, 1, 2, 3], cellValue: 6 },
-      CRATE: { cells: [[0, 0], [1, 0], [2, 0], [0, 1], [2, 1], [0, 2], [1, 2], [2, 2]], rotations: [0], cellValue: 7 }
+      SLAB: {
+        cells: [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]],
+        rotations: [0, 1],
+        cellValue: 1
+      },
+      BOOT: {
+        cells: [[0, 0], [0, 1], [0, 2], [1, 1], [1, 2], [2, 2]],
+        rotations: [0, 1, 2, 3],
+        cellValue: 2
+      },
+      STAIR: {
+        cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2], [3, 2]],
+        rotations: [0, 1],
+        cellValue: 3
+      },
+      CROSS: {
+        cells: [[1, 0], [0, 1], [1, 1], [2, 1], [1, 2], [1, 3]],
+        rotations: [0],
+        cellValue: 4
+      },
+      Y: {
+        cells: [[0, 0], [2, 0], [0, 1], [1, 1], [2, 1], [1, 2]],
+        rotations: [0, 1, 2, 3],
+        cellValue: 5
+      },
+      TRAPEZOID: {
+        cells: [[0, 0], [0, 1], [1, 1], [0, 2], [1, 2], [0, 3]],
+        rotations: [0, 1, 2, 3],
+        cellValue: 6
+      },
+      HINOTO: {
+        cells: [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2]],
+        rotations: [0],
+        cellValue: 7
+      }
     }
   },
   presentation: {
