@@ -57,6 +57,34 @@ test("single-player frames do not compute or publish a state hash", () => {
   assert.deepEqual(metadata[0], { interpolation: 0 });
 });
 
+test("runtime event batches include views from immediately before and after their tick", () => {
+  let value = 0;
+  const batches = [];
+  const session = {
+    engine: { stepsPerSecond: 60 },
+    game: { status: "playing" },
+    step() {
+      value += 1;
+      return [{ type: "VALUE_CHANGED" }];
+    },
+    view: () => ({ value })
+  };
+  const runtime = new GameRuntime({
+    session,
+    onEvents(events, _game, feedbackViews) {
+      batches.push({ events, feedbackViews });
+    }
+  });
+
+  runtime.runOneTick();
+
+  assert.equal(batches.length, 1);
+  assert.deepEqual(batches[0].events, [{ type: "VALUE_CHANGED" }]);
+  assert.deepEqual(batches[0].feedbackViews.beforeView, { value: 0 });
+  assert.deepEqual(batches[0].feedbackViews.afterView, { value: 1 });
+  assert(Object.isFrozen(batches[0].feedbackViews));
+});
+
 test("runtime replay commands are indexed by the fixed-step clock", () => {
   const rules = getSingleplayerMode("classic").rules;
   const session = createGameSession({ seed: 2, rules });

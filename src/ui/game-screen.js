@@ -1,12 +1,25 @@
 import { GAMEPLAY_ACTION_IDS } from "../config.js";
 import { getGameInputAction } from "./game-input.js";
-import { getSculptAction, getVersusEventLabel, getVersusResultLabel } from "./game-screen-model.js";
+import {
+  getLineClearRows,
+  getSculptAction,
+  getVersusEventLabel,
+  getVersusResultLabel,
+  isDangerView
+} from "./game-screen-model.js";
 import { createResponsiveShell } from "./responsive-shell.js";
 
 const SCULPT_CURSOR_COLORS = Object.freeze({
   CARVE: "#d98b43",
   FILL: "#6fb879",
   NONE: "#f1f5e6"
+});
+
+const FEEDBACK_GROUPS = Object.freeze({
+  sculpt: "sculpt",
+  hardDrop: "hard-drop",
+  lineClear: "line-clear",
+  levelUp: "level-up"
 });
 
 function clearCanvas(canvas, context) {
@@ -56,6 +69,7 @@ export function createGameScreen({ sendCommand }) {
   const gameStage = document.querySelector("#game-stage");
   const gameShellFrame = document.querySelector("#game-shell-frame");
   const gameShell = document.querySelector("#game-shell");
+  const playfieldPanel = document.querySelector(".playfield-panel");
   const score = document.querySelector("#score");
   const level = document.querySelector("#level");
   const lines = document.querySelector("#lines");
@@ -86,6 +100,10 @@ export function createGameScreen({ sendCommand }) {
   const versusFeed = document.querySelector("#versus-feed");
   const focusConnector = document.querySelector("#focus-connector");
   const focusConnectorPath = document.querySelector("#focus-connector-path");
+  const feedbackLayer = document.createElement("div");
+  feedbackLayer.className = "game-feedback-layer";
+  feedbackLayer.setAttribute("aria-hidden", "true");
+  gameShell.append(feedbackLayer);
   const responsiveShell = createResponsiveShell({
     stage: gameStage,
     frame: gameShellFrame,
@@ -99,6 +117,409 @@ export function createGameScreen({ sendCommand }) {
   let lastMeta = null;
   let gameContext = Object.freeze({ kind: "singleplayer", localPlayerId: null });
   let versusMessages = [];
+  const classTimers = new Map();
+  const transientTimers = new Map();
+  const transientsByGroup = new Map();
+  let activeSculptFeedbackKey = null;
+  let activeSculptFeedbackPieceId = null;
+
+  function pulseClass(element, className, duration) {
+    if (!element) return;
+    let timers = classTimers.get(element);
+    if (!timers) {
+      timers = new Map();
+      classTimers.set(element, timers);
+    }
+    const previous = timers.get(className);
+    if (previous !== undefined) clearTimeout(previous);
+    element.classList.remove(className);
+    void element.offsetWidth;
+    element.classList.add(className);
+    const timer = setTimeout(() => {
+      if (timers.get(className) !== timer) return;
+      element.classList.remove(className);
+      timers.delete(className);
+      if (timers.size === 0) classTimers.delete(element);
+    }, duration);
+    timers.set(className, timer);
+  }
+
+  function clearPulseClass(element, className) {
+    const timers = classTimers.get(element);
+    const timer = timers?.get(className);
+    if (timer !== undefined) clearTimeout(timer);
+    timers?.delete(className);
+    if (timers?.size === 0) classTimers.delete(element);
+    element?.classList.remove(className);
+  }
+
+  function clearPulseClasses() {
+    for (const [element, timers] of classTimers) {
+      for (const [className, timer] of timers) {
+        clearTimeout(timer);
+        element.classList.remove(className);
+      }
+    }
+    classTimers.clear();
+  }
+
+  function focusFeedbackKey(view, layout = getFocusLayout(view)) {
+    const pieceId = view?.focusedPiece?.id;
+    if (!pieceId || !layout) return null;
+    return [
+      pieceId,
+      layout.minX,
+      layout.minY,
+      layout.maxX,
+      layout.maxY,
+      layout.cellSize,
+      layout.originX,
+      layout.originY
+    ].join(":");
+  }
+
+  function shellMetrics() {
+    const rect = gameShell.getBoundingClientRect();
+    const width = gameShell.clientWidth || rect.width || 1;
+    const height = gameShell.clientHeight || rect.height || 1;
+    return {
+      rect,
+      scaleX: rect.width > 0 ? rect.width / width : 1,
+      scaleY: rect.height > 0 ? rect.height / height : 1
+    };
+  }
+
+  function elementOriginInShell(element) {
+    const metrics = shellMetrics();
+    const rect = element.getBoundingClientRect();
+    return {
+      x: (rect.left - metrics.rect.left) / metrics.scaleX,
+      y: (rect.top - metrics.rect.top) / metrics.scaleY
+    };
+  }
+
+  function elementCenterInShell(element) {
+    const metrics = shellMetrics();
+    const rect = element.getBoundingClientRect();
+    return {
+      x: (rect.left + rect.width / 2 - metrics.rect.left) / metrics.scaleX,
+      y: (rect.top + rect.height / 2 - metrics.rect.top) / metrics.scaleY
+    };
+  }
+
+  function elementContentOriginInShell(element) {
+    const origin = elementOriginInShell(element);
+    const styles = getComputedStyle(element);
+    const borderLeft = Number.parseFloat(styles.borderLeftWidth) || 0;
+    const borderTop = Number.parseFloat(styles.borderTopWidth) || 0;
+    return {
+      x: origin.x + borderLeft,
+      y: origin.y + borderTop
+    };
+  }
+
+  function fieldGridPoint(view, gridX, gridY) {
+    if (!view?.board) return null;
+    const origin = elementOriginInShell(fieldCanvas);
+    return {
+      x: origin.x + (gridX / view.board.width) * fieldCanvas.clientWidth,
+      y: origin.y + (gridY / view.board.height) * fieldCanvas.clientHeight
+    };
+  }
+
+  function fieldPointForPiece(view, piece, yOffset = 0) {
+    if (!view || !piece || !piece.cells?.length) return null;
+    const averageX = piece.cells.reduce((sum, cell) => sum + cell.x + 0.5, 0) / piece.cells.length;
+    const averageY = piece.cells.reduce((sum, cell) => sum + cell.y + 0.5, 0) / piece.cells.length;
+    return fieldGridPoint(
+      view,
+      Math.max(0.25, Math.min(view.board.width - 0.25, piece.x + averageX)),
+      Math.max(0.25, Math.min(view.board.height - 0.25, piece.y + yOffset + averageY))
+    );
+  }
+
+  function getFocusLayout(view) {
+    const piece = view?.focusedPiece;
+    if (!piece) return null;
+    const editable = view.sculpt.fill.targets;
+    const all = [...piece.cells, ...editable];
+    const minX = Math.min(...all.map((cell) => cell.x)) - 1;
+    const maxX = Math.max(...all.map((cell) => cell.x)) + 1;
+    const minY = Math.min(...all.map((cell) => cell.y)) - 1;
+    const maxY = Math.max(...all.map((cell) => cell.y)) + 1;
+    const columns = maxX - minX + 1;
+    const rows = maxY - minY + 1;
+    const cellSize = Math.floor(Math.min(32, 190 / columns, 190 / rows));
+    const gridWidth = columns * cellSize;
+    const gridHeight = rows * cellSize;
+    const originX = Math.floor((focusCanvas.width - gridWidth) / 2);
+    const originY = Math.floor((focusCanvas.height - gridHeight) / 2);
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      columns,
+      rows,
+      cellSize,
+      gridWidth,
+      gridHeight,
+      originX,
+      originY
+    };
+  }
+
+  function focusCellGeometry(view, cell) {
+    const layout = getFocusLayout(view);
+    if (!cell || !layout) return null;
+    const x = layout.originX + (cell.x - layout.minX + 0.5) * layout.cellSize;
+    const y = layout.originY + (cell.y - layout.minY + 0.5) * layout.cellSize;
+    const origin = elementContentOriginInShell(focusCanvas);
+    return {
+      x: origin.x + (x / focusCanvas.width) * focusCanvas.clientWidth,
+      y: origin.y + (y / focusCanvas.height) * focusCanvas.clientHeight,
+      width: (layout.cellSize / focusCanvas.width) * focusCanvas.clientWidth,
+      height: (layout.cellSize / focusCanvas.height) * focusCanvas.clientHeight
+    };
+  }
+
+  function removeTransient(element) {
+    const timer = transientTimers.get(element);
+    if (timer !== undefined) clearTimeout(timer);
+    transientTimers.delete(element);
+    const group = element.dataset.feedbackGroup;
+    if (group) {
+      const grouped = transientsByGroup.get(group);
+      grouped?.delete(element);
+      if (grouped?.size === 0) {
+        transientsByGroup.delete(group);
+        if (group === FEEDBACK_GROUPS.sculpt) {
+          activeSculptFeedbackKey = null;
+          activeSculptFeedbackPieceId = null;
+        }
+      }
+    }
+    element.remove();
+  }
+
+  function clearTransientGroup(group) {
+    const elements = transientsByGroup.get(group);
+    if (!elements) return;
+    for (const element of [...elements]) removeTransient(element);
+  }
+
+  function clearAllTransients() {
+    for (const group of [...transientsByGroup.keys()]) clearTransientGroup(group);
+    for (const element of [...transientTimers.keys()]) removeTransient(element);
+    feedbackLayer.replaceChildren();
+    activeSculptFeedbackKey = null;
+    activeSculptFeedbackPieceId = null;
+  }
+
+  function clearSculptFeedback() {
+    clearTransientGroup(FEEDBACK_GROUPS.sculpt);
+    activeSculptFeedbackKey = null;
+    activeSculptFeedbackPieceId = null;
+  }
+
+  function addTransient(element, timeout = 900, group = null) {
+    if (group) {
+      element.dataset.feedbackGroup = group;
+      let elements = transientsByGroup.get(group);
+      if (!elements) {
+        elements = new Set();
+        transientsByGroup.set(group, elements);
+      }
+      elements.add(element);
+    }
+    feedbackLayer.append(element);
+    const remove = () => removeTransient(element);
+    element.addEventListener("animationend", (event) => {
+      if (event.target === element) remove();
+    });
+    transientTimers.set(element, setTimeout(remove, timeout));
+  }
+
+  function spawnMaterialChips(source, target, {
+    count,
+    direction,
+    color,
+    delay = 0
+  }) {
+    if (!source || !target) return;
+    const bends = [-10, 7, -5, 12, -8, 4];
+    const sizes = [5, 3, 4, 6, 3, 4];
+    const dx = target.x - source.x;
+    const dy = target.y - source.y;
+    for (let index = 0; index < count; index += 1) {
+      const chip = document.createElement("i");
+      const bend = bends[index % bends.length];
+      const size = sizes[index % sizes.length];
+      chip.className = `material-chip is-${direction}`;
+      chip.style.left = `${source.x}px`;
+      chip.style.top = `${source.y}px`;
+      chip.style.width = `${size}px`;
+      chip.style.height = `${Math.max(3, size - 1)}px`;
+      chip.style.setProperty("--chip-color", color);
+      chip.style.setProperty("--chip-mid-x", `${dx * 0.52 + bend}px`);
+      chip.style.setProperty("--chip-mid-y", `${dy * 0.48 - 12 - Math.abs(bend) * 0.35}px`);
+      chip.style.setProperty("--chip-end-x", `${dx}px`);
+      chip.style.setProperty("--chip-end-y", `${dy}px`);
+      const rotation = index % 2 === 0 ? 150 + index * 17 : -135 - index * 19;
+      chip.style.setProperty("--chip-mid-rotation", `${rotation * 0.58}deg`);
+      chip.style.setProperty("--chip-rotation", `${rotation}deg`);
+      chip.style.setProperty("--chip-delay", `${delay + index * 26}ms`);
+      addTransient(chip, delay + 1100, FEEDBACK_GROUPS.sculpt);
+    }
+  }
+
+  function spawnSculptCellEffect(geometry, type, color, effectKey) {
+    if (!geometry) return;
+    const effect = document.createElement("span");
+    effect.className = `sculpt-cell-effect is-${type}`;
+    effect.dataset.effectKey = effectKey;
+    effect.style.left = `${geometry.x}px`;
+    effect.style.top = `${geometry.y}px`;
+    effect.style.width = `${Math.max(12, geometry.width - 2)}px`;
+    effect.style.height = `${Math.max(12, geometry.height - 2)}px`;
+    effect.style.setProperty("--cell-material", color);
+
+    if (type === "cut") {
+      for (const position of ["nw", "ne", "sw", "se"]) {
+        const fragment = document.createElement("i");
+        fragment.className = `cut-fragment is-${position}`;
+        effect.append(fragment);
+      }
+      const crack = document.createElement("i");
+      crack.className = "cut-crack";
+      effect.append(crack);
+    } else {
+      const frame = document.createElement("i");
+      frame.className = "fill-framework";
+      const material = document.createElement("i");
+      material.className = "fill-material";
+      effect.append(frame, material);
+    }
+
+    addTransient(effect, type === "cut" ? 650 : 850, FEEDBACK_GROUPS.sculpt);
+  }
+
+  function spawnImpact(point, className, group = null) {
+    if (!point) return;
+    const impact = document.createElement("i");
+    impact.className = className;
+    impact.style.left = `${point.x}px`;
+    impact.style.top = `${point.y}px`;
+    addTransient(impact, 620, group);
+  }
+
+  function spawnCarveFeedback(event, view) {
+    clearSculptFeedback();
+    if (!view || !event?.cell || view.focusedPiece?.id !== event.pieceId) return;
+    const geometry = focusCellGeometry(view, event.cell);
+    if (!geometry) return;
+    activeSculptFeedbackKey = focusFeedbackKey(view);
+    activeSculptFeedbackPieceId = event.pieceId;
+    const source = geometry ? { x: geometry.x, y: geometry.y } : null;
+    const target = elementCenterInShell(scrap);
+    const piece = view.activePieces?.find((candidate) => candidate.id === event.pieceId);
+    const color = piece?.style?.fill || "#d98b43";
+    spawnSculptCellEffect(geometry, "cut", color, `${event.pieceId}:${event.cell.x}:${event.cell.y}`);
+    spawnMaterialChips(source, target, {
+      count: 6,
+      direction: "to-scrap",
+      color,
+      delay: 170
+    });
+    clearPulseClass(scrap, "is-spending");
+    pulseClass(scrap, "is-gaining", 820);
+  }
+
+  function spawnFillFeedback(event, view) {
+    clearSculptFeedback();
+    if (!view || !event?.cell || view.focusedPiece?.id !== event.pieceId) return;
+    const source = elementCenterInShell(scrap);
+    const geometry = focusCellGeometry(view, event.cell);
+    if (!geometry) return;
+    activeSculptFeedbackKey = focusFeedbackKey(view);
+    activeSculptFeedbackPieceId = event.pieceId;
+    const target = geometry ? { x: geometry.x, y: geometry.y } : null;
+    const piece = view.activePieces?.find((candidate) => candidate.id === event.pieceId);
+    const color = piece?.style?.fill || "#6fb879";
+    spawnSculptCellEffect(geometry, "fill", color, `${event.pieceId}:${event.cell.x}:${event.cell.y}`);
+    spawnMaterialChips(source, target, {
+      count: Math.max(4, Math.min(6, (view.sculpt?.fill?.cost || 2) * 2)),
+      direction: "to-fill",
+      color,
+      delay: 90
+    });
+    clearPulseClass(scrap, "is-gaining");
+    pulseClass(scrap, "is-spending", 560);
+  }
+
+  function spawnHardDropFeedback(event, beforeView, afterView) {
+    clearSculptFeedback();
+    clearTransientGroup(FEEDBACK_GROUPS.hardDrop);
+    if (!beforeView || !event?.pieceId) return;
+    const beforePiece = beforeView.activePieces.find((candidate) => candidate.id === event.pieceId);
+    if (!beforePiece) return;
+    const afterPiece = afterView?.activePieces.find((candidate) => candidate.id === event.pieceId);
+    const distance = Math.max(0, Number(event.distance) || 0);
+    const source = fieldPointForPiece(beforeView, beforePiece);
+    const target = afterPiece
+      ? fieldPointForPiece(afterView, afterPiece)
+      : fieldPointForPiece(beforeView, beforePiece, distance);
+    if (!source || !target) return;
+
+    if (distance > 0) {
+      const streak = document.createElement("i");
+      streak.className = "hard-drop-streak";
+      streak.style.left = `${source.x}px`;
+      streak.style.top = `${source.y}px`;
+      streak.style.height = `${Math.max(8, target.y - source.y)}px`;
+      addTransient(streak, 480, FEEDBACK_GROUPS.hardDrop);
+    }
+    spawnImpact(target, "hard-drop-impact", FEEDBACK_GROUPS.hardDrop);
+    playfieldPanel.style.setProperty("--hard-drop-kick", `${Math.min(3, 1.25 + distance * 0.08)}px`);
+    pulseClass(playfieldPanel, "is-hard-drop", 180);
+  }
+
+  function spawnLineClearFeedback(event, events, beforeView) {
+    if (!beforeView) return;
+    clearTransientGroup(FEEDBACK_GROUPS.lineClear);
+    const rows = getLineClearRows(beforeView, events);
+    const count = Math.max(1, Number(event?.count) || 1);
+    const origin = elementOriginInShell(fieldCanvas);
+    const rowHeight = fieldCanvas.clientHeight / beforeView.board.height;
+    const visibleRows = rows.length > 0
+      ? rows
+      : Array.from({ length: count }, (_, index) => beforeView.board.height - count + index);
+
+    for (const row of visibleRows.slice(-count)) {
+      const sweep = document.createElement("i");
+      sweep.className = "line-clear-sweep";
+      sweep.style.left = `${origin.x}px`;
+      sweep.style.top = `${origin.y + row * rowHeight}px`;
+      sweep.style.width = `${fieldCanvas.clientWidth}px`;
+      sweep.style.height = `${Math.max(4, rowHeight)}px`;
+      addTransient(sweep, 620, FEEDBACK_GROUPS.lineClear);
+    }
+    pulseClass(playfieldPanel, "is-line-clear", 300);
+    pulseClass(gameShellFrame, "is-line-clear", 340);
+    pulseClass(lines, "is-counting", 420);
+  }
+
+  function spawnLevelUpFeedback(event) {
+    clearTransientGroup(FEEDBACK_GROUPS.levelUp);
+    const fieldOrigin = elementOriginInShell(fieldCanvas);
+    const warning = document.createElement("div");
+    warning.className = "level-up-warning";
+    warning.textContent = `LEVEL ${event.level} // SPEED UP`;
+    warning.style.left = `${fieldOrigin.x + fieldCanvas.clientWidth / 2}px`;
+    warning.style.top = `${fieldOrigin.y + Math.min(80, fieldCanvas.clientHeight * 0.22)}px`;
+    addTransient(warning, 2000, FEEDBACK_GROUPS.levelUp);
+    pulseClass(level, "is-leveling", 1200);
+  }
 
   function resetFocusCursor(piece) {
     focusCursorPieceId = piece ? piece.id : null;
@@ -214,32 +635,29 @@ export function createGameScreen({ sendCommand }) {
   function renderFocus(view) {
     clearCanvas(focusCanvas, focus);
     const piece = view.focusedPiece;
-    focusLayout = null;
-    if (!piece) {
+    focusLayout = getFocusLayout(view);
+    if (activeSculptFeedbackKey && activeSculptFeedbackKey !== focusFeedbackKey(view, focusLayout)) {
+      clearSculptFeedback();
+    }
+    if (!piece || !focusLayout) {
       resetFocusCursor(null);
       return;
     }
 
     const editable = view.sculpt.fill.targets;
-    const all = [...piece.cells, ...editable];
-    let minX = Math.min(...all.map((cell) => cell.x));
-    let maxX = Math.max(...all.map((cell) => cell.x));
-    let minY = Math.min(...all.map((cell) => cell.y));
-    let maxY = Math.max(...all.map((cell) => cell.y));
-    minX -= 1;
-    maxX += 1;
-    minY -= 1;
-    maxY += 1;
-
-    const columns = maxX - minX + 1;
-    const rows = maxY - minY + 1;
-    const cellSize = Math.floor(Math.min(32, 190 / columns, 190 / rows));
-    const gridWidth = columns * cellSize;
-    const gridHeight = rows * cellSize;
-    const originX = Math.floor((focusCanvas.width - gridWidth) / 2);
-    const originY = Math.floor((focusCanvas.height - gridHeight) / 2);
-
-    focusLayout = { minX, minY, maxX, maxY, cellSize, originX, originY };
+    const {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      columns,
+      rows,
+      cellSize,
+      gridWidth,
+      gridHeight,
+      originX,
+      originY
+    } = focusLayout;
     if (focusCursorPieceId !== piece.id) resetFocusCursor(piece);
     if (!focusCursor
         || focusCursor.x < minX || focusCursor.x > maxX
@@ -413,6 +831,7 @@ export function createGameScreen({ sendCommand }) {
     lastMeta = meta;
     configureFieldCanvas(view.board);
     responsiveShell.refresh();
+    gameShellFrame.classList.toggle("is-danger", isDangerView(view));
     renderField(view);
     renderNext(view);
     renderFocus(view);
@@ -486,6 +905,10 @@ export function createGameScreen({ sendCommand }) {
     peerState.textContent = isVersus ? "OPEN" : "OFFLINE";
     versusMessages = [];
     versusFeed.replaceChildren();
+    clearAllTransients();
+    clearPulseClasses();
+    gameShellFrame.classList.remove("is-danger", "is-line-clear");
+    playfieldPanel.classList.remove("is-hard-drop", "is-line-clear");
     focusCursor = null;
     focusCursorPieceId = null;
     lastView = null;
@@ -493,8 +916,50 @@ export function createGameScreen({ sendCommand }) {
     responsiveShell.scheduleRefresh();
   }
 
-  function handleMatchEvents(events) {
+  function handleGameEvents(events = [], feedbackViews = null) {
+    if (!Array.isArray(events) || events.length === 0) return;
+    const localEvents = gameContext.kind === "multiplayer"
+      ? events.filter((event) => event.playerId === gameContext.localPlayerId)
+      : events;
+    if (localEvents.length === 0) return;
+    const beforeView = feedbackViews?.beforeView || lastView;
+    const afterView = feedbackViews?.afterView || beforeView;
+
+    for (const event of localEvents) {
+      switch (event.type) {
+        case "BLOCK_CARVED":
+          spawnCarveFeedback(event, afterView);
+          break;
+        case "BLOCK_FILLED":
+          spawnFillFeedback(event, afterView);
+          break;
+        case "PIECE_HARD_DROPPED":
+          spawnHardDropFeedback(event, beforeView, afterView);
+          break;
+        case "FOCUS_CHANGED":
+          clearSculptFeedback();
+          break;
+        case "PIECE_LOCKED":
+          if (event.pieceId === activeSculptFeedbackPieceId) clearSculptFeedback();
+          break;
+        case "GAME_OVER":
+          clearSculptFeedback();
+          break;
+        case "LINES_CLEARED":
+          spawnLineClearFeedback(event, localEvents, beforeView);
+          break;
+        case "LEVEL_CHANGED":
+          spawnLevelUpFeedback(event);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  function handleMatchEvents(events, feedbackViews = null) {
     if (gameContext.kind !== "multiplayer") return;
+    handleGameEvents(events, feedbackViews);
     const labels = events
       .map((event) => getVersusEventLabel(event, gameContext.localPlayerId))
       .filter(Boolean);
@@ -512,6 +977,7 @@ export function createGameScreen({ sendCommand }) {
     getStatus: () => gameContext.kind === "multiplayer" && lastMeta?.matchStatus === "finished"
       ? "gameover"
       : lastView?.status || null,
+    handleGameEvents,
     handleMatchEvents,
     handleKey,
     performAction,

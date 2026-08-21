@@ -21,8 +21,14 @@ export class GameRuntime {
   runOneTick() {
     const commands = this.pendingCommands;
     this.pendingCommands = [];
+    const beforeView = this.session.view();
     const events = this.session.step(commands);
-    if (events.length > 0) this.onEvents(events, this.game);
+    if (events.length > 0) {
+      this.onEvents(events, this.game, Object.freeze({
+        beforeView,
+        afterView: this.session.view()
+      }));
+    }
     return events;
   }
 

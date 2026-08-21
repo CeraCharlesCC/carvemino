@@ -311,6 +311,7 @@ export class NetworkMatchRuntime {
 
   runHostTick() {
     if (!this.scheduleLocalCommands()) return [];
+    const beforeView = this.localView;
     const matchTick = this.match.matchTick;
     const remoteInputs = this.remoteInputsByTick.get(matchTick);
     const commandsByPlayer = commandsForRoster(this.playerIds, (playerId) => {
@@ -324,7 +325,7 @@ export class NetworkMatchRuntime {
     this.remoteInputsByTick.delete(matchTick);
 
     const events = stepMatch(this.match, commandsByPlayer);
-    this.emitEvents(events);
+    this.emitEvents(events, beforeView);
     this.sendHashCheckpointIfNeeded();
     this.markFinishedIfNeeded();
     return events;
@@ -345,8 +346,9 @@ export class NetworkMatchRuntime {
     }
 
     this.authoritativeFrames.delete(matchTick);
+    const beforeView = this.localView;
     const events = stepMatch(this.match, frame);
-    this.emitEvents(events);
+    this.emitEvents(events, beforeView);
     this.recordLocalCheckpointIfNeeded();
     this.compareExpectedHash(this.match.matchTick);
     this.markFinishedIfNeeded();
@@ -594,8 +596,13 @@ export class NetworkMatchRuntime {
     }
   }
 
-  emitEvents(events) {
-    if (events.length > 0) this.onEvents(events, this.match);
+  emitEvents(events, beforeView) {
+    if (events.length > 0) {
+      this.onEvents(events, this.match, Object.freeze({
+        beforeView,
+        afterView: this.localView
+      }));
+    }
   }
 
   emitFrame(interpolation) {

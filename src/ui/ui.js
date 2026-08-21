@@ -160,6 +160,7 @@ export function createUi({
   return {
     render: gameScreen.render,
     renderNetwork: gameScreen.render,
+    handleGameEvents: gameScreen.handleGameEvents,
     handleMatchEvents: gameScreen.handleMatchEvents,
     setProfile,
     setGameMode,

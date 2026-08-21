@@ -50,7 +50,8 @@ function startGame(modeId = activeModeId) {
   runtimeKind = "singleplayer";
   runtime = new GameRuntime({
     session,
-    onEvents(events, gameState) {
+    onEvents(events, gameState, feedbackViews) {
+      ui.handleGameEvents(events, feedbackViews);
       audio.handleGameEvents(events, gameState);
       const result = profile.processGameEvents(activeModeId, events, gameState.score);
       if (result.highScoreChanged || result.unlocked.length > 0) {
@@ -100,8 +101,8 @@ function startNetworkMatch(context) {
     role,
     localPlayerId,
     transport,
-    onEvents(events, currentMatch) {
-      ui.handleMatchEvents(events);
+    onEvents(events, currentMatch, feedbackViews) {
+      ui.handleMatchEvents(events, feedbackViews);
       const localGame = getPlayerGame(currentMatch, localPlayerId);
       audio.handleGameEvents(localAudioEvents(events, localPlayerId), localGame);
       if (currentMatch.status === "finished") lanSession.markFinished();

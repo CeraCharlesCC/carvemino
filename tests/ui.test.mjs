@@ -12,7 +12,13 @@ import {
   isRepeatingGameAction,
   triggerHapticFeedback
 } from "../src/ui/game-input.js";
-import { getSculptAction, getVersusEventLabel, getVersusResultLabel } from "../src/ui/game-screen-model.js";
+import {
+  getLineClearRows,
+  getSculptAction,
+  getVersusEventLabel,
+  getVersusResultLabel,
+  isDangerView
+} from "../src/ui/game-screen-model.js";
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getLanStatusText } from "../src/ui/lan-lobby.js";
 import { createInputMode, getInitialInputMode } from "../src/ui/input-mode.js";
@@ -520,6 +526,94 @@ test("sculpt action follows projected legal targets", () => {
 
   view.sculpt.carve.targets = [];
   assert.equal(getSculptAction(view, { x: 0, y: 0 }), null);
+});
+
+test("danger state only reacts to settled cells near the top of the visible board", () => {
+  const view = {
+    board: {
+      width: 4,
+      height: 8,
+      cells: Array(32).fill(null)
+    },
+    activePieces: [{ id: "falling", x: 0, y: 0, cells: [{ x: 0, y: 0 }] }]
+  };
+
+  assert.equal(isDangerView(view), false, "falling pieces do not make the warning frame stay on");
+  view.board.cells[4 * 3 + 2] = { fill: "#fff" };
+  assert.equal(isDangerView(view), true);
+  view.board.cells[4 * 3 + 2] = null;
+  view.board.cells[4 * 4] = { fill: "#fff" };
+  assert.equal(isDangerView(view), false, "the default threshold covers the top four rows");
+});
+
+test("line clear feedback reconstructs rows completed by pieces that lock in the event batch", () => {
+  const cells = Array(12).fill(null);
+  cells[8] = { fill: "#fff" };
+  cells[9] = { fill: "#fff" };
+  const view = {
+    board: { width: 4, height: 3, cells },
+    activePieces: [
+      { id: "locking", x: 2, y: 2, cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }] },
+      { id: "falling", x: 0, y: 1, cells: [{ x: 2, y: 0 }, { x: 3, y: 0 }] }
+    ]
+  };
+
+  assert.deepEqual(getLineClearRows(view, [{ type: "PIECE_LOCKED", pieceId: "locking" }]), [2]);
+  assert.deepEqual(getLineClearRows(view, [{ type: "PIECE_LOCKED", pieceId: "falling" }]), []);
+});
+
+test("sculpt feedback expresses cutting and filling as staged material changes", () => {
+  const screen = readFileSync(new URL("../src/ui/game-screen.js", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../styles/screens/game.css", import.meta.url), "utf8");
+
+  assert(!css.includes("@media (prefers-reduced-motion"));
+  assert.match(screen, /spawnSculptCellEffect\(geometry, "cut", color,[^;]+\);\s*spawnMaterialChips/s,
+    "CUT breaks the source cell before its material moves to SCRAP");
+  assert.match(screen, /spawnSculptCellEffect\(geometry, "fill", color,[^;]+\);\s*spawnMaterialChips/s,
+    "FILL places its framework before SCRAP material arrives");
+  assert.match(screen, /case "BLOCK_CARVED":\s*spawnCarveFeedback\(event, afterView\)/s);
+  assert.match(screen, /case "BLOCK_FILLED":\s*spawnFillFeedback\(event, afterView\)/s,
+    "sculpt overlays use the same post-edit layout that the FOCUS canvas renders");
+  assert.match(screen, /elementContentOriginInShell\(focusCanvas\)/,
+    "overlay coordinates begin at the canvas content box rather than its border box");
+  assert.match(css, /@keyframes cut-fragment-break\s*\{/);
+  assert.match(css, /@keyframes cut-crack-reveal\s*\{/);
+  assert.match(css, /@keyframes fill-framework-place\s*\{/);
+  assert.match(css, /@keyframes fill-material-build\s*\{/);
+  assert(!css.includes("feedback-particle"));
+  assert(!css.includes("@keyframes material-flow"));
+  assert.match(css, /@keyframes hard-drop-impact\s*\{\s*0%, 26% \{ opacity: \.95;/);
+});
+
+test("sculpt feedback stays within FOCUS and level-up feedback remains prominent", () => {
+  const screen = readFileSync(new URL("../src/ui/game-screen.js", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../styles/screens/game.css", import.meta.url), "utf8");
+
+  assert(!screen.includes("fieldPointForCell"),
+    "CARVE and FILL should not duplicate material feedback over the main playfield");
+  assert.match(css, /\.level-up-warning\s*\{[^}]*min-width:\s*236px;/s);
+  assert.match(css, /\.level-up-warning\s*\{[^}]*font-size:\s*14px;/s);
+  assert.match(css, /\.level-up-warning\s*\{[^}]*animation:\s*level-up-warning 1800ms/s);
+});
+
+test("transient feedback drops stale FOCUS geometry instead of stacking old animations", () => {
+  const screen = readFileSync(new URL("../src/ui/game-screen.js", import.meta.url), "utf8");
+
+  assert.match(screen, /function spawnCarveFeedback\(event, view\)\s*\{\s*clearSculptFeedback\(\);/s);
+  assert.match(screen, /function spawnFillFeedback\(event, view\)\s*\{\s*clearSculptFeedback\(\);/s,
+    "a rapid next edit supersedes the previous FOCUS animation");
+  assert.match(screen, /view\.focusedPiece\?\.id !== event\.pieceId/s,
+    "a tick-final view must not animate an edit over a different focused piece");
+  assert.match(screen, /activeSculptFeedbackKey !== focusFeedbackKey\(view, focusLayout\)[\s\S]*?clearSculptFeedback\(\)/,
+    "gravity/collisions that change FOCUS bounds invalidate old overlay coordinates");
+  assert.match(screen, /function spawnHardDropFeedback[\s\S]*?clearSculptFeedback\(\);[\s\S]*?clearTransientGroup\(FEEDBACK_GROUPS\.hardDrop\)/,
+    "hard drop removes an in-flight sculpt effect and replaces any previous drop effect");
+  assert.match(screen, /spawnCarveFeedback[\s\S]*?clearPulseClass\(scrap, "is-spending"\)[\s\S]*?pulseClass\(scrap, "is-gaining"/,
+    "rapid carve/fill alternation must not leave the previous SCRAP pulse winning the cascade");
+  assert.match(screen, /spawnFillFeedback[\s\S]*?clearPulseClass\(scrap, "is-gaining"\)[\s\S]*?pulseClass\(scrap, "is-spending"/);
+  assert.match(screen, /case "FOCUS_CHANGED":\s*clearSculptFeedback\(\)/s);
+  assert.match(screen, /case "PIECE_LOCKED":\s*if \(event\.pieceId === activeSculptFeedbackPieceId\) clearSculptFeedback\(\)/s,
+    "locking another active piece must not cancel feedback for the focused piece");
 });
 
 test("game input translation uses configured bindings with Enter as sculpt fallback", () => {

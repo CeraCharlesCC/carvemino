@@ -134,7 +134,9 @@ function createRuntimePair({
   hashIntervalTicks = 10,
   maxBufferedFutureTicks = 600,
   hostEvents = [],
-  clientEvents = []
+  clientEvents = [],
+  hostFeedbackViews = [],
+  clientFeedbackViews = []
 }) {
   const transports = createTransportPair();
   const host = new NetworkMatchRuntime({
@@ -147,8 +149,9 @@ function createRuntimePair({
     inputDelayTicks,
     hashIntervalTicks,
     maxBufferedFutureTicks,
-    onEvents(events) {
+    onEvents(events, _match, feedbackViews) {
       hostEvents.push(...events);
+      hostFeedbackViews.push(feedbackViews);
     }
   });
   const client = new NetworkMatchRuntime({
@@ -161,8 +164,9 @@ function createRuntimePair({
     inputDelayTicks,
     hashIntervalTicks,
     maxBufferedFutureTicks,
-    onEvents(events) {
+    onEvents(events, _match, feedbackViews) {
       clientEvents.push(...events);
+      clientFeedbackViews.push(feedbackViews);
     }
   });
   return { host, client, transports };
@@ -223,6 +227,21 @@ test("network runtimes apply only host frames and converge after commands from b
   assert.deepEqual(delayedFrame.payload.commandsByPlayer.b, [{ type: "FOCUS_NEXT" }]);
   assert(client.connectionStats.inputsSent > 0);
   assert(host.connectionStats.inputsReceived > 0);
+});
+
+test("network event batches carry tick-local before and after views for feedback", () => {
+  const hostFeedbackViews = [];
+  const { host } = createBasicRuntimePair("feedback-view-match", { hostFeedbackViews });
+
+  host.runOneTick();
+
+  assert.equal(hostFeedbackViews.length, 1);
+  const [feedbackViews] = hostFeedbackViews;
+  assert(feedbackViews.beforeView.board);
+  assert(feedbackViews.afterView.board);
+  assert(Object.isFrozen(feedbackViews));
+  assert.notDeepEqual(feedbackViews.beforeView, feedbackViews.afterView,
+    "the first network tick spawns pieces after the captured pre-tick view");
 });
 
 test("network runtime routes independent inputs for every remote player in a larger roster", () => {
