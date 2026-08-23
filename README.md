@@ -10,6 +10,22 @@ Carvemino flips the usual falling-block formula. You do not steer pieces sideway
 | --- | --- |
 | <img src="docs/screenshots/carver-gameplay.png" alt="Carver gameplay" width="350"> | <img src="docs/screenshots/lan-versus.png" alt="LAN versus" width="350"> |
 
+## Available on itch.io
+
+<table>
+  <tr>
+    <td width="210">
+      <a href="https://cerac2.itch.io/carvemino"><img src="icons/cover_img.png" alt="Carvemino cover art" width="196"></a>
+    </td>
+    <td width="342">
+      <h3>Carvemino</h3>
+      <p>by <a href="https://cerac2.itch.io">CeraC2</a></p>
+      <p>A block-stacking puzzle where the pieces choose where to fall—and you carve them into shape before they land.</p>
+      <p><a href="https://cerac2.itch.io/carvemino"><strong>Play on itch.io →</strong></a></p>
+    </td>
+  </tr>
+</table>
+
 ## Highlights
 
 * **Sculpt instead of steer.** Remove cells from a falling piece, bank the material, then spend it to fill eligible neighboring cells.
