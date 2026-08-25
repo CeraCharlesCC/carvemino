@@ -20,6 +20,7 @@ export function getInitialInputMode(matchMedia = globalThis.matchMedia?.bind(glo
 export function createInputMode({
   root = globalThis.document?.querySelector?.(".console-layout"),
   manual = globalThis.document?.querySelector?.("#startup-manual"),
+  overlays = globalThis.document?.querySelectorAll?.("#menu-controls-dialog, #tutorial-offer-dialog") || [],
   documentObject = globalThis.document,
   windowObject = globalThis.window,
   matchMedia = globalThis.matchMedia?.bind(globalThis)
@@ -48,7 +49,9 @@ export function createInputMode({
     if (event?.pointerType !== "touch" && event?.pointerType !== "pen") return;
     const interactive = event.target?.closest?.(INTERACTIVE_SELECTOR);
     if (!interactive) return;
-    const belongsToUi = root?.contains?.(interactive) || manual?.contains?.(interactive);
+    const belongsToUi = root?.contains?.(interactive)
+      || manual?.contains?.(interactive)
+      || [...overlays].some((overlay) => overlay?.contains?.(interactive));
     if (belongsToUi) setMode(INPUT_MODES.touch);
   }
 

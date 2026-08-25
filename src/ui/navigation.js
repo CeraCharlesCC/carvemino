@@ -24,6 +24,7 @@ export function createNavigation({
   pauseGame,
   resumeGame,
   openManual = () => {},
+  interceptControllerStart = () => null,
   onAudioEvent,
   onScreenChange
 }) {
@@ -185,6 +186,8 @@ export function createNavigation({
   }
 
   function performControllerStart(returnFocus = pauseGameButton) {
+    const intercepted = interceptControllerStart();
+    if (intercepted !== null && intercepted !== undefined) return intercepted;
     const status = gameScreen.getStatus();
     if (currentScreen !== "game") {
       triggerHapticFeedback();

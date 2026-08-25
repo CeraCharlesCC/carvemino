@@ -62,7 +62,7 @@ function drawGrid(context, width, height, cellSize) {
   context.restore();
 }
 
-export function createGameScreen({ sendCommand }) {
+export function createGameScreen({ sendCommand, onAction = () => {} }) {
   const fieldCanvas = document.querySelector("#field");
   const nextCanvas = document.querySelector("#next");
   const focusCanvas = document.querySelector("#focus");
@@ -70,6 +70,7 @@ export function createGameScreen({ sendCommand }) {
   const next = nextCanvas.getContext("2d");
   const focus = focusCanvas.getContext("2d");
   const gameStage = document.querySelector("#game-stage");
+  const consoleLayout = document.querySelector(".console-layout");
   const gameShellFrame = document.querySelector("#game-shell-frame");
   const gameShell = document.querySelector("#game-shell");
   const playfieldPanel = document.querySelector(".playfield-panel");
@@ -103,6 +104,12 @@ export function createGameScreen({ sendCommand }) {
   const versusFeed = document.querySelector("#versus-feed");
   const focusConnector = document.querySelector("#focus-connector");
   const focusConnectorPath = document.querySelector("#focus-connector-path");
+  const tutorialGuideElement = document.querySelector("#tutorial-guide");
+  const tutorialGuideMessage = document.querySelector("#tutorial-guide-message");
+  const tutorialKeyboardAction = document.querySelector("#tutorial-keyboard-action");
+  const tutorialKeyboardKeys = document.querySelector("#tutorial-keyboard-keys");
+  const tutorialTouchHint = document.querySelector("#tutorial-touch-hint");
+  const tutorialControllerHint = document.querySelector("#tutorial-controller-hint");
   const feedbackLayer = document.createElement("div");
   feedbackLayer.className = "game-feedback-layer";
   feedbackLayer.setAttribute("aria-hidden", "true");
@@ -125,6 +132,8 @@ export function createGameScreen({ sendCommand }) {
   const transientsByGroup = new Map();
   let activeSculptFeedbackKey = null;
   let activeSculptFeedbackPieceId = null;
+  let tutorialGuide = null;
+  let tutorialPulseFrame = null;
 
   function pulseClass(element, className, duration) {
     if (!element) return;
@@ -619,7 +628,7 @@ export function createGameScreen({ sendCommand }) {
     }
   }
 
-  function renderFocus(view) {
+  function renderFocus(view, animationTime = null) {
     clearCanvas(focusCanvas, focus);
     const piece = view.focusedPiece;
     focusLayout = getFocusLayout(view);
@@ -684,6 +693,27 @@ export function createGameScreen({ sendCommand }) {
       const px = originX + (cell.x - minX) * cellSize;
       const py = originY + (cell.y - minY) * cellSize;
       drawCell(focus, px, py, cellSize, piece.style, true);
+    }
+
+    const tutorialTargets = tutorialGuide?.targetCell ? [tutorialGuide.targetCell] : [];
+    if (tutorialTargets.length > 0) {
+      const pulse = animationTime == null ? 0.5 : (Math.sin(animationTime / 145) + 1) / 2;
+      focus.save();
+      for (const cell of tutorialTargets) {
+        const px = originX + (cell.x - minX) * cellSize;
+        const py = originY + (cell.y - minY) * cellSize;
+        const inset = 1.5 + pulse * 1.5;
+        focus.strokeStyle = "#080a07";
+        focus.lineWidth = 7;
+        focus.setLineDash([]);
+        focus.strokeRect(px + inset, py + inset, cellSize - inset * 2, cellSize - inset * 2);
+        focus.strokeStyle = "#f1f5e6";
+        focus.lineWidth = 3;
+        focus.setLineDash([Math.max(5, cellSize * 0.16), Math.max(3, cellSize * 0.09)]);
+        focus.lineDashOffset = -pulse * 12;
+        focus.strokeRect(px + inset, py + inset, cellSize - inset * 2, cellSize - inset * 2);
+      }
+      focus.restore();
     }
 
     if (focusCursor) {
@@ -831,36 +861,130 @@ export function createGameScreen({ sendCommand }) {
   }
 
   function moveFocusCursor(dx, dy) {
-    if (!lastView || !lastView.focusedPiece || !focusLayout) return;
+    if (!lastView || !lastView.focusedPiece || !focusLayout) return false;
     if (focusCursorPieceId !== lastView.focusedPiece.id || !focusCursor) {
       resetFocusCursor(lastView.focusedPiece);
     }
 
-    focusCursor.x = Math.max(focusLayout.minX, Math.min(focusLayout.maxX, focusCursor.x + dx));
-    focusCursor.y = Math.max(focusLayout.minY, Math.min(focusLayout.maxY, focusCursor.y + dy));
+    const nextX = Math.max(focusLayout.minX, Math.min(focusLayout.maxX, focusCursor.x + dx));
+    const nextY = Math.max(focusLayout.minY, Math.min(focusLayout.maxY, focusCursor.y + dy));
+    if (nextX === focusCursor.x && nextY === focusCursor.y) return false;
+    focusCursor.x = nextX;
+    focusCursor.y = nextY;
     renderFocus(lastView);
+    return true;
+  }
+
+  function sameCell(a, b) {
+    return Boolean(a && b && a.x === b.x && a.y === b.y);
   }
 
   function sculptAtCursor() {
-    if (!lastView || !lastView.focusedPiece || !focusCursor) return;
+    if (!lastView || !lastView.focusedPiece || !focusCursor) return false;
     const piece = lastView.focusedPiece;
-    if (!getSculptAction(lastView, focusCursor)) return;
+    const sculptAction = getSculptAction(lastView, focusCursor);
+    if (!sculptAction) return false;
+    if (tutorialGuide?.targetCell && !sameCell(focusCursor, tutorialGuide.targetCell)) return false;
+    if (["cut", "cut-again"].includes(tutorialGuide?.step) && sculptAction !== "CARVE") return false;
+    if (tutorialGuide?.step === "fill" && sculptAction !== "FILL") return false;
     sendCommand({ type: "SCULPT", pieceId: piece.id, x: focusCursor.x, y: focusCursor.y });
+    return true;
+  }
+
+  function isTutorialActionAllowed(action) {
+    const step = tutorialGuide?.step;
+    if (!step) return true;
+    if (step === "clear") return false;
+    const cursorAction = action === GAMEPLAY_ACTION_IDS.cursorUp
+      || action === GAMEPLAY_ACTION_IDS.cursorLeft
+      || action === GAMEPLAY_ACTION_IDS.cursorDown
+      || action === GAMEPLAY_ACTION_IDS.cursorRight;
+    if (step === "move") return cursorAction;
+    if (step === "move-second" || step === "move-fill") return cursorAction;
+    if (step === "cut" || step === "cut-again" || step === "fill") {
+      return action === GAMEPLAY_ACTION_IDS.sculpt;
+    }
+    if (step === "drop") return action === GAMEPLAY_ACTION_IDS.hardDrop;
+    return false;
   }
 
   function performAction(action) {
+    if (!isTutorialActionAllowed(action)) return false;
+    let accepted = true;
     switch (action) {
       case GAMEPLAY_ACTION_IDS.focusPrevious: sendCommand({ type: "FOCUS_PREVIOUS" }); break;
       case GAMEPLAY_ACTION_IDS.focusNext: sendCommand({ type: "FOCUS_NEXT" }); break;
-      case GAMEPLAY_ACTION_IDS.cursorUp: moveFocusCursor(0, -1); break;
-      case GAMEPLAY_ACTION_IDS.cursorLeft: moveFocusCursor(-1, 0); break;
-      case GAMEPLAY_ACTION_IDS.cursorDown: moveFocusCursor(0, 1); break;
-      case GAMEPLAY_ACTION_IDS.cursorRight: moveFocusCursor(1, 0); break;
-      case GAMEPLAY_ACTION_IDS.sculpt: sculptAtCursor(); break;
+      case GAMEPLAY_ACTION_IDS.cursorUp: accepted = moveFocusCursor(0, -1); break;
+      case GAMEPLAY_ACTION_IDS.cursorLeft: accepted = moveFocusCursor(-1, 0); break;
+      case GAMEPLAY_ACTION_IDS.cursorDown: accepted = moveFocusCursor(0, 1); break;
+      case GAMEPLAY_ACTION_IDS.cursorRight: accepted = moveFocusCursor(1, 0); break;
+      case GAMEPLAY_ACTION_IDS.sculpt: accepted = sculptAtCursor(); break;
       case GAMEPLAY_ACTION_IDS.hardDrop: sendCommand({ type: "HARD_DROP_FOCUSED" }); break;
       default: return false;
     }
-    return true;
+    if (accepted) onAction(action, { cursor: focusCursor ? { ...focusCursor } : null });
+    return accepted;
+  }
+
+  function stopTutorialPulse() {
+    if (tutorialPulseFrame != null) cancelAnimationFrame(tutorialPulseFrame);
+    tutorialPulseFrame = null;
+  }
+
+  function syncTutorialPulse() {
+    stopTutorialPulse();
+    if (!tutorialGuide?.targetCell || !lastView) return;
+    const animate = (time) => {
+      if (!tutorialGuide?.targetCell || !lastView) {
+        tutorialPulseFrame = null;
+        return;
+      }
+      renderFocus(lastView, time);
+      tutorialPulseFrame = requestAnimationFrame(animate);
+    };
+    tutorialPulseFrame = requestAnimationFrame(animate);
+  }
+
+  function setTutorialGuide(guide) {
+    tutorialGuide = guide ? { ...guide } : null;
+    if (!tutorialGuideElement || !tutorialGuideMessage) return;
+    tutorialGuideElement.hidden = !tutorialGuide;
+    tutorialGuideMessage.textContent = tutorialGuide?.message || "";
+    if (tutorialKeyboardAction) tutorialKeyboardAction.textContent = tutorialGuide?.keyboardAction || "";
+    if (tutorialKeyboardKeys) {
+      const keys = tutorialGuide?.keyboardKeys || [];
+      tutorialKeyboardKeys.replaceChildren(...keys.map((label) => {
+        const key = document.createElement("kbd");
+        key.textContent = label;
+        return key;
+      }));
+    }
+    if (tutorialTouchHint) tutorialTouchHint.textContent = tutorialGuide?.touchHint || "";
+    if (tutorialControllerHint) tutorialControllerHint.textContent = tutorialGuide?.controllerHint || "";
+    tutorialGuideElement.dataset.hasControl = tutorialGuide?.control ? "true" : "false";
+    if (tutorialGuide?.step) gameScreen.dataset.tutorialStep = tutorialGuide.step;
+    else delete gameScreen.dataset.tutorialStep;
+    if (tutorialGuide?.step && consoleLayout) consoleLayout.dataset.tutorialStep = tutorialGuide.step;
+    else if (consoleLayout) delete consoleLayout.dataset.tutorialStep;
+    responsiveShell.scheduleRefresh();
+    if (lastView) renderFocus(lastView);
+    syncTutorialPulse();
+  }
+
+  function clearTutorialGuide() {
+    tutorialGuide = null;
+    stopTutorialPulse();
+    if (tutorialGuideElement) tutorialGuideElement.hidden = true;
+    if (tutorialGuideMessage) tutorialGuideMessage.textContent = "";
+    if (tutorialKeyboardAction) tutorialKeyboardAction.textContent = "";
+    if (tutorialKeyboardKeys) tutorialKeyboardKeys.replaceChildren();
+    if (tutorialTouchHint) tutorialTouchHint.textContent = "";
+    if (tutorialControllerHint) tutorialControllerHint.textContent = "";
+    tutorialGuideElement?.removeAttribute("data-has-control");
+    delete gameScreen.dataset.tutorialStep;
+    if (consoleLayout) delete consoleLayout.dataset.tutorialStep;
+    responsiveShell.scheduleRefresh();
+    if (lastView) renderFocus(lastView);
   }
 
   function handleKey(event, bindings) {
@@ -968,6 +1092,8 @@ export function createGameScreen({ sendCommand }) {
     performAction,
     refreshLayout: responsiveShell.scheduleRefresh,
     render,
+    setTutorialGuide,
+    clearTutorialGuide,
     setGameMode
   };
 }

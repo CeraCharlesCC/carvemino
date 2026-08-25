@@ -25,6 +25,7 @@ import {
 import { getResponsiveShellScale } from "../src/ui/responsive-shell.js";
 import { getLanStatusText } from "../src/ui/lan-lobby.js";
 import { createInputMode, getInitialInputMode } from "../src/ui/input-mode.js";
+import { FIRST_RUN_STAGES, createFirstRunTutorialStore } from "../src/ui/first-run-tutorial.js";
 import { createNavigation } from "../src/ui/navigation.js";
 import {
   getBackScreen,
@@ -34,7 +35,6 @@ import {
   shouldPauseGameSimulation
 } from "../src/ui/navigation-model.js";
 import {
-  claimStartupManualVisit,
   createManualDemoState,
   getManualControllerIntent,
   getManualDemoTarget,
@@ -234,6 +234,18 @@ test("index exposes the DOM hooks required by navigation and the LAN lobby", () 
   }
   for (const id of [
     "press-start",
+    "menu-controls-dialog",
+    "menu-controls-ack",
+    "tutorial-offer-dialog",
+    "tutorial-yes",
+    "tutorial-no",
+    "tutorial-guide",
+    "tutorial-guide-message",
+    "tutorial-keyboard-action",
+    "tutorial-keyboard-keys",
+    "tutorial-touch-hint",
+    "tutorial-controller-hint",
+    "pause-how-to-play",
     "lan-host-mode",
     "lan-create-invite",
     "lan-host-offer-qr",
@@ -256,6 +268,12 @@ test("index exposes the DOM hooks required by navigation and the LAN lobby", () 
   }
 });
 
+test("UI startup no longer auto-opens the reference manual", () => {
+  const source = readFileSync(new URL("../src/ui/ui.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /claimStartupManualVisit/);
+  assert.doesNotMatch(source, /mode:\s*["']startup["']/);
+});
+
 test("input mode initializes from pointer layout and switches on meaningful input types", () => {
   assert.equal(getInitialInputMode(() => ({ matches: false })), "keyboard");
   assert.equal(getInitialInputMode(() => ({ matches: true })), "touch");
@@ -264,6 +282,7 @@ test("input mode initializes from pointer layout and switches on meaningful inpu
   const documentHandlers = new Map();
   const root = { dataset: {}, contains: (target) => target?.owner === "root" };
   const manual = { contains: (target) => target?.owner === "manual" };
+  const onboarding = { contains: (target) => target?.owner === "onboarding" };
   const documentObject = {
     documentElement: { dataset: {} },
     addEventListener: (type, handler) => documentHandlers.set(type, handler),
@@ -276,6 +295,7 @@ test("input mode initializes from pointer layout and switches on meaningful inpu
   const inputMode = createInputMode({
     root,
     manual,
+    overlays: [onboarding],
     documentObject,
     windowObject,
     matchMedia: () => ({ matches: false })
@@ -290,6 +310,14 @@ test("input mode initializes from pointer layout and switches on meaningful inpu
   documentHandlers.get("pointerdown")({
     pointerType: "touch",
     target: { closest: () => manualButton }
+  });
+  assert.equal(inputMode.getMode(), "touch");
+
+  inputMode.setMode("keyboard");
+  const onboardingButton = { owner: "onboarding" };
+  documentHandlers.get("pointerdown")({
+    pointerType: "touch",
+    target: { closest: () => onboardingButton }
   });
   assert.equal(inputMode.getMode(), "touch");
 
@@ -448,6 +476,23 @@ test("controller Start covers title, pause/resume, multiplayer match menu, and g
   status = "gameover";
   assert.equal(navigation.performControllerStart(), true);
   assert.equal(playAgain, 1);
+});
+
+test("controller Start can be intercepted by first-run onboarding", (t) => {
+  const dom = installNavigationGlobals(t);
+  let titleStarts = 0;
+  let onboardingStarts = 0;
+  dom.elements.get("#press-start").click = () => { titleStarts += 1; };
+  const navigation = createTestNavigation({
+    interceptControllerStart() {
+      onboardingStarts += 1;
+      return true;
+    }
+  });
+
+  assert.equal(navigation.performControllerStart(), true);
+  assert.equal(onboardingStarts, 1);
+  assert.equal(titleStarts, 0);
 });
 
 test("VS result and battle event copy is local-player aware", () => {
@@ -716,17 +761,33 @@ test("startup manual locale follows browser language with an English fallback", 
   assert.match(japanese.t("manual.lab.controllerHint"), /コントローラー/);
   assert.match(english.t("manual.controllerNotice.copy"), /controller/i);
   assert.match(japanese.t("manual.controllerNotice.copy"), /コントローラー/);
+  assert.equal(english.t("onboarding.menu.title"), "CONTROLS READY");
+  assert.match(japanese.t("onboarding.menu.title"), /操作/);
+  assert.equal(japanese.t("onboarding.tutorial.title"), "チュートリアルをプレイしますか？");
+  assert.match(english.t("tutorial.guide.move"), /FOCUS.*piece falling/i);
+  assert.match(japanese.t("tutorial.guide.move"), /FOCUS.*落下中/);
+  assert.match(english.t("tutorial.guide.clear"), /high score/i);
+  assert.match(japanese.t("tutorial.guide.clear"), /横一列.*消え.*ハイスコア/);
+  assert.match(japanese.t("tutorial.control.touch.cut"), /画面下部.*Aボタン/);
+  assert.equal(
+    japanese.t("tutorial.control.controller.fill", { button: "CIRCLE" }),
+    "コントローラーのCIRCLEボタンを押します。"
+  );
 });
 
-test("startup manual is automatically claimed only once per local storage", () => {
+test("first-run state replaces automatic startup-manual claiming", () => {
   const values = new Map();
   const storage = {
     getItem(key) { return values.get(key) ?? null; },
     setItem(key, value) { values.set(key, String(value)); }
   };
 
-  assert.equal(claimStartupManualVisit(storage), true);
-  assert.equal(claimStartupManualVisit(storage), false);
+  const state = createFirstRunTutorialStore(storage);
+  assert.equal(state.getStage(), FIRST_RUN_STAGES.fresh);
+  assert.equal(state.shouldShowMenuControls(), true);
+  state.acknowledgeMenu();
+  assert.equal(state.getStage(), FIRST_RUN_STAGES.menuAcknowledged);
+  assert.equal(state.shouldShowMenuControls(), false);
 });
 
 test("interactive focus lab teaches cut, fill, focus switching, and drop without game state", () => {

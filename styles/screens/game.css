@@ -743,10 +743,313 @@ kbd {
   }
 }
 
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) and (min-width: 700px) {
+  .onboarding-dialog {
+    bottom: calc(202px + env(safe-area-inset-bottom, 0));
+    max-height: calc(100dvh - 226px);
+  }
+}
+
 @media (hover: none) and (pointer: coarse) and (orientation: landscape) and (min-width: 900px) and (min-height: 600px) {
   .focus-nav[data-input-hint="tablet-rail"] { display: flex; }
 }
 
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 700px) {
   .game-screen { --game-header-height: 34px; }
+}
+
+/* First-run onboarding and in-game tutorial guidance. */
+.onboarding-dialog {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  width: min(480px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 1px solid #7c7964;
+  border-radius: 4px;
+  overflow: auto;
+  background:
+    linear-gradient(180deg, #1b1d18 0, var(--panel) 54px),
+    var(--panel);
+  color: var(--ink);
+  box-shadow:
+    0 24px 70px #000e,
+    inset 0 0 0 1px #25271f;
+}
+.console-layout[data-onboarding] .arcade-cabinet {
+  filter: brightness(.22) saturate(.55);
+  pointer-events: none;
+}
+.onboarding-dialog::backdrop {
+  background: transparent;
+}
+.onboarding-panel {
+  position: relative;
+  padding: 28px;
+}
+.onboarding-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 28px;
+  right: 28px;
+  height: 2px;
+  background: var(--moss);
+  box-shadow: 0 0 14px var(--glow);
+}
+.onboarding-panel .eyebrow {
+  margin-bottom: 8px;
+  color: var(--moss);
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.onboarding-panel h2 {
+  margin: 0 0 10px;
+  font-size: clamp(20px, 5vw, 24px);
+  line-height: 1.2;
+  letter-spacing: 2px;
+}
+.onboarding-panel p { line-height: 1.55; }
+.onboarding-input-copy { margin: 0 0 16px; }
+.onboarding-control-list {
+  gap: 1px;
+  padding: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.onboarding-control-row {
+  min-height: 52px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: minmax(96px, auto) 1fr;
+  align-items: center;
+  gap: 12px;
+  background: #0d0f0c;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.onboarding-key-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.onboarding-key-cluster kbd {
+  padding: 5px 6px;
+  border-color: #7c7964;
+  background: #28281c;
+  color: var(--ink);
+  font-size: 10px;
+  white-space: nowrap;
+  box-shadow: inset 0 -2px 0 #11120f;
+}
+.onboarding-primary {
+  width: 100%;
+  margin-top: 16px;
+}
+.onboarding-panel .menu-button {
+  min-height: 48px;
+  font-size: 12px;
+}
+.onboarding-choice { gap: 8px; }
+.onboarding-choice .onboarding-primary { margin-top: 0; }
+#tutorial-offer-dialog { width: min(380px, calc(100vw - 24px)); }
+.onboarding-tutorial-panel h2 {
+  margin-bottom: 20px;
+  text-align: center;
+}
+:root[data-input-mode="keyboard"] .onboarding-input-copy[data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .onboarding-input-copy[data-input-hint="touch"],
+:root[data-input-mode="controller"] .onboarding-input-copy[data-input-hint="controller"] { display: grid; }
+
+.tutorial-guide {
+  position: absolute;
+  z-index: 22;
+  top: calc(var(--game-header-height) + 10px);
+  left: 10px;
+  width: min(318px, calc(100% - 20px));
+  padding: 10px 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 7px;
+  border: 1px solid #7c7964;
+  background:
+    linear-gradient(110deg, #151712f5, #090b08f5),
+    #090b08;
+  box-shadow: 0 7px 22px #000b, inset 0 0 0 1px #25271f;
+  pointer-events: none;
+}
+.tutorial-guide[hidden] { display: none; }
+.tutorial-guide-heading {
+  display: flex;
+  align-items: baseline;
+}
+.tutorial-guide-heading .eyebrow {
+  margin: 0;
+  color: var(--arrow);
+  font-size: 9px;
+  letter-spacing: 1.6px;
+}
+.tutorial-guide p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.tutorial-guide-control {
+  min-width: 0;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: #070806;
+}
+.tutorial-guide-control strong {
+  color: var(--moss);
+  font-size: 9px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.tutorial-keyboard-keys {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tutorial-keyboard-keys kbd {
+  min-width: 28px;
+  padding: 5px 6px;
+  border-color: var(--moss);
+  background: #34351f;
+  color: var(--ink);
+  font-size: 11px;
+  text-align: center;
+  box-shadow: 0 0 0 1px #abb6a22b, 0 0 10px #abb6a224;
+}
+.tutorial-guide-control-copy {
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: left;
+}
+:root[data-input-mode="keyboard"] .tutorial-guide-control[data-input-hint="keyboard"],
+:root[data-input-mode="touch"] .tutorial-guide-control[data-input-hint="touch"],
+:root[data-input-mode="controller"] .tutorial-guide-control[data-input-hint="controller"] { display: flex; }
+.tutorial-guide[data-has-control="false"] .tutorial-guide-control { display: none !important; }
+.game-screen[data-tutorial-step="move"] .focus-section,
+.game-screen[data-tutorial-step="move-second"] .focus-section,
+.game-screen[data-tutorial-step="move-fill"] .focus-section,
+.game-screen[data-tutorial-step="cut"] .focus-section,
+.game-screen[data-tutorial-step="cut-again"] .focus-section,
+.game-screen[data-tutorial-step="fill"] .focus-section,
+.game-screen[data-tutorial-step="fill"] #scrap,
+.game-screen[data-tutorial-step="drop"] .playfield-panel {
+  outline: 2px solid var(--arrow);
+  outline-offset: 2px;
+}
+.game-screen[data-tutorial-step="move"] .focus-section,
+.game-screen[data-tutorial-step="move-second"] .focus-section,
+.game-screen[data-tutorial-step="move-fill"] .focus-section,
+.game-screen[data-tutorial-step="cut"] .focus-section,
+.game-screen[data-tutorial-step="cut-again"] .focus-section,
+.game-screen[data-tutorial-step="fill"] .focus-section {
+  animation: tutorial-focus-pulse 880ms ease-in-out infinite;
+}
+.game-screen[data-tutorial-step="move"] .focus-connector path,
+.game-screen[data-tutorial-step="move-second"] .focus-connector path,
+.game-screen[data-tutorial-step="move-fill"] .focus-connector path,
+.game-screen[data-tutorial-step="cut"] .focus-connector path,
+.game-screen[data-tutorial-step="cut-again"] .focus-connector path,
+.game-screen[data-tutorial-step="fill"] .focus-connector path {
+  stroke: var(--arrow);
+  stroke-width: 1.4;
+  animation: tutorial-connector-flow 650ms linear infinite;
+}
+.game-screen[data-tutorial-step="fill"] #scrap { box-shadow: 0 0 12px var(--arrow); }
+.console-layout[data-tutorial-step="move"] .touch-dpad,
+.console-layout[data-tutorial-step="move"] .rail-dpad,
+.console-layout[data-tutorial-step="move-second"] .touch-dpad,
+.console-layout[data-tutorial-step="move-second"] .rail-dpad,
+.console-layout[data-tutorial-step="move-fill"] .touch-dpad,
+.console-layout[data-tutorial-step="move-fill"] .rail-dpad,
+.console-layout[data-tutorial-step="drop"] .drop-button,
+.console-layout[data-tutorial-step="drop"] .rail-drop-button,
+.console-layout[data-tutorial-step="cut"] .sculpt-button,
+.console-layout[data-tutorial-step="cut"] .rail-sculpt-button,
+.console-layout[data-tutorial-step="cut-again"] .sculpt-button,
+.console-layout[data-tutorial-step="cut-again"] .rail-sculpt-button,
+.console-layout[data-tutorial-step="fill"] .sculpt-button,
+.console-layout[data-tutorial-step="fill"] .rail-sculpt-button { box-shadow: 0 0 0 2px var(--arrow); }
+
+@keyframes tutorial-focus-pulse {
+  0%, 100% { outline-color: #f0b35d99; box-shadow: 0 0 0 #f0b35d00; }
+  50% { outline-color: #f0b35d; box-shadow: 0 0 14px #f0b35d55; }
+}
+
+@keyframes tutorial-connector-flow {
+  to { stroke-dashoffset: -14; }
+}
+
+@media (max-width: 520px) {
+  .onboarding-panel { padding: 22px 18px; }
+  .onboarding-panel::before { left: 18px; right: 18px; }
+  .onboarding-panel h2 { font-size: 20px; }
+  .onboarding-control-row {
+    min-height: 48px;
+    grid-template-columns: minmax(88px, auto) 1fr;
+    gap: 8px;
+  }
+
+  .tutorial-guide {
+    top: calc(var(--game-header-height) + 6px);
+    left: 6px;
+    width: min(292px, calc(100% - 12px));
+    padding: 8px 10px 9px;
+    row-gap: 5px;
+  }
+  .tutorial-guide p {
+    font-size: clamp(13px, 3.8vw, 14px);
+    line-height: 1.35;
+  }
+  .tutorial-guide-control {
+    min-width: 0;
+    width: 100%;
+    min-height: 34px;
+    padding: 5px 7px;
+    justify-content: space-between;
+  }
+  .tutorial-guide-control-copy {
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .tutorial-keyboard-keys { justify-content: flex-end; }
+  .tutorial-keyboard-keys kbd { padding: 4px 5px; font-size: 10px; }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) {
+  .onboarding-dialog {
+    bottom: calc(var(--control-deck-height, 164px) + 6px + env(safe-area-inset-bottom, 0));
+    max-height: calc(100dvh - var(--control-deck-height, 164px) - 30px);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: portrait) and (max-width: 374px) and (max-height: 650px) {
+  .tutorial-guide {
+    top: calc(var(--game-header-height) + 4px);
+    left: 4px;
+    width: min(238px, calc(100% - 8px));
+    padding: 8px 9px;
+  }
+  .tutorial-guide p { font-size: 12px; }
+  .tutorial-guide-control { padding: 5px 7px; }
+  .game-screen[data-tutorial-step="drop"] .tutorial-guide {
+    right: 0;
+    left: auto;
+    width: min(220px, calc(100% - 8px));
+    box-shadow: -4px 5px 16px #000b;
+  }
 }

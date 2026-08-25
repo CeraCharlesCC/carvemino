@@ -3,10 +3,12 @@ import { SINGLEPLAYER_CATALOG, VERSUS_CATALOG, getSingleplayerMode } from "./app
 import { NetworkMatchRuntime } from "./app/network-match-runtime.js";
 import { createProfileStore } from "./app/profile.js";
 import { GameRuntime } from "./app/runtime.js";
+import { prepareTutorialRun } from "./app/tutorial-run.js";
 import { createAudioEngine } from "./audio/engine.js";
 import { createGameSession } from "./domain/game.js";
 import { getPlayerGame } from "./domain/match.js";
 import { createUi } from "./ui/ui.js";
+import { TUTORIAL_SEED } from "./config.js";
 
 const profile = createProfileStore();
 const audio = createAudioEngine();
@@ -18,6 +20,7 @@ let runtimeKind = null;
 let activeModeId = null;
 let networkQuitInProgress = false;
 let seed = 1;
+let tutorialActive = false;
 
 function freshSeed() {
   if (globalThis.crypto && globalThis.crypto.getRandomValues) {
@@ -35,15 +38,17 @@ function stopSingleplayer() {
   runtimeKind = null;
 }
 
-function startGame(modeId = activeModeId) {
+function startGame(modeId = activeModeId, { tutorial = false } = {}) {
   if (!modeId) return;
   if (runtimeKind === "network") quitNetworkGame();
   else stopSingleplayer();
 
   const mode = getSingleplayerMode(modeId);
   activeModeId = mode.id;
-  seed = freshSeed();
+  tutorialActive = tutorial;
+  seed = tutorial ? TUTORIAL_SEED : freshSeed();
   const session = createGameSession({ seed, rules: mode.rules });
+  const tutorialPlan = tutorial ? prepareTutorialRun(session) : null;
   audio.startGame({ modeId: mode.id, level: session.game.level });
 
   ui.setGameMode(mode.id, { kind: "singleplayer" });
@@ -63,7 +68,8 @@ function startGame(modeId = activeModeId) {
     }
   });
   ui.render(session.view());
-  runtime.start();
+  if (!tutorial) runtime.start();
+  return tutorialPlan ? { tutorialPlan } : null;
 }
 
 function localAudioEvents(events, localPlayerId) {
@@ -171,6 +177,8 @@ function quitNetworkGame() {
 }
 
 function quitGame() {
+  if (tutorialActive) ui?.abandonTutorial?.();
+  tutorialActive = false;
   if (runtimeKind === "network") quitNetworkGame();
   else stopSingleplayer();
 }
@@ -179,13 +187,38 @@ ui = createUi({
   modes: SINGLEPLAYER_CATALOG.map(({ id, name, description }) => ({ id, name, description })),
   lanModes: VERSUS_CATALOG.map(({ id, name, description }) => ({ id, name, description })),
   sendCommand(command) {
-    if (runtime) runtime.command(command);
+    if (!runtime) return;
+    runtime.command(command);
+    if (runtimeKind !== "singleplayer" || !tutorialActive) return;
+
+    let events = runtime.runOneTick();
+    if (command?.type === "HARD_DROP_FOCUSED"
+        && !events.some((event) => event.type === "PIECE_HARD_DROPPED")) {
+      while (tutorialActive && runtime.game.worldHoldSteps > 0) runtime.runOneTick();
+      if (tutorialActive) {
+        runtime.command(command);
+        events = runtime.runOneTick();
+      }
+    }
+    ui.render(runtime.session.view());
   },
   restart() {
-    if (runtimeKind !== "network") startGame();
+    if (runtimeKind === "network") return;
+    const restartTutorial = tutorialActive;
+    const result = startGame(activeModeId, { tutorial: restartTutorial });
+    if (restartTutorial) ui.restartTutorial(result?.tutorialPlan);
   },
-  startMode(modeId) {
-    startGame(modeId);
+  startMode(modeId, options) {
+    return startGame(modeId, options);
+  },
+  releaseTutorial() {
+    if (runtimeKind !== "singleplayer" || !runtime || !tutorialActive) return;
+    runtime.start();
+  },
+  finishTutorial() {
+    if (runtimeKind !== "singleplayer" || !runtime || !tutorialActive) return;
+    tutorialActive = false;
+    runtime.start();
   },
   async createHostInvite(modeId) {
     ui.setLanNotice("");
@@ -216,7 +249,7 @@ ui = createUi({
     audio.pauseGame();
   },
   resumeGame() {
-    if (runtimeKind === "singleplayer" && runtime) runtime.start();
+    if (runtimeKind === "singleplayer" && runtime && !tutorialActive) runtime.start();
     audio.resumeGame();
   },
   changeKeybinding(action, code) {

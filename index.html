@@ -379,6 +379,19 @@
             <button class="utility-button" type="button" id="pause-game">PAUSE</button>
           </header>
 
+          <aside class="tutorial-guide" id="tutorial-guide" role="region" aria-live="polite" aria-labelledby="tutorial-guide-eyebrow" hidden>
+            <div class="tutorial-guide-heading">
+              <span class="eyebrow" id="tutorial-guide-eyebrow" data-i18n="tutorial.eyebrow">GUIDED RUN</span>
+            </div>
+            <p id="tutorial-guide-message"></p>
+            <div class="tutorial-guide-control" data-input-hint="keyboard">
+              <strong id="tutorial-keyboard-action"></strong>
+              <span class="tutorial-keyboard-keys" id="tutorial-keyboard-keys"></span>
+            </div>
+            <div class="tutorial-guide-control tutorial-guide-control-copy" data-input-hint="touch" id="tutorial-touch-hint"></div>
+            <div class="tutorial-guide-control tutorial-guide-control-copy" data-input-hint="controller" id="tutorial-controller-hint"></div>
+          </aside>
+
           <div class="game-stage" id="game-stage">
             <div class="game-shell-frame" id="game-shell-frame">
               <div class="game-shell" id="game-shell">
@@ -524,6 +537,49 @@
       <p data-i18n="orientation.copy">Rotate your phone to portrait to play.</p>
     </div>
   </aside>
+
+  <dialog class="onboarding-dialog" id="menu-controls-dialog" aria-labelledby="menu-controls-title">
+    <div class="onboarding-panel">
+      <p class="eyebrow" data-i18n="onboarding.firstRun">FIRST RUN SETUP</p>
+      <h2 id="menu-controls-title" data-i18n="onboarding.menu.title">CONTROLS READY</h2>
+      <div class="onboarding-input-copy onboarding-control-list" data-input-hint="keyboard">
+        <div class="onboarding-control-row">
+          <span class="onboarding-key-cluster"><kbd>WASD</kbd><kbd>ARROWS</kbd></span>
+          <span data-i18n="onboarding.menu.keyboard.select">Select menu items</span>
+        </div>
+        <div class="onboarding-control-row">
+          <span class="onboarding-key-cluster"><kbd>ENTER</kbd></span>
+          <span data-i18n="onboarding.menu.keyboard.confirm">Confirm a choice</span>
+        </div>
+        <div class="onboarding-control-row">
+          <span class="onboarding-key-cluster"><kbd>ESC</kbd></span>
+          <span data-i18n="onboarding.menu.keyboard.back">Go back</span>
+        </div>
+      </div>
+      <div class="onboarding-input-copy onboarding-control-list" data-input-hint="touch">
+        <div class="onboarding-control-row"><span class="onboarding-key-cluster"><kbd>D-PAD</kbd></span><span data-i18n="onboarding.menu.touch.select">Select menu items</span></div>
+        <div class="onboarding-control-row"><span class="onboarding-key-cluster"><kbd>A</kbd><kbd>START</kbd></span><span data-i18n="onboarding.menu.touch.confirm">Confirm a choice</span></div>
+        <div class="onboarding-control-row"><span class="onboarding-key-cluster"><kbd>B</kbd></span><span data-i18n="onboarding.menu.touch.back">Go back</span></div>
+      </div>
+      <div class="onboarding-input-copy onboarding-control-list" data-input-hint="controller">
+        <div class="onboarding-control-row"><span class="onboarding-key-cluster"><kbd>D-PAD</kbd><kbd>STICK</kbd></span><span data-i18n="onboarding.menu.controller.select">Select menu items</span></div>
+        <div class="onboarding-control-row"><span class="onboarding-key-cluster"><kbd data-controller-menu-action="sculpt">BOTTOM FACE</kbd></span><span data-i18n="onboarding.menu.controller.confirm">Confirm a choice</span></div>
+        <div class="onboarding-control-row"><span class="onboarding-key-cluster"><kbd data-controller-menu-action="hardDrop">RIGHT FACE</kbd></span><span data-i18n="onboarding.menu.controller.back">Go back</span></div>
+        <div class="onboarding-control-row"><span class="onboarding-key-cluster"><kbd>START</kbd></span><span data-i18n="onboarding.menu.controller.start">Confirm where shown</span></div>
+      </div>
+      <button class="menu-button onboarding-primary" type="button" id="menu-controls-ack"><span data-i18n="onboarding.menu.continue">CONTINUE</span></button>
+    </div>
+  </dialog>
+
+  <dialog class="onboarding-dialog" id="tutorial-offer-dialog" aria-labelledby="tutorial-offer-title">
+    <div class="onboarding-panel onboarding-tutorial-panel">
+      <h2 id="tutorial-offer-title" data-i18n="onboarding.tutorial.title">PLAY THE TUTORIAL?</h2>
+      <nav class="arcade-menu onboarding-choice" data-i18n-aria-label="onboarding.tutorial.choiceLabel" aria-label="Tutorial choice">
+        <button class="menu-button onboarding-primary" type="button" id="tutorial-yes"><span data-i18n="onboarding.tutorial.yes">PLAY</span></button>
+        <button class="menu-button" type="button" id="tutorial-no"><span data-i18n="onboarding.tutorial.no">SKIP</span></button>
+      </nav>
+    </div>
+  </dialog>
 
   <dialog class="startup-manual" id="startup-manual" aria-labelledby="manual-title">
     <div class="manual-book">

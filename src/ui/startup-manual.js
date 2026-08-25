@@ -1,4 +1,4 @@
-import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS, STARTUP_MANUAL_STORAGE_KEY } from "../config.js";
+import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS } from "../config.js";
 import { formatKeyLabel, getGameInputAction } from "./game-input.js";
 import { mapPhysicalFaceActionForMenu } from "./gamepad-input.js";
 
@@ -20,25 +20,6 @@ export function getManualControllerIntent(pageIndex, actionId, { controllerType,
   if (actionId === "sculpt") return "activate";
   if (actionId === "hardDrop") return "back";
   return "consume";
-}
-
-export function claimStartupManualVisit(storage) {
-  if (storage === undefined) {
-    try {
-      storage = globalThis.localStorage;
-    } catch {
-      return true;
-    }
-  }
-
-  try {
-    if (storage?.getItem?.(STARTUP_MANUAL_STORAGE_KEY) === "1") return false;
-    storage?.setItem?.(STARTUP_MANUAL_STORAGE_KEY, "1");
-    return true;
-  } catch {
-    // If persistence is unavailable, showing the guide is the safer fallback.
-    return true;
-  }
 }
 
 function copyCell(cell) {
@@ -222,7 +203,6 @@ export function createStartupManual({
   i18n,
   returnFocus = null,
   screen = null,
-  onStart = null,
   onAudioEvent = () => {},
   getKeybindings = () => DEFAULT_KEYBINDINGS
 } = {}) {
@@ -256,7 +236,6 @@ export function createStartupManual({
   let pageIndex = 0;
   let demoState = createManualDemoState();
   let activeReturnFocus = returnFocus;
-  let completionMode = "reference";
   const touchInput = globalThis.matchMedia?.("(hover: none) and (pointer: coarse)");
 
   function usesPhysicalPad() {
@@ -354,16 +333,12 @@ export function createStartupManual({
     previousButton.disabled = pageIndex === 0;
     pageNumber.textContent = `${String(pageIndex + 1).padStart(2, "0")} / ${String(pages.length).padStart(2, "0")}`;
     const isLastPage = pageIndex === pages.length - 1;
-    const isStartupCompletion = completionMode === "startup";
     nextButton.classList.toggle("is-final-action", isLastPage);
-    nextButton.classList.toggle("is-start-action", isLastPage && isStartupCompletion);
-    nextLabel.textContent = i18n.t(isLastPage
-      ? (isStartupCompletion ? "manual.nav.done" : "manual.nav.close")
-      : "manual.nav.next");
+    nextButton.classList.remove("is-start-action");
+    nextLabel.textContent = i18n.t(isLastPage ? "manual.nav.close" : "manual.nav.next");
     if (nextIcon) nextIcon.textContent = isLastPage ? "▶" : "→";
     if (nextHint) {
-      nextHint.hidden = !(isLastPage && isStartupCompletion);
-      if (isLastPage && isStartupCompletion) nextHint.textContent = i18n.t("manual.nav.doneHint");
+      nextHint.hidden = true;
     }
     paginationButtons.forEach((button) => {
       const isCurrent = Number(button.dataset.manualPageTarget) === pageIndex;
@@ -381,9 +356,8 @@ export function createStartupManual({
     else dialog.removeAttribute("open");
   }
 
-  function open({ returnFocus: nextReturnFocus = returnFocus, mode = "reference" } = {}) {
+  function open({ returnFocus: nextReturnFocus = returnFocus } = {}) {
     activeReturnFocus = nextReturnFocus;
-    completionMode = mode;
     pageIndex = 0;
     demoState = createManualDemoState();
     refreshKeybindings();
@@ -473,10 +447,7 @@ export function createStartupManual({
   }
   nextButton.addEventListener("click", () => {
     if (pageIndex >= pages.length - 1) {
-      const shouldStart = completionMode === "startup";
-      if (shouldStart) activeReturnFocus = null;
       close();
-      if (shouldStart) requestAnimationFrame(() => onStart?.());
       return;
     }
     pageIndex += 1;
