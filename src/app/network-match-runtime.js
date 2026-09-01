@@ -70,9 +70,37 @@ function normalizeUnsubscribe(value) {
   return typeof value === "function" ? value : () => {};
 }
 
-// The host is authoritative: it emits complete per-tick input frames, clients
-// advance from those frames, hashes detect divergence, and snapshots repair it.
+/**
+ * Runs a deterministic match over an already-connected message transport.
+ *
+ * The host is authoritative: clients submit delayed inputs, the host emits a
+ * complete input frame for each tick, and clients advance only from those
+ * frames. Periodic hashes detect divergence and host snapshots repair it.
+ *
+ * The runtime owns its transport subscriptions for its lifetime. `stop()`
+ * is terminal: it unsubscribes, closes the transport when supported, and the
+ * runtime cannot be started again.
+ */
 export class NetworkMatchRuntime {
+  /**
+   * @param {object} options
+   * @param {object} options.match Mutable deterministic match state.
+   * @param {object} options.rules Ruleset matching `match.rulesetId`.
+   * @param {object} options.policy Match policy matching `match.policyId`.
+   * @param {"host"|"client"} options.role Local authority role.
+   * @param {string} options.localPlayerId Player in the match roster controlled locally.
+   * @param {{send: Function, onMessage: Function, onStateChange: Function, close?: Function}} options.transport
+   *   Connected transport. `send()` may return `false` to reject a message; the
+   *   subscription methods may return unsubscribe functions.
+   * @param {number} [options.inputDelayTicks] Ticks between local input capture and requested execution.
+   * @param {number} [options.hashIntervalTicks] Ticks between deterministic hash checkpoints.
+   * @param {number} [options.maxBufferedFutureTicks] Maximum accepted lead for remote frames and hashes.
+   * @param {Function} [options.onFrame] Receives the local view and render/network metadata.
+   * @param {Function} [options.onEvents] Receives events plus local views immediately before and after the tick.
+   * @param {Function} [options.onConnectionStateChange] Receives transport state changes and current statistics.
+   * @param {Function} [options.onStop] Receives the terminal reason and final statistics.
+   * @param {Function} [options.onError] Receives transport or protocol failures before shutdown.
+   */
   constructor({
     match,
     rules,
@@ -229,6 +257,10 @@ export class NetworkMatchRuntime {
     });
   }
 
+  /**
+   * Queues a local gameplay command for delayed network scheduling.
+   * @returns {boolean} `false` when the runtime is disposed or the match is no longer playing.
+   */
   command(command) {
     if (this.disposed || this.match.status !== "playing") return false;
     validateGameplayCommand(command);
@@ -667,6 +699,10 @@ export class NetworkMatchRuntime {
     }
   }
 
+  /**
+   * Starts animation-driven simulation when the runtime is still playable.
+   * @returns {boolean} Whether a new animation loop was started.
+   */
   start() {
     if (this.running || this.disposed || this.match.status !== "playing") return false;
     if (typeof requestAnimationFrame !== "function") {
@@ -692,6 +728,11 @@ export class NetworkMatchRuntime {
     }
   }
 
+  /**
+   * Permanently disposes the runtime, its subscriptions, and its transport.
+   * Repeated calls are no-ops.
+   * @param {string} [reason] Terminal reason reported to `onStop`.
+   */
   stop(reason = "stopped") {
     if (this.disposed) return;
     this.disposed = true;

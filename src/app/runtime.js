@@ -1,4 +1,18 @@
+/**
+ * Drives a single-player game session from the browser animation clock.
+ *
+ * Wall-clock time is accumulated into fixed simulation steps. Commands queued
+ * between steps are consumed together on the next tick, preserving deterministic
+ * replay timing. Event callbacks receive views captured immediately before and
+ * after the tick that produced those events.
+ */
 export class GameRuntime {
+  /**
+   * @param {object} options
+   * @param {object} options.session Deterministic game session to advance.
+   * @param {Function} [options.onFrame] Receives the current view and interpolation metadata.
+   * @param {Function} [options.onEvents] Receives emitted events, game state, and before/after views.
+   */
   constructor({ session, onFrame = () => {}, onEvents = () => {} }) {
     if (!session) throw new Error("game session is required");
     this.session = session;

@@ -100,6 +100,13 @@ export function createGameEngine(rules) {
   return Object.freeze(engine);
 }
 
+/**
+ * Owns one ruleset-bound game state together with the command log used for replay.
+ *
+ * Commands are recorded against the current simulation tick before the engine
+ * advances, so exporting and replaying the log reproduces the same fixed-step
+ * command timing.
+ */
 class GameSession {
   constructor({ rules, seed = 1 } = {}) {
     this.engine = createGameEngine(rules);
@@ -145,6 +152,13 @@ class GameSession {
   }
 }
 
+/**
+ * Creates a deterministic game session and its replay log.
+ * @param {object} options
+ * @param {object} options.rules Rules used to bind the game engine.
+ * @param {number} [options.seed] Unsigned seed for deterministic game creation.
+ * @returns {GameSession}
+ */
 export function createGameSession(options) {
   return new GameSession(options);
 }

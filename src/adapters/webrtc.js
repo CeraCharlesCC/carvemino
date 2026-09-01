@@ -126,7 +126,23 @@ function defaultPeerConnectionFactory(rtcConfig) {
   return new RTCPeerConnection(rtcConfig);
 }
 
+/**
+ * Adapts an ordered WebRTC data channel to the app's structured message transport.
+ *
+ * Incoming wire data is decoded and validated before subscribers receive it.
+ * Signaling helpers exchange compact text offers/answers after ICE gathering.
+ * Sending is deliberately non-throwing to callers: it returns `false` when the
+ * channel is unavailable or a send fails. Closing is idempotent and also aborts
+ * any signaling call still waiting for ICE gathering.
+ */
 export class WebRtcPeerTransport {
+  /**
+   * @param {object} [options]
+   * @param {RTCConfiguration} [options.rtcConfig] Configuration passed to `RTCPeerConnection`.
+   * @param {boolean} [options.initiator] Whether this peer creates the ordered data channel.
+   * @param {string} [options.channelName] Data-channel label used by the initiator.
+   * @param {Function} [options.peerConnectionFactory] Injectable `RTCPeerConnection` factory for alternate environments and tests.
+   */
   constructor({
     rtcConfig = {},
     initiator = false,
@@ -220,6 +236,10 @@ export class WebRtcPeerTransport {
     return () => this.errorHandlers.delete(handler);
   }
 
+  /**
+   * Encodes and sends one protocol message when the data channel is open.
+   * @returns {boolean} Whether the message was accepted by the channel.
+   */
   send(message) {
     if (!this.channel || this.channel.readyState !== "open") return false;
     try {
@@ -250,6 +270,10 @@ export class WebRtcPeerTransport {
     await this.connection.setRemoteDescription(await decodeSessionDescription(answerText, "answer"));
   }
 
+  /**
+   * Closes the channel/peer connection and aborts pending ICE gathering.
+   * @returns {boolean} `true` only for the first close call.
+   */
   close() {
     if (this.closed) return false;
     this.closed = true;

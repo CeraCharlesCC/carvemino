@@ -38,7 +38,29 @@ function modeForConfiguration(modes, rulesetId, policyId) {
   return modes.find((mode) => mode.rules.id === rulesetId && mode.policy.id === policyId) || null;
 }
 
+/**
+ * Orchestrates manual WebRTC signaling and the two-player LAN lobby handshake.
+ *
+ * The session owns lobby message handling through negotiation. When a match is
+ * ready it removes that handler and passes the live transport to `onMatchReady`,
+ * allowing the network match runtime to take over message ownership. Resetting
+ * or cancelling also invalidates in-flight signaling so late async completions
+ * cannot mutate a newer session.
+ *
+ * `state` tracks the broad lifecycle (idle, signaling/connecting, lobby,
+ * starting, playing, and terminal states), while `phase` gives UI-facing detail
+ * within it.
+ */
 export class LanSession {
+  /**
+   * @param {object} [options]
+   * @param {Array<object>} [options.modes] Supported LAN mode configurations.
+   * @param {Function} [options.transportFactory] Creates a host or joiner peer transport.
+   * @param {Function} [options.randomUint32] Source used for player, match, and seed values.
+   * @param {Function} [options.onStateChange] Receives immutable state snapshots throughout signaling and lobby setup.
+   * @param {Function} [options.onMatchReady] Receives the negotiated match and transport when gameplay can begin.
+   * @param {Function} [options.onError] Receives terminal lobby/signaling failures and the resulting snapshot.
+   */
   constructor({
     modes = VERSUS_CATALOG,
     transportFactory = (options) => new WebRtcPeerTransport(options),
