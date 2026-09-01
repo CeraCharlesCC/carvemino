@@ -46,7 +46,8 @@ function setGainValue(audio, gainNode, value) {
 
 export function createAudioEngine({
   contextFactory = defaultContextFactory,
-  musicController = createMusicController()
+  musicController = createMusicController(),
+  cueProvider = getSoundCue
 } = {}) {
   let context = null;
   let masterGain = null;
@@ -128,7 +129,7 @@ export function createAudioEngine({
   }
 
   function playCue(name, delay = 0) {
-    const tones = getSoundCue(name);
+    const tones = cueProvider?.(name);
     if (!tones) return;
     for (const tone of tones) playTone(tone, delay);
   }

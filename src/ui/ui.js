@@ -17,6 +17,17 @@ import { createStartupManual } from "./startup-manual.js";
 import { createFirstRunTutorialStore, createTutorialCoordinator } from "./first-run-tutorial.js";
 import { createI18n } from "../i18n.js";
 
+export function initializeUiStartup({
+  navigation,
+  firstRun,
+  startupManual,
+  showMenuControls = () => {}
+}) {
+  startupManual?.close?.();
+  navigation.showScreen("menu");
+  if (firstRun.shouldShowMenuControls()) showMenuControls();
+}
+
 export function createUi({
   modes,
   lanModes = [],
@@ -381,8 +392,12 @@ export function createUi({
     if (options.kind !== "multiplayer") profileUi.setGameMode(mode);
   }
 
-  navigation.showScreen("menu");
-  if (firstRun.shouldShowMenuControls()) showDialog(menuControlsDialog, menuControlsAck);
+  initializeUiStartup({
+    navigation,
+    firstRun,
+    startupManual,
+    showMenuControls: () => showDialog(menuControlsDialog, menuControlsAck)
+  });
 
   return {
     render: gameScreen.render,

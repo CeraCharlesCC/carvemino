@@ -40,6 +40,7 @@ import {
   getManualDemoTarget,
   performManualDemoAction
 } from "../src/ui/startup-manual.js";
+import { initializeUiStartup } from "../src/ui/ui.js";
 import { replaceGlobal } from "./helpers/globals.mjs";
 
 function createPointerControl(actionId) {
@@ -268,10 +269,28 @@ test("index exposes the DOM hooks required by navigation and the LAN lobby", () 
   }
 });
 
-test("UI startup no longer auto-opens the reference manual", () => {
-  const source = readFileSync(new URL("../src/ui/ui.js", import.meta.url), "utf8");
-  assert.doesNotMatch(source, /claimStartupManualVisit/);
-  assert.doesNotMatch(source, /mode:\s*["']startup["']/);
+test("UI startup enters the menu with the reference manual closed", () => {
+  let manualOpen = true;
+  let shownScreen = null;
+  let menuControlsShown = 0;
+
+  initializeUiStartup({
+    navigation: {
+      showScreen(screen) { shownScreen = screen; }
+    },
+    firstRun: {
+      shouldShowMenuControls: () => true
+    },
+    startupManual: {
+      open() { manualOpen = true; },
+      close() { manualOpen = false; }
+    },
+    showMenuControls() { menuControlsShown += 1; }
+  });
+
+  assert.equal(manualOpen, false);
+  assert.equal(shownScreen, "menu");
+  assert.equal(menuControlsShown, 1);
 });
 
 test("input mode initializes from pointer layout and switches on meaningful input types", () => {

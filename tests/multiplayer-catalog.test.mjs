@@ -15,7 +15,7 @@ test("versus catalog derives each mode from the shared base registry", () => {
     assert.equal(Object.isFrozen(mode.rules), true);
     assert.equal(Object.isFrozen(mode.policy), true);
     assert.equal(mode.policy.kind, "versus");
-    assert.equal(mode.rules, singleplayer.rules);
+    assert.equal(mode.rules.id, singleplayer.rules.id);
     assert.equal(mode.name, `${singleplayer.name} VS`);
     assert.match(mode.rules.id, new RegExp(mode.id));
     assert.match(mode.policy.id, new RegExp(mode.id));

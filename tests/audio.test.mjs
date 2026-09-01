@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createAudioEngine } from "../src/audio/engine.js";
-import { getSoundCue, lineClearCueName } from "../src/audio/sounds.js";
 import { DEFAULT_AUDIO_SETTINGS } from "../src/config.js";
 import { FakeAudioContext } from "./helpers/web-audio.mjs";
 
@@ -19,8 +18,15 @@ function createSilentMusicController() {
   };
 }
 
-function cueToneCount(name) {
-  return getSoundCue(name)?.length ?? 0;
+function createCueRecorder() {
+  const cues = [];
+  return {
+    cues,
+    cueProvider(name) {
+      cues.push(name);
+      return [];
+    }
+  };
 }
 
 test("audio engine starts from the shared application defaults", () => {
@@ -29,10 +35,11 @@ test("audio engine starts from the shared application defaults", () => {
 });
 
 test("audio engine routes menu interaction cues without pinning their tuning", () => {
-  const context = new FakeAudioContext();
+  const recorder = createCueRecorder();
   const engine = createAudioEngine({
-    contextFactory: () => context,
-    musicController: createSilentMusicController()
+    contextFactory: () => null,
+    musicController: createSilentMusicController(),
+    cueProvider: recorder.cueProvider
   });
 
   engine.setScreen("menu");
@@ -40,12 +47,28 @@ test("audio engine routes menu interaction cues without pinning their tuning", (
   engine.handleUiEvent("confirm");
   engine.handleUiEvent("back");
 
-  assert.equal(
-    context.oscillators.length,
-    cueToneCount("menu-select") + cueToneCount("menu-confirm") + cueToneCount("menu-back")
-  );
+  assert.deepEqual(recorder.cues, ["menu-select", "menu-confirm", "menu-back"]);
   assert.equal(engine.getState().lifecycle, "menu");
   assert.equal(engine.getState().music.scene, "menu");
+});
+
+test("audio engine renders every tone supplied for a semantic cue", () => {
+  const context = new FakeAudioContext();
+  const engine = createAudioEngine({
+    contextFactory: () => context,
+    musicController: createSilentMusicController(),
+    cueProvider(name) {
+      assert.equal(name, "menu-confirm");
+      return [
+        { frequency: 330, duration: 0.04 },
+        { frequency: 660, duration: 0.05 }
+      ];
+    }
+  });
+
+  engine.handleUiEvent("confirm");
+
+  assert.equal(context.oscillators.length, 2);
 });
 
 test("audio lifecycle routes gameplay state and level into the BGM controller", () => {
@@ -75,10 +98,11 @@ test("audio lifecycle routes gameplay state and level into the BGM controller", 
 });
 
 test("line clears coalesce the lock sound and game over supersedes other cues", () => {
-  const context = new FakeAudioContext();
+  const recorder = createCueRecorder();
   const engine = createAudioEngine({
-    contextFactory: () => context,
-    musicController: createSilentMusicController()
+    contextFactory: () => null,
+    musicController: createSilentMusicController(),
+    cueProvider: recorder.cueProvider
   });
 
   engine.startGame({ modeId: "classic" });
@@ -87,21 +111,21 @@ test("line clears coalesce the lock sound and game over supersedes other cues", 
     { type: "LINES_CLEARED", count: 2 },
     { type: "LEVEL_CHANGED", level: 2 }
   ]);
-  assert.equal(
-    context.oscillators.length,
-    cueToneCount(lineClearCueName(2)) + cueToneCount("level-up"),
+  assert.deepEqual(
+    recorder.cues,
+    ["line-clear-2", "level-up"],
     "a line clear replaces the ordinary lock cue"
   );
 
-  const beforeGameOver = context.oscillators.length;
+  recorder.cues.length = 0;
   engine.handleGameEvents([
     { type: "BLOCK_CARVED" },
     { type: "PIECE_LOCKED" },
     { type: "GAME_OVER", reason: "lock-topout" }
   ]);
-  assert.equal(
-    context.oscillators.length - beforeGameOver,
-    cueToneCount("game-over"),
+  assert.deepEqual(
+    recorder.cues,
+    ["game-over"],
     "game over suppresses lower-priority gameplay cues"
   );
 });
