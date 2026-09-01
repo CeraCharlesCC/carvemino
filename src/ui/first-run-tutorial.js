@@ -153,7 +153,7 @@ export function createTutorialCoordinator({
   }
 
   function handleAction(actionId, context = {}) {
-    if (!CURSOR_ACTIONS.has(actionId)) return false;
+    if (!CURSOR_ACTIONS.has(actionId) || !step || !plan) return false;
     const movementSteps = {
       move: { target: plan.moveTarget || plan.cutTargets[0], next: "cut" },
       moveSecond: { target: plan.cutTargets[1], next: "cutAgain" },

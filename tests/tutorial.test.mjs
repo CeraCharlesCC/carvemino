@@ -182,6 +182,11 @@ test("tutorial milestones advance on successful outcomes, never on invalid or un
   assert.equal(tutorial.getStep(), null, "line clear should end the guided state immediately");
   tutorial.handleEvents([{ type: "LINES_CLEARED", count: 1 }]);
   assert.equal(completed, 1, "later normal-game clears must not complete the tutorial twice");
+  assert.equal(
+    tutorial.handleAction("cursorRight", { cursor: plan.moveTarget }),
+    false,
+    "normal gameplay cursor input after completion must be ignored safely"
+  );
   assert.deepEqual(guides.map(({ step }) => step), [
     "move", "cut", "move-second", "cut-again", "move-fill", "fill", "drop", "clear"
   ]);
@@ -201,6 +206,11 @@ test("tutorial milestones advance on successful outcomes, never on invalid or un
   );
 
   tutorial.stop();
+  assert.equal(
+    tutorial.handleAction("cursorLeft", { cursor: plan.cutTargets[1] }),
+    false,
+    "cursor input after an abandoned tutorial must be ignored safely"
+  );
   tutorial.handleEvents([{ type: "LINES_CLEARED" }]);
   assert.equal(tutorial.getStep(), null, "abandoned tutorials must not react to later normal-game events");
   assert.equal(completed, 1);
