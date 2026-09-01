@@ -835,3 +835,19 @@ test("interactive focus lab teaches cut, fill, focus switching, and drop without
   assert.equal(dropped.focusedIndex, 0);
   assert.equal(dropped.lastAction, "drop");
 });
+
+test("interactive focus lab prevents fills beyond the field bounds", () => {
+  let state = performManualDemoAction(createManualDemoState(), "focusNext");
+  state = performManualDemoAction(state, "sculpt");
+  state = performManualDemoAction(state, "cursorSet", { x: 2, y: 1 });
+  assert.equal(getManualDemoTarget(state), "fill");
+  state = performManualDemoAction(state, "sculpt");
+  state = performManualDemoAction(state, "cursorSet", { x: 1, y: 1 });
+  state = performManualDemoAction(state, "sculpt");
+  state = performManualDemoAction(state, "cursorSet", { x: 3, y: 1 });
+
+  assert.equal(getManualDemoTarget(state), null);
+  const rejected = performManualDemoAction(state, "sculpt");
+  assert.equal(rejected.lastAction, "invalid");
+  assert.equal(rejected.pieces[1].cells.length, state.pieces[1].cells.length);
+});

@@ -51,6 +51,16 @@ function isAdjacentToPiece(piece, x, y) {
   return piece.cells.some((cell) => Math.abs(cell.x - x) + Math.abs(cell.y - y) === 1);
 }
 
+function isInsideField(piece, x, y) {
+  const fieldX = piece.origin.x + x;
+  const fieldY = piece.origin.y + y;
+  return fieldX >= 0 && fieldX < FIELD_WIDTH && fieldY >= 0 && fieldY < FIELD_HEIGHT;
+}
+
+function isFillCandidate(piece, x, y) {
+  return isInsideField(piece, x, y) && isAdjacentToPiece(piece, x, y);
+}
+
 export function getManualDemoTarget(state) {
   const piece = focusedPiece(state);
   if (!piece || piece.locked) return null;
@@ -58,7 +68,7 @@ export function getManualDemoTarget(state) {
   if (hasCell(piece, x, y)) {
     return piece.cells.length > MINIMUM_CELLS && piece.carved < piece.carveLimit ? "cut" : null;
   }
-  if (state.scrap >= FILL_COST && isAdjacentToPiece(piece, x, y)) return "fill";
+  if (state.scrap >= FILL_COST && isFillCandidate(piece, x, y)) return "fill";
   return null;
 }
 
@@ -298,7 +308,7 @@ export function createStartupManual({
         cell.className = "manual-focus-cell";
         cell.dataset.manualCell = `${x},${y}`;
         if (piece && hasCell(piece, x, y)) cell.classList.add("is-piece");
-        else if (piece && !piece.locked && isAdjacentToPiece(piece, x, y)) cell.classList.add("is-fill-candidate");
+        else if (piece && !piece.locked && isFillCandidate(piece, x, y)) cell.classList.add("is-fill-candidate");
         if (demoState.cursor.x === x && demoState.cursor.y === y && piece) {
           cell.classList.add("is-cursor");
           if (target === "cut") cell.classList.add("can-cut");
