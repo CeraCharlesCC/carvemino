@@ -4,6 +4,7 @@ import { DEFAULT_INPUT_REPEAT_DELAY, DEFAULT_INPUT_REPEAT_INTERVAL } from "./inp
 const GAMEPAD_START_ACTION = "controllerStart";
 const DEFAULT_GAMEPAD_PRESS_THRESHOLD = 0.6;
 const DEFAULT_GAMEPAD_RELEASE_THRESHOLD = 0.4;
+export const DEFAULT_GAMEPAD_CURSOR_DEADZONE = 0.22;
 export const GAMEPAD_CONTROLLER_TYPES = Object.freeze({
   generic: "generic",
   nintendo: "nintendo",
@@ -53,6 +54,10 @@ const EMPTY_DIRECTIONS = Object.freeze({ up: false, down: false, left: false, ri
 function finiteAxis(value) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(-1, Math.min(1, value));
+}
+
+function stickMagnitude(stick) {
+  return Math.min(1, Math.hypot(stick?.x || 0, stick?.y || 0));
 }
 
 function isButtonPressed(button) {
@@ -139,6 +144,11 @@ function normalizeStandardGamepad(gamepad, previous = null, {
   const rawButtons = Array.from({ length: STANDARD_BUTTON_COUNT }, (_, index) => (
     isButtonPressed(gamepad.buttons?.[index])
   ));
+  const rightStick = {
+    x: finiteAxis(gamepad.axes?.[2]),
+    y: finiteAxis(gamepad.axes?.[3])
+  };
+  const rightStickPressed = isButtonPressed(gamepad.buttons?.[11]);
 
   return {
     index: gamepad.index,
@@ -147,7 +157,10 @@ function normalizeStandardGamepad(gamepad, previous = null, {
     rawButtons,
     dpad,
     stick,
-    directions
+    directions,
+    rightStick,
+    rightStickPressed,
+    rightStickJustPressed: rightStickPressed && previous?.rightStickPressed === false
   };
 }
 
@@ -155,7 +168,8 @@ export function createGamepadActionTracker({
   repeatDelay = DEFAULT_INPUT_REPEAT_DELAY,
   repeatInterval = DEFAULT_INPUT_REPEAT_INTERVAL,
   pressThreshold = DEFAULT_GAMEPAD_PRESS_THRESHOLD,
-  releaseThreshold = DEFAULT_GAMEPAD_RELEASE_THRESHOLD
+  releaseThreshold = DEFAULT_GAMEPAD_RELEASE_THRESHOLD,
+  cursorDeadzone = DEFAULT_GAMEPAD_CURSOR_DEADZONE
 } = {}) {
   let previous = null;
   const nextRepeatAt = Object.fromEntries(DIRECTION_BINDINGS.map(({ name }) => [name, null]));
@@ -177,6 +191,10 @@ export function createGamepadActionTracker({
     let meaningful = snapshot.rawButtons.some((pressed, index) => (
       pressed && !previous?.rawButtons?.[index]
     ));
+    if (stickMagnitude(snapshot.rightStick) > cursorDeadzone
+        && stickMagnitude(previous?.rightStick) <= cursorDeadzone) {
+      meaningful = true;
+    }
 
     for (const { actionId } of BUTTON_BINDINGS) {
       if (snapshot.buttons[actionId] && !previous?.buttons?.[actionId]) {
@@ -233,7 +251,9 @@ export function createGamepadInput({
   repeatDelay = DEFAULT_INPUT_REPEAT_DELAY,
   repeatInterval = DEFAULT_INPUT_REPEAT_INTERVAL,
   pressThreshold = DEFAULT_GAMEPAD_PRESS_THRESHOLD,
-  releaseThreshold = DEFAULT_GAMEPAD_RELEASE_THRESHOLD
+  releaseThreshold = DEFAULT_GAMEPAD_RELEASE_THRESHOLD,
+  cursorDeadzone = DEFAULT_GAMEPAD_CURSOR_DEADZONE,
+  onState = () => {}
 } = {}) {
   if (typeof performAction !== "function") {
     throw new Error("gamepad input requires an action dispatcher");
@@ -269,7 +289,8 @@ export function createGamepadInput({
       repeatDelay,
       repeatInterval,
       pressThreshold,
-      releaseThreshold
+      releaseThreshold,
+      cursorDeadzone
     });
   }
 
@@ -316,6 +337,7 @@ export function createGamepadInput({
           ? [...new Set([...activeResult.result.actions, ...activeResult.result.activityActions])]
           : activeResult.result.actions;
         dispatch(actions);
+        onState(activeResult.result.snapshot, timestamp);
       }
     }
 

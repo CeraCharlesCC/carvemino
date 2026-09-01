@@ -364,6 +364,9 @@ export function createUi({
   const gamepadInput = createGamepadInput({
     performAction: performUiControllerAction,
     performStart: performUiControllerStart,
+    onState: (snapshot, timestamp) => {
+      startupManual?.handleControllerState(snapshot, timestamp);
+    },
     onActivity: (gamepad) => {
       activeControllerType = getGamepadControllerType(gamepad);
       updateControllerFaceHints(activeControllerType);

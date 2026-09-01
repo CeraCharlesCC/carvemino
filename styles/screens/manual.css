@@ -69,6 +69,30 @@
   mix-blend-mode: multiply;
 }
 
+.manual-controller-cursor {
+  position: fixed;
+  z-index: 20;
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+  border: 2px solid #f7efd9;
+  border-radius: 50%;
+  background:
+    linear-gradient(90deg, transparent 8px, #29261d 8px 10px, transparent 10px),
+    linear-gradient(transparent 8px, #29261d 8px 10px, transparent 10px),
+    #e8dfc8c7;
+  box-shadow: 0 0 0 2px #29261d, 2px 3px 5px #0008;
+  transform: translate(-50%, -50%);
+}
+
+.manual-controller-cursor[hidden] { display: none; }
+
+.startup-manual button.is-controller-cursor-target:not(:disabled) {
+  outline: 3px solid #f7efd9;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px #29261d;
+}
+
 .manual-book-header,
 .manual-page-stack,
 .manual-book-footer {
@@ -745,6 +769,22 @@
   display: grid;
   justify-items: center;
   gap: 4px;
+}
+
+.manual-controller-cursor-hint {
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: #4f4939;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+:root[data-input-mode="controller"] .startup-manual
+  .manual-controller-cursor-hint[data-input-hint="controller"] {
+  display: flex;
 }
 
 .manual-book-footer button {

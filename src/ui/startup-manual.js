@@ -1,6 +1,7 @@
 import { DEFAULT_KEYBINDINGS, GAMEPLAY_ACTIONS } from "../config.js";
 import { formatKeyLabel, getGameInputAction } from "./game-input.js";
 import { mapPhysicalFaceActionForMenu } from "./gamepad-input.js";
+import { createManualControllerCursor } from "./manual-controller-cursor.js";
 
 const FIELD_WIDTH = 8;
 const FIELD_HEIGHT = 7;
@@ -224,6 +225,7 @@ export function createStartupManual({
       handleGameAction() { return null; },
       handleControllerAction() { return null; },
       handleControllerStart() { return null; },
+      handleControllerState() { return false; },
       refreshKeybindings() {}
     };
   }
@@ -243,6 +245,7 @@ export function createStartupManual({
   const scrapReadout = dialog.querySelector("#manual-lab-scrap");
   const targetReadout = dialog.querySelector("#manual-lab-target");
   const status = dialog.querySelector("#manual-lab-status");
+  const controllerCursor = createManualControllerCursor({ dialog });
   let pageIndex = 0;
   let demoState = createManualDemoState();
   let activeReturnFocus = returnFocus;
@@ -362,6 +365,7 @@ export function createStartupManual({
   }
 
   function close() {
+    controllerCursor.hide();
     if (typeof dialog.close === "function" && dialog.open) dialog.close();
     else dialog.removeAttribute("open");
   }
@@ -376,6 +380,7 @@ export function createStartupManual({
     if (usesPhysicalPad() && typeof dialog.show === "function") dialog.show();
     else if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
+    controllerCursor.reset({ startTarget: nextButton });
     requestAnimationFrame(() => nextButton?.focus());
   }
 
@@ -439,6 +444,11 @@ export function createStartupManual({
     return activateControllerFocus();
   }
 
+  function handleControllerState(snapshot, timestamp) {
+    if (!dialog.open) return false;
+    return controllerCursor.update(snapshot, timestamp);
+  }
+
   for (const button of dialog.querySelectorAll("[data-manual-close]")) {
     button.addEventListener("click", close);
   }
@@ -485,6 +495,7 @@ export function createStartupManual({
     event.stopPropagation();
   });
   dialog.addEventListener("close", () => {
+    controllerCursor.hide();
     const focusTarget = activeReturnFocus;
     requestAnimationFrame(() => focusTarget?.focus());
   });
@@ -500,5 +511,13 @@ export function createStartupManual({
   i18n.apply(dialog);
   refreshKeybindings();
   renderDemo();
-  return { open, close, handleGameAction, handleControllerAction, handleControllerStart, refreshKeybindings };
+  return {
+    open,
+    close,
+    handleGameAction,
+    handleControllerAction,
+    handleControllerStart,
+    handleControllerState,
+    refreshKeybindings
+  };
 }

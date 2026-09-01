@@ -40,6 +40,11 @@ import {
   getManualDemoTarget,
   performManualDemoAction
 } from "../src/ui/startup-manual.js";
+import {
+  applyManualCursorDeadzone,
+  createManualControllerCursor,
+  moveManualCursor
+} from "../src/ui/manual-controller-cursor.js";
 import { initializeUiStartup } from "../src/ui/ui.js";
 import { replaceGlobal } from "./helpers/globals.mjs";
 
@@ -370,6 +375,89 @@ test("manual controller actions stay in the practice lab and become DOM navigati
     controllerType: "nintendo",
     physicalFace: true
   }), "back");
+});
+
+test("manual controller cursor applies a radial deadzone and time-based bounded movement", () => {
+  assert.deepEqual(applyManualCursorDeadzone({ x: 0.1, y: -0.1 }), { x: 0, y: 0, magnitude: 0 });
+  assert.deepEqual(applyManualCursorDeadzone({ x: 1, y: 0 }), { x: 1, y: 0, magnitude: 1 });
+
+  const diagonal = moveManualCursor(
+    { x: 50, y: 50 },
+    { x: 1, y: 1 },
+    20,
+    { left: 0, top: 0, right: 100, bottom: 100 },
+    { speed: 100, responseCurve: 1 }
+  );
+  assert.ok(diagonal.x > 50);
+  assert.ok(diagonal.y > 50);
+  assert.equal(diagonal.x, diagonal.y);
+
+  assert.deepEqual(moveManualCursor(
+    { x: 99, y: 1 },
+    { x: 1, y: -1 },
+    1000,
+    { left: 0, top: 0, right: 100, bottom: 100 },
+    { speed: 1000, responseCurve: 1 }
+  ), { x: 100, y: 0 });
+});
+
+test("manual controller cursor activates a valid button once per R3 press", () => {
+  const classes = new Set();
+  let clicks = 0;
+  let focused = 0;
+  const button = {
+    disabled: false,
+    classList: {
+      add: (name) => classes.add(name),
+      remove: (name) => classes.delete(name)
+    },
+    closest: () => button,
+    getBoundingClientRect: () => ({ left: 40, top: 40, right: 60, bottom: 60 }),
+    focus: () => { focused += 1; },
+    click: () => { clicks += 1; }
+  };
+  let hit = button;
+  const cursorElement = { hidden: true, style: {} };
+  const dialog = {
+    contains: (candidate) => candidate === button,
+    querySelector(selector) {
+      if (selector === ".manual-book") {
+        return { getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 100 }) };
+      }
+      if (selector === ".manual-controller-cursor") return cursorElement;
+      return null;
+    }
+  };
+  const cursor = createManualControllerCursor({
+    dialog,
+    documentObject: { elementFromPoint: () => hit }
+  });
+
+  cursor.reset({ startTarget: button });
+  cursor.update({ rightStick: { x: 1, y: 0 }, rightStickPressed: false }, 100000);
+  assert.equal(cursorElement.style.left, "50px", "the first frame must not apply a stale delta");
+  assert.equal(cursorElement.hidden, false);
+  cursor.update({
+    rightStick: { x: 0, y: 0 },
+    rightStickPressed: true,
+    rightStickJustPressed: true
+  }, 100016);
+  cursor.update({ rightStick: { x: 0, y: 0 }, rightStickPressed: true }, 100032);
+  assert.equal(clicks, 1);
+  assert.equal(focused, 1);
+
+  cursor.update({ rightStick: { x: 0, y: 0 }, rightStickPressed: false }, 100048);
+  hit = { closest: () => ({ disabled: true }) };
+  cursor.update({ rightStick: { x: 0, y: 0 }, rightStickPressed: true }, 100064);
+  assert.equal(clicks, 1, "disabled targets must not be activated");
+  cursor.update({ rightStick: { x: 0, y: 0 }, rightStickPressed: false }, 100080);
+  const outsideButton = { disabled: false };
+  hit = { closest: () => outsideButton };
+  cursor.update({ rightStick: { x: 0, y: 0 }, rightStickPressed: true }, 100096);
+  assert.equal(clicks, 1, "buttons outside the manual must not be activated");
+  cursor.destroy();
+  assert.equal(cursorElement.hidden, true);
+  assert.equal(classes.has("is-controller-cursor-target"), false);
 });
 
 test("multiplayer menus never pause one peer and exit back to LAN", () => {
@@ -780,6 +868,9 @@ test("startup manual locale follows browser language with an English fallback", 
   assert.match(japanese.t("manual.lab.controllerHint"), /コントローラー/);
   assert.match(english.t("manual.controllerNotice.copy"), /controller/i);
   assert.match(japanese.t("manual.controllerNotice.copy"), /コントローラー/);
+  assert.match(english.t("manual.controllerCursor.pointer"), /right stick/i);
+  assert.match(japanese.t("manual.controllerCursor.pointer"), /右スティック/);
+  assert.match(english.t("manual.controllerCursor.click"), /R3/i);
   assert.equal(english.t("onboarding.menu.title"), "CONTROLS READY");
   assert.match(japanese.t("onboarding.menu.title"), /操作/);
   assert.equal(japanese.t("onboarding.tutorial.title"), "チュートリアルをプレイしますか？");

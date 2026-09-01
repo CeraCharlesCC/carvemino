@@ -193,6 +193,43 @@ test("left-stick normalization uses a deadzone and release hysteresis", () => {
   assert.deepEqual(result.actions, []);
 });
 
+test("right-stick axes and R3 are exposed without creating gameplay actions", () => {
+  const tracker = createGamepadActionTracker();
+  let result = tracker.update(makeGamepad({ axes: [0, 0, 0.5, -0.75] }), 0);
+  assert.deepEqual(result.snapshot.rightStick, { x: 0.5, y: -0.75 });
+  assert.equal(result.snapshot.rightStickPressed, false);
+  assert.deepEqual(result.actions, []);
+
+  result = tracker.update(makeGamepad({ axes: [0, 0], pressed: [11] }), 1);
+  assert.deepEqual(result.snapshot.rightStick, { x: 0, y: 0 });
+  assert.equal(result.snapshot.rightStickPressed, true);
+  assert.equal(result.snapshot.rightStickJustPressed, true);
+  assert.equal(result.meaningful, true);
+  assert.deepEqual(result.actions, []);
+
+  result = tracker.update(makeGamepad({ axes: [0, 0], pressed: [11] }), 2);
+  assert.equal(result.meaningful, false);
+  assert.equal(result.snapshot.rightStickJustPressed, false);
+  assert.deepEqual(result.actions, []);
+});
+
+test("right-stick drift is ignored but crossing the cursor deadzone is meaningful", () => {
+  const tracker = createGamepadActionTracker();
+  let result = tracker.update(makeGamepad({ axes: [0, 0, 0.1, -0.1] }), 0);
+  assert.equal(result.meaningful, false);
+
+  result = tracker.update(makeGamepad({ axes: [0, 0, 0.23, 0] }), 1);
+  assert.equal(result.meaningful, true);
+  assert.deepEqual(result.actions, []);
+
+  result = tracker.update(makeGamepad({ axes: [0, 0, 0.5, 0] }), 2);
+  assert.equal(result.meaningful, false);
+  result = tracker.update(makeGamepad({ axes: [0, 0, 0, 0] }), 3);
+  assert.equal(result.meaningful, false);
+  result = tracker.update(makeGamepad({ axes: [0, 0, 0, -0.3] }), 4);
+  assert.equal(result.meaningful, true);
+});
+
 test("D-pad and stick sources in the same direction are deduplicated", () => {
   const tracker = createGamepadActionTracker();
   tracker.update(makeGamepad(), 0);
@@ -238,6 +275,58 @@ test("adapter tolerates sparse snapshots and switches to the most recently activ
   assert.deepEqual(actions, [GAMEPLAY_ACTION_IDS.hardDrop, GAMEPLAY_ACTION_IDS.sculpt]);
   assert.deepEqual(input.getActiveGamepad(), { index: 2, id: "pad-2" });
 
+  input.destroy();
+});
+
+test("the active controller snapshot is delivered on every animation frame", () => {
+  let pads = [makeGamepad()];
+  const frames = createFrameHarness();
+  const states = [];
+  const input = createGamepadInput({
+    navigatorObject: { getGamepads: () => pads },
+    windowObject: createEventTarget(),
+    documentObject: { ...createEventTarget(), visibilityState: "visible" },
+    requestFrame: (callback) => frames.request(callback),
+    cancelFrame: (id) => frames.cancel(id),
+    now: () => 0,
+    performAction() {},
+    onState: (snapshot, timestamp) => states.push({ snapshot, timestamp })
+  });
+
+  pads = [makeGamepad({ axes: [0, 0, 0.3, 0] })];
+  frames.run(10);
+  pads = [makeGamepad({ axes: [0, 0, 0.6, -0.25] })];
+  frames.run(20);
+
+  assert.equal(states.length, 2);
+  assert.deepEqual(states.map(({ timestamp }) => timestamp), [10, 20]);
+  assert.deepEqual(states[1].snapshot.rightStick, { x: 0.6, y: -0.25 });
+  assert.deepEqual(input.getActiveGamepad(), { index: 0, id: "pad-0" });
+  input.destroy();
+});
+
+test("right-stick movement can switch the active controller", () => {
+  let pads = [makeGamepad({ index: 0 }), makeGamepad({ index: 1 })];
+  const frames = createFrameHarness();
+  const activity = [];
+  const input = createGamepadInput({
+    navigatorObject: { getGamepads: () => pads },
+    windowObject: createEventTarget(),
+    documentObject: { ...createEventTarget(), visibilityState: "visible" },
+    requestFrame: (callback) => frames.request(callback),
+    cancelFrame: (id) => frames.cancel(id),
+    now: () => 0,
+    performAction() {},
+    onActivity: (gamepad) => activity.push(gamepad)
+  });
+
+  pads = [makeGamepad({ index: 0, axes: [0, 0, 0.3, 0] }), makeGamepad({ index: 1 })];
+  frames.run(1);
+  pads = [makeGamepad({ index: 0 }), makeGamepad({ index: 1, axes: [0, 0, 0, -0.3] })];
+  frames.run(2);
+
+  assert.deepEqual(activity, [{ index: 0, id: "pad-0" }, { index: 1, id: "pad-1" }]);
+  assert.deepEqual(input.getActiveGamepad(), { index: 1, id: "pad-1" });
   input.destroy();
 });
 

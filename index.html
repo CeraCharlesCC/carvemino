@@ -815,6 +815,11 @@
         <button type="button" data-manual-previous><span aria-hidden="true">←</span> <span data-i18n="manual.nav.previous">PREVIOUS</span></button>
         <div class="manual-page-meta">
           <output id="manual-page-number" aria-live="polite">01 / 03</output>
+          <span class="manual-controller-cursor-hint" data-input-hint="controller">
+            <span data-i18n="manual.controllerCursor.pointer">RIGHT STICK: POINTER</span>
+            <span aria-hidden="true">·</span>
+            <span data-i18n="manual.controllerCursor.click">R3: CLICK</span>
+          </span>
           <nav class="manual-pagination" aria-label="Manual sections" data-i18n-aria-label="manual.pagination.label">
             <button type="button" data-manual-page-target="0"><span class="manual-pagination-dot" aria-hidden="true"></span><span data-i18n="manual.pagination.core">PLAY</span></button>
             <button type="button" data-manual-page-target="1"><span class="manual-pagination-dot" aria-hidden="true"></span><span data-i18n="manual.pagination.lab">PRACTICE</span></button>
@@ -826,6 +831,7 @@
           <small data-manual-next-hint hidden>Close this guide and start playing.</small>
         </button>
       </footer>
+      <span class="manual-controller-cursor" aria-hidden="true" hidden></span>
     </div>
   </dialog>
 
