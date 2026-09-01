@@ -56,6 +56,8 @@ async function decompressSdp(codec, bytes) {
 }
 
 function waitForIceGatheringComplete(connection, signal) {
+  // LAN signaling is exchanged once as copied/QR text rather than through a
+  // trickle-ICE channel, so the SDP must contain all gathered candidates first.
   if (connection.iceGatheringState === "complete") return Promise.resolve();
   if (signal?.aborted) return Promise.reject(new Error("WebRTC transport closed during ICE gathering"));
   return new Promise((resolve, reject) => {
@@ -162,6 +164,8 @@ export class WebRtcPeerTransport {
     channel.addEventListener("message", (event) => {
       try {
         const message = decodeMessage(event.data);
+        // Snapshot subscribers so a handler added during a lobby-to-game handoff
+        // does not receive the packet that caused the handoff.
         for (const handler of [...this.messageHandlers]) handler(message);
       } catch (error) {
         this.reportError(error);

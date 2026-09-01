@@ -86,6 +86,8 @@ export function cancelIncomingGarbage(state, rows) {
     remaining -= amount;
     cancelled += amount;
     if (packet.rows === 0 && !state.appliedGarbageIds.includes(packet.id)) {
+      // Despite the name, appliedGarbageIds is also the consumed-ID tombstone set:
+      // fully cancelled packets must be retired so later duplicates stay rejected.
       state.appliedGarbageIds.push(packet.id);
     }
   }

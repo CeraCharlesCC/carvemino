@@ -15,6 +15,8 @@ export function bringNextSpawnForward(state) {
   const delta = state.worldTick - state.dropQueue[0].spawnAtWorldTick;
   if (delta >= 0) return;
 
+  // Shift the prepared queue as a unit instead of replanning it. This preserves
+  // piece identities, relative spawn cadence, and the already-consumed RNG state.
   for (const plan of state.dropQueue) plan.spawnAtWorldTick += delta;
   if (state.nextScheduledSpawnWorldTick != null) state.nextScheduledSpawnWorldTick += delta;
 }

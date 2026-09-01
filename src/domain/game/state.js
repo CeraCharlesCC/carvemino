@@ -145,6 +145,8 @@ export function createGameState({ seed = 1, rules }) {
     nextPieceId: 1,
     nextSpawnIndex: 1,
     nextScheduledSpawnWorldTick: null,
+    // Keep gameplay randomness on independent streams so consuming extra draws in
+    // one subsystem cannot perturb piece choice, rotation, or drop placement elsewhere.
     random: {
       pieces: { state: hashSeed(seed >>> 0, 0x243f6a88) },
       rotations: { state: hashSeed(seed >>> 0, 0xa4093822) },

@@ -75,6 +75,8 @@ export function getLineClearRows(view, events = []) {
   const board = view?.board;
   if (!board || !Array.isArray(board.cells) || board.width <= 0 || board.height <= 0) return [];
 
+  // The caller supplies the pre-step view; locked pieces are overlaid here because
+  // the post-step board has already removed any rows they completed.
   const occupied = board.cells.map(Boolean);
   const lockedPieceIds = new Set((events || [])
     .filter((event) => event?.type === "PIECE_LOCKED" && event.pieceId)

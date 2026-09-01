@@ -1,3 +1,5 @@
+// Codecs centralize boundary validation. assert validates without copying, while
+// parse also detaches object/array containers from the caller's mutable input.
 const OPTIONAL = Symbol("codec.optional");
 
 function isPlainObject(value) {

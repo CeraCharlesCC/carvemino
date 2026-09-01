@@ -66,6 +66,8 @@ function isButtonPressed(button) {
 }
 
 function axisDirections(value, previousNegative, previousPositive, pressThreshold, releaseThreshold) {
+  // Use a lower release threshold than press threshold so stick jitter near the
+  // boundary does not repeatedly toggle a held direction.
   const negative = value <= -(previousNegative ? releaseThreshold : pressThreshold);
   const positive = value >= (previousPositive ? releaseThreshold : pressThreshold);
   return { negative, positive };

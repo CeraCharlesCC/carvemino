@@ -82,6 +82,8 @@ export function supportKindBelow(state, piece) {
     if (active.has(cellKey(x, y))) hasActiveSupport = true;
   }
 
+  // Another falling piece blocks movement but is not stable support for locking;
+  // only the board/floor is allowed to advance the resting lock timer.
   if (hasBoardSupport) return "board";
   if (hasActiveSupport) return "active";
   return "none";

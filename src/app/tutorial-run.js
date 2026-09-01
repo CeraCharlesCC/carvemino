@@ -19,6 +19,8 @@ function chooseCutTargets(piece) {
 }
 
 function planSculptedShape(session, cutTargets, originalBottomY) {
+  // Ask a restored sandbox copy of the real engine for legal sculpt results rather
+  // than duplicating sculpt rules in tutorial-only planning code.
   const planner = session.engine.restore(session.snapshot());
   for (const target of cutTargets) {
     session.engine.step(planner, [{
@@ -64,6 +66,8 @@ function prepareLineClear(session, piece, finalCells) {
       .map((cell) => piece.x + cell.x)
   );
   const rowY = session.game.board.height - 1;
+  // Prime only the cells outside the planned landing footprint so completing the
+  // guided sculpt and drop deterministically demonstrates a real line clear.
   for (let x = 0; x < session.game.board.width; x += 1) {
     if (!landingColumns.has(x)) {
       session.game.board.cells[rowY * session.game.board.width + x] = piece.cellValue;

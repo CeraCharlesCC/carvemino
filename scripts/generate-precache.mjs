@@ -26,6 +26,7 @@ function hashContent(content) {
 
 export async function generatePrecacheManifest(siteDirectory) {
   const absoluteSiteDirectory = path.resolve(siteDirectory);
+  // The generated manifest cannot include itself in its content hash.
   const allFiles = (await listFiles(absoluteSiteDirectory))
     .filter((relativePath) => relativePath !== MANIFEST_FILENAME)
     .sort();
@@ -37,6 +38,8 @@ export async function generatePrecacheManifest(siteDirectory) {
 
   const version = hashContent(fileHashes.map(([relativePath, hash]) => `${relativePath}\0${hash}`).join("\n"))
     .slice(0, 16);
+  // sw.js still contributes to the version so worker changes rotate the shell
+  // cache, but the browser updates the worker itself rather than precaching it.
   const urls = allFiles
     .filter((relativePath) => relativePath !== SERVICE_WORKER_FILENAME)
     .map((relativePath) => `./${relativePath}`);

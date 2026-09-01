@@ -135,6 +135,8 @@ function startFocusWorldHold(state, rules) {
   const focusGraceSteps = rules.simulation.focusGraceSteps;
   if (focusGraceSteps <= 0) return;
   if (state.worldHoldSteps > 0) return;
+  // A focus change can pause a world tick only once; otherwise repeatedly
+  // switching focus during the grace period could freeze the world forever.
   if (state.lastFocusHoldWorldTick === state.worldTick) return;
   state.worldHoldSteps = focusGraceSteps;
   state.lastFocusHoldWorldTick = state.worldTick;
@@ -310,6 +312,8 @@ function updateResting(state) {
 export function stepGameState(state, commands, rules) {
   const events = [];
   if (state.status !== "playing") return events;
+  // stepTick counts every playing call. worldTick advances only after the normal
+  // garbage/spawn/gravity pass; holds and lock-resolution steps leave it unchanged.
   state.stepTick += 1;
 
   applyCommands(state, commands || [], rules, events);
@@ -320,6 +324,8 @@ export function stepGameState(state, commands, rules) {
   }
 
   if (finalizePendingLocks(state, rules, events)) {
+    // Pending locks resolve on a later step without consuming another world tick;
+    // do not also run garbage, spawning, or gravity on that resolution step.
     replenishAfterNaturalLock(state, rules, events);
     return events;
   }

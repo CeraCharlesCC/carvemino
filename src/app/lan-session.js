@@ -146,6 +146,8 @@ export class LanSession {
   }
 
   isCurrentOperation(generation, transport) {
+    // Awaited signaling is current only if no reset occurred and it still belongs
+    // to the active transport; either mismatch makes a late completion stale.
     return this.generation === generation && this.transport === transport;
   }
 
@@ -345,6 +347,9 @@ export class LanSession {
       rules: this.mode.rules,
       policy: this.mode.policy
     });
+    // Hand message ownership from the lobby to NetworkMatchRuntime. The WebRTC
+    // adapter snapshots handlers while dispatching so this triggering packet is
+    // not replayed into the runtime listener registered by onMatchReady.
     this.removeMessageHandler();
     this.removeMessageHandler = () => {};
     this.publish("playing", "playing");

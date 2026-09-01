@@ -116,6 +116,8 @@ function playerById(match, playerId) {
 function finishMatch(match, result, events) {
   if (match.status !== "playing") return false;
   const playerIds = match.players.map((player) => player.id);
+  // Policies report atMatchTick for the tick currently being processed. Since
+  // matchTick increments after policy hooks, validate it against matchTick + 1.
   const normalizedResult = normalizeResult(
     result,
     "finished",

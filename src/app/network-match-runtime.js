@@ -70,6 +70,8 @@ function normalizeUnsubscribe(value) {
   return typeof value === "function" ? value : () => {};
 }
 
+// The host is authoritative: it emits complete per-tick input frames, clients
+// advance from those frames, hashes detect divergence, and snapshots repair it.
 export class NetworkMatchRuntime {
   constructor({
     match,
@@ -273,6 +275,8 @@ export class NetworkMatchRuntime {
     if (this.role === "client" && this.lastLocalSubmissionSourceTick === this.match.matchTick) {
       return true;
     }
+    // A lagging client may already know the host is further ahead than its local
+    // simulation, so schedule from the newest authoritative tick it has observed.
     const schedulingTick = this.role === "client"
       ? Math.max(this.match.matchTick, this.latestAuthoritativeFrameTick)
       : this.match.matchTick;
@@ -427,6 +431,8 @@ export class NetworkMatchRuntime {
   }
 
   canReceiveAfterMatchEnd(message) {
+    // Local completion is provisional until the final authoritative hash agrees.
+    // A client may still need a snapshot that restores it to a playing host state.
     if (this.role === "client") {
       if (this.resyncPending && message?.type === "match-snapshot") return true;
       return message?.type === "match-hash" && message.matchTick === this.match.matchTick;
@@ -618,6 +624,8 @@ export class NetworkMatchRuntime {
   markFinishedIfNeeded() {
     if (this.match.status === "playing") return;
     if (this.resyncPending) return;
+    // Remember whether animation was active so a terminal resync that restores a
+    // playing host snapshot can restart the client loop instead of staying stopped.
     if (this.running) this.resumeAfterTerminalResync = true;
     this.stopReason = "finished";
     this.running = false;
@@ -637,6 +645,8 @@ export class NetworkMatchRuntime {
     let steps = 0;
     while (this.match.status === "playing" && steps < MAX_STEPS_PER_FRAME) {
       const hasElapsedStep = this.accumulator >= this.stepSeconds;
+      // Drain an authoritative backlog after stalls/backgrounding without waiting
+      // one wall-clock interval per buffered tick; normal single-frame play stays paced.
       const canCatchUpBufferedFrame = this.role === "client"
         && this.authoritativeFrames.size > 1
         && this.authoritativeFrames.has(this.match.matchTick);
